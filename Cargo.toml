@@ -1,0 +1,20 @@
+[workspace]
+members = [
+  "repsheet-api",
+]
+resolver = "3"
+
+[workspace.package]
+authors = [
+  "Guillaume Leroy <gleroy@therealm.tech>",
+]
+license = "MIT"
+repository = "https://github.com/therealm-tech/repsheet"
+version = "0.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

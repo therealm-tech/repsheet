@@ -1,0 +1,84 @@
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "api:"
+    groups:
+      cargo:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /repsheet-webapp
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "webapp:"
+    groups:
+      # The router and the query client each ship lockstep packages.
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      npm:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "docker:"
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "docker:"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "ci:"
+    groups:
+      github-actions:
+        update-types:
+          - minor
+          - patch

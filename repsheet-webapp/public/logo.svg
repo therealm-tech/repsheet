@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="60 550 1812 810" role="img" aria-label="RepSheet">
+  <style>
+    .bar { fill: #25292D; }
+    .plate { fill: #F26A0A; }
+    @media (prefers-color-scheme: dark) { .bar { fill: #EDEFF1; } }
+  </style>
+  <defs>
+    <g id="half">
+      <rect class="bar" x="77" y="895" width="68" height="145" rx="10"/>
+      <g class="plate">
+        <rect x="175" y="767" width="75" height="75"/>
+        <rect x="175" y="867" width="75" height="75"/>
+        <rect x="175" y="967" width="75" height="75"/>
+        <rect x="175" y="1067" width="75" height="75"/>
+        <rect x="272" y="665" width="75" height="75"/>
+        <rect x="272" y="767" width="75" height="75"/>
+        <rect x="272" y="867" width="75" height="75"/>
+        <rect x="272" y="967" width="75" height="75"/>
+        <rect x="272" y="1067" width="75" height="75"/>
+        <rect x="272" y="1167" width="75" height="75"/>
+        <rect x="370" y="565" width="75" height="75"/>
+        <rect x="370" y="665" width="75" height="75"/>
+        <rect x="370" y="767" width="75" height="75"/>
+        <rect x="370" y="867" width="75" height="75"/>
+        <rect x="370" y="967" width="75" height="75"/>
+        <rect x="370" y="1067" width="75" height="75"/>
+        <rect x="370" y="1167" width="75" height="75"/>
+        <rect x="370" y="1267" width="75" height="75"/>
+      </g>
+      <rect class="bar" x="475" y="783" width="90" height="367" rx="14"/>
+    </g>
+  </defs>
+  <use href="#half"/>
+  <use href="#half" transform="matrix(-1 0 0 1 1932 0)"/>
+  <rect class="bar" x="585" y="937" width="762" height="63"/>
+</svg>

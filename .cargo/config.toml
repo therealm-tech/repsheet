@@ -1,0 +1,12 @@
+# Development defaults for the docker-compose stack. Cargo sets these only for
+# what it spawns (`cargo run`, `cargo test`), not for ./target/debug/repsheet-api
+# run by hand or the binary in a container; a variable already set in the
+# environment wins.
+[env]
+DATABASE_URL = "postgres://repsheet:repsheet@localhost:5433/repsheet"
+# Port 3000 is the container default; locally the API answers on 3100, where
+# the webapp's dev server proxies /api.
+BIND_ADDR = "127.0.0.1:3100"
+# The throwaway super admin of the local stack.
+SUPER_ADMIN_EMAIL = "admin@repsheet.localhost"
+SUPER_ADMIN_PASSWORD = "repsheet-admin"

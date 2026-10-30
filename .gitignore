@@ -1,0 +1,18 @@
+# Rust
+target/
+
+# Node
+node_modules/
+repsheet-webapp/dist/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
