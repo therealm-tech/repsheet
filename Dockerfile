@@ -36,12 +36,8 @@ HEALTHCHECK CMD ["/usr/local/bin/repsheet-api", "healthcheck"]
 ENTRYPOINT ["/usr/local/bin/repsheet-api"]
 CMD ["serve"]
 
-FROM nginx:1.31.7-alpine3.24@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d AS webapp
-# The nginx image lags behind Alpine's security updates: these two upgrades
-# clear CVE-2026-77214 (libexpat) and CVE-2026-88806 (libx11) until a newer
-# nginx image ships them.
-RUN apk add --no-cache libexpat=2.9.0-r0 libx11=1.8.14-r0 \
-    && addgroup -g 65532 -S repsheet \
+FROM nginx:1.31.8-alpine3.24@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11 AS webapp
+RUN addgroup -g 65532 -S repsheet \
     && adduser -u 65532 -S -D -H -h /nonexistent -s /sbin/nologin -G repsheet repsheet \
     && rm /etc/nginx/conf.d/default.conf \
     && chown repsheet:repsheet /var/cache/nginx /etc/nginx/conf.d
