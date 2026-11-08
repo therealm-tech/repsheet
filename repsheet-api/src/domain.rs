@@ -231,10 +231,9 @@ mod tests {
 
     #[test]
     fn a_required_load_needs_a_weight() {
-        assert!(
-            Mode::Reps
-                .check(Load::Required, &set(Some(8), Some(60.0), None, None))
-                .is_empty()
+        assert_eq!(
+            Mode::Reps.check(Load::Required, &set(Some(8), Some(60.0), None, None)),
+            Vec::new()
         );
         assert_eq!(
             Mode::Reps.check(Load::Required, &set(Some(8), None, None, None)),
@@ -244,15 +243,13 @@ mod tests {
 
     #[test]
     fn an_optional_load_may_be_negative_or_absent() {
-        assert!(
-            Mode::Reps
-                .check(Load::Optional, &set(Some(10), None, None, None))
-                .is_empty()
+        assert_eq!(
+            Mode::Reps.check(Load::Optional, &set(Some(10), None, None, None)),
+            Vec::new()
         );
-        assert!(
-            Mode::Reps
-                .check(Load::Optional, &set(Some(10), Some(-20.0), None, None))
-                .is_empty()
+        assert_eq!(
+            Mode::Reps.check(Load::Optional, &set(Some(10), Some(-20.0), None, None)),
+            Vec::new()
         );
     }
 
