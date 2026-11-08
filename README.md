@@ -87,8 +87,9 @@ docker compose --profile app up -d --build
 ```
 
 Then open <http://localhost:8100> on your phone or in a browser, create an account and start a
-workout. The super admin of this local stack is set in
-[docker-compose.yaml](docker-compose.yaml). The API reference is served at <http://localhost:8100/api/docs>, and the OpenAPI document
+workout. Served over HTTPS, or from `localhost`, the webapp installs as an app: "Add to Home
+Screen" on a phone, the install button of the address bar in a desktop browser. The super admin of
+this local stack is set in [docker-compose.yaml](docker-compose.yaml). The API reference is served at <http://localhost:8100/api/docs>, and the OpenAPI document
 at `/api/openapi.json`.
 
 Stop everything with:

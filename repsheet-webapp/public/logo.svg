@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="60 550 1812 810" role="img" aria-label="RepSheet">
   <style>
-    .bar { fill: #25292D; }
+    .bar { fill: #EDEFF1; }
     .plate { fill: #F26A0A; }
-    @media (prefers-color-scheme: dark) { .bar { fill: #EDEFF1; } }
+    @media (prefers-color-scheme: light) { .bar { fill: #25292D; } }
   </style>
   <defs>
     <g id="half">
