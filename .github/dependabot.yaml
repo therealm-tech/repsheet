@@ -41,6 +41,12 @@ updates:
           - "@types/react"
           - "@types/react-dom"
       npm:
+        # Dependabot gives a dependency to its most specific matching group,
+        # not the first: a wildcard pattern ranks below this pattern-less
+        # group, so `tanstack` stays empty unless excluded here.
+        # https://github.com/dependabot/dependabot-core/issues/14576
+        exclude-patterns:
+          - "@tanstack/*"
         update-types:
           - minor
           - patch
