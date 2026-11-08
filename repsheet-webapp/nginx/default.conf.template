@@ -4,6 +4,9 @@ server {
     listen 8080;
     root /usr/share/nginx/html;
 
+    # Without merge, any add_header in a location (Cache-Control below) drops
+    # these server-level headers from that location's responses.
+    add_header_inherit merge;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
 
