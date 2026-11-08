@@ -39,6 +39,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and the reasoning behind i
 ### Prerequisites
 
 - Docker with Compose v2
+- To deploy on Kubernetes: a cluster, `kubectl` and Helm ≥ 3.8
 
 ### Installation
 
@@ -105,6 +106,31 @@ tagged `X.Y.Z`, `X.Y` and `X`: `ghcr.io/therealm-tech/repsheet-api` and
 
 Run the API with `DATABASE_URL` pointing at a PostgreSQL 18 database, and the webapp with `API_HOST`
 pointing at the API. Put TLS in front of the webapp: tokens travel in an `Authorization` header.
+
+On Kubernetes, install the Helm chart, published to the same registry as
+`oci://ghcr.io/therealm-tech/charts/repsheet`. It deploys both images against an existing PostgreSQL
+database. Keep the database URL and the super admin password in a Secret:
+
+```sh
+kubectl create namespace repsheet
+```
+
+```sh
+kubectl create secret generic repsheet --namespace repsheet \
+  --from-literal=DATABASE_URL='postgres://repsheet:<password>@<host>:5432/repsheet' \
+  --from-literal=SUPER_ADMIN_PASSWORD='<password>'
+```
+
+```sh
+helm install repsheet oci://ghcr.io/therealm-tech/charts/repsheet --version 0.1.0 \
+  --namespace repsheet \
+  --set api.database.existingSecret.name=repsheet \
+  --set api.superAdmin.existingSecret.name=repsheet \
+  --set api.superAdmin.email=admin@example.com
+```
+
+Expose the webapp with `ingress.enabled` or `httpRoute.enabled`. Every value is listed in the
+[chart's README](charts/repsheet/README.md).
 
 ## Contributing
 

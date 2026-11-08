@@ -15,6 +15,9 @@ concurrency:
 
 env:
   HADOLINT_VERSION: 2.15.1
+  HELM_DOCS_VERSION: 1.14.2
+  HELM_UNITTEST_VERSION: 1.2.1
+  HELM_VERSION: v4.3.1
   TRIVY_VERSION: v0.76.1
 
 jobs:
@@ -46,6 +49,16 @@ jobs:
           sudo curl -fsSL -o /usr/local/bin/hadolint \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
           sudo chmod +x /usr/local/bin/hadolint
+
+      - name: set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: install helm-docs
+        run: |
+          curl -fsSL "https://github.com/norwoodj/helm-docs/releases/download/v${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin helm-docs
 
       - name: set up Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
@@ -116,3 +129,29 @@ jobs:
 
       - name: run the webapp tests
         run: npm test
+
+  test-chart:
+    name: test (chart)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: install helm-unittest
+        # Helm 4 verifies a plugin's signature against a keyring; the plugin's
+        # key is imported from the tag of the release being installed.
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/helm-unittest/helm-unittest/v${HELM_UNITTEST_VERSION}/public-key.asc" \
+            | gpg --batch --import
+          gpg --export > "$RUNNER_TEMP/helm-unittest.gpg"
+          helm plugin install \
+            "https://github.com/helm-unittest/helm-unittest/releases/download/v${HELM_UNITTEST_VERSION}/unittest-${HELM_UNITTEST_VERSION}.tgz" \
+            --keyring "$RUNNER_TEMP/helm-unittest.gpg"
+
+      - name: run the chart tests
+        run: helm unittest --strict charts/repsheet

@@ -197,6 +197,12 @@ package manager; its health check runs the binary itself (`repsheet-api healthch
 is plain static files, so nginx serves them and proxies the API, which keeps both on one origin and
 spares the API from CORS.
 
+**The Helm chart deploys the application, not its database.** [charts/repsheet/](charts/repsheet/)
+runs the two images as Deployments and only hands the API a `DATABASE_URL`. Backups, upgrades and
+high availability of PostgreSQL belong to whatever operates it, a managed service or an operator; a
+database bundled in the chart would tie its lifecycle to every upgrade of the application. The chart
+carries its own version, and its `appVersion` names the release of the images it deploys.
+
 ## Invariants and constraints
 
 - Every query on user data filters by the authenticated user. A resource owned by someone else
@@ -212,6 +218,8 @@ spares the API from CORS.
   `{ items, page, perPage, total }`.
 - A migration that has been applied is never edited: `sqlx` checksums them and refuses to start on
   a mismatch.
+- Every API replica applies the migrations on start-up, under a PostgreSQL advisory lock taken by
+  `sqlx`: replicas starting together apply them once, and the others wait, then find them applied.
 
 ## Limitations
 

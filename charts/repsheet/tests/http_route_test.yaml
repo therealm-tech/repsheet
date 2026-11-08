@@ -1,0 +1,64 @@
+suite: httpRoute
+templates:
+  - http-route.yaml
+release:
+  namespace: repsheet
+set:
+  api:
+    database:
+      url: postgres://repsheet:secret@postgres:5432/repsheet
+    superAdmin:
+      email: admin@example.com
+      password: super-secret
+tests:
+  - it: is disabled by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: requires the Gateway's name
+    set:
+      httpRoute.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: httpRoute.gateway.name is required when httpRoute.enabled is true
+
+  - it: attaches to a Gateway in the release namespace by default
+    set:
+      httpRoute.enabled: true
+      httpRoute.gateway.name: public
+    asserts:
+      - equal:
+          path: spec.parentRefs[0]
+          value:
+            group: gateway.networking.k8s.io
+            kind: Gateway
+            name: public
+            namespace: repsheet
+      - equal:
+          path: spec.rules[0].backendRefs[0]
+          value:
+            name: RELEASE-NAME-repsheet-webapp
+            port: 8080
+      - notExists:
+          path: spec.hostnames
+
+  - it: attaches to a listener of a Gateway in another namespace
+    set:
+      httpRoute.enabled: true
+      httpRoute.gateway.name: public
+      httpRoute.gateway.namespace: gateways
+      httpRoute.gateway.sectionName: https
+      httpRoute.hostnames:
+        - repsheet.example.com
+    asserts:
+      - equal:
+          path: spec.parentRefs[0].namespace
+          value: gateways
+      - equal:
+          path: spec.parentRefs[0].sectionName
+          value: https
+      - equal:
+          path: spec.hostnames
+          value:
+            - repsheet.example.com

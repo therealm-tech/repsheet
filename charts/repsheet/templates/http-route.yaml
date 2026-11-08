@@ -1,0 +1,34 @@
+{{- if .Values.httpRoute.enabled }}
+{{- $webapp := include "repsheet.values" (dict "root" . "component" "webapp") | fromYaml }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "repsheet.fullname" . }}
+  labels:
+    {{- include "repsheet.labels" (dict "root" .) | nindent 4 }}
+  {{- with .Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ required "httpRoute.gateway.name is required when httpRoute.enabled is true" .Values.httpRoute.gateway.name }}
+      namespace: {{ .Values.httpRoute.gateway.namespace | default .Release.Namespace }}
+      {{- with .Values.httpRoute.gateway.sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+  {{- with .Values.httpRoute.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "repsheet.componentName" (dict "root" . "component" "webapp") }}
+          port: {{ $webapp.service.port }}
+{{- end }}

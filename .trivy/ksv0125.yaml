@@ -1,0 +1,5 @@
+# KSV-0125 only trusts the Azure, ECR and GCR registries by default; RepSheet
+# publishes its images to GHCR alone.
+ksv0125:
+  trusted_registries:
+    - ghcr.io

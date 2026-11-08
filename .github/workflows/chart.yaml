@@ -1,0 +1,74 @@
+name: chart
+
+on:
+  push:
+    tags:
+      - chart-*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHART_DIR: charts/repsheet
+  CHART_REPOSITORY: oci://ghcr.io/therealm-tech/charts
+  HELM_VERSION: v4.3.1
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: derive the version from the tag
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ] || [[ "$GITHUB_REF_NAME" != chart-* ]]; then
+            echo "Run this workflow from a chart-X.Y.Z tag, not ${GITHUB_REF_NAME}." >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#chart-}"
+          committed="$(sed -n 's/^version: *//p' "$CHART_DIR/Chart.yaml")"
+          if [ "$committed" != "$version" ]; then
+            echo "Chart.yaml says ${committed} but the tag says ${version}." >&2
+            echo "Cut chart releases with scripts/release.sh --chart so the two stay in step." >&2
+            exit 1
+          fi
+          if [[ "$version" != *-* ]]; then
+            installed="$(sed -n "s|^helm install repsheet ${CHART_REPOSITORY}/repsheet --version \([^ ]*\).*|\1|p" README.md)"
+            if [ "$installed" != "$version" ]; then
+              echo "README.md installs version ${installed:-<none>} but the tag says ${version}." >&2
+              echo "Cut chart releases with scripts/release.sh --chart so the two stay in step." >&2
+              exit 1
+            fi
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: package the chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: helm package "$CHART_DIR" --version "$VERSION" --destination "$RUNNER_TEMP"
+
+      - name: log in to GHCR
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_PASSWORD" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: push the chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: helm push "$RUNNER_TEMP/repsheet-${VERSION}.tgz" "$CHART_REPOSITORY"

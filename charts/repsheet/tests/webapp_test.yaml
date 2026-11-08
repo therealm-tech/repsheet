@@ -1,0 +1,95 @@
+suite: webapp
+templates:
+  - webapp/deployment.yaml
+  - webapp/service-account.yaml
+  - webapp/service.yaml
+set:
+  api:
+    database:
+      url: postgres://repsheet:secret@postgres:5432/repsheet
+    superAdmin:
+      email: admin@example.com
+      password: super-secret
+tests:
+  - it: proxies the API through its Service
+    template: webapp/deployment.yaml
+    set:
+      api.service.port: 80
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: API_HOST
+            value: RELEASE-NAME-repsheet-api:80
+
+  - it: gives nginx writable directories on a read-only root filesystem
+    template: webapp/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-conf
+            mountPath: /etc/nginx/conf.d
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: tmp
+            mountPath: /tmp
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tmp
+            emptyDir: {}
+
+  - it: runs the image matching the chart's appVersion
+    template: webapp/deployment.yaml
+    chart:
+      appVersion: 1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/therealm-tech/repsheet-webapp:1.2.3
+      - equal:
+          path: spec.revisionHistoryLimit
+          value: 0
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+
+  - it: keeps the extra volumes next to its own
+    template: webapp/deployment.yaml
+    set:
+      webapp.extraVolumes:
+        - name: extra
+          emptyDir: {}
+      webapp.extraVolumeMounts:
+        - name: extra
+          mountPath: /extra
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.volumes
+          count: 3
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: extra
+            mountPath: /extra
+
+  - it: creates a ServiceAccount of its own
+    template: webapp/service-account.yaml
+    asserts:
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-repsheet-webapp
+
+  - it: exposes the webapp on its Service port
+    template: webapp/service.yaml
+    asserts:
+      - equal:
+          path: spec.ports[0].port
+          value: 8080
+      - equal:
+          path: spec.selector["app.kubernetes.io/component"]
+          value: webapp
