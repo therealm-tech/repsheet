@@ -1,0 +1,28 @@
+# {{ template "chart.name" . }}
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+{{ template "chart.description" . }}
+
+The chart runs the API and the webapp as two Deployments, each with its own Service and
+ServiceAccount, and routes traffic to the webapp through an optional Ingress or Gateway API
+HTTPRoute. PostgreSQL is not part of it: the API connects to the database named by `api.database`.
+
+It is published to GitHub Container Registry as `oci://ghcr.io/therealm-tech/charts/repsheet`. The
+install commands are in the [RepSheet README](https://github.com/therealm-tech/repsheet#deployment),
+and the application's design in its [ARCHITECTURE.md](https://github.com/therealm-tech/repsheet/blob/main/ARCHITECTURE.md).
+
+## Configuration
+
+- The API requires `api.database`, `api.superAdmin.email` and `api.superAdmin`'s password. Each
+  secret comes either inline, stored in a Secret the chart generates, or from a Secret you manage
+  (`existingSecret.name`, and `existingSecret.key` when its entry is named differently).
+- Values under `global` apply to both components. Each can be overridden for one component by
+  setting the same key under `api` or `webapp`, e.g. `api.replicaCount`.
+- Both containers run as UID 65532 with a read-only root filesystem. The webapp mounts `emptyDir`
+  volumes on `/etc/nginx/conf.d`, where its entrypoint renders the nginx configuration, and on
+  `/tmp`, for nginx's pid and temporary files.
+- Put TLS in front of the webapp, at the Ingress or the Gateway: tokens travel in an
+  `Authorization` header.
+
+{{ template "chart.valuesSection" . }}

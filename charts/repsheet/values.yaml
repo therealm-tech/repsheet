@@ -1,0 +1,244 @@
+# -- Values shared by the `api` and `webapp` components. Any key below but `fullnameOverride` can be overridden for one component by setting it under `api:` or `webapp:`, e.g. `api.replicaCount`.
+# @default -- See its keys below.
+global:
+  # -- (string) Overrides the name the chart's objects are prefixed with. Unset → `<release>-repsheet`, or `<release>` when the release name already contains `repsheet`.
+  fullnameOverride: ~
+  # -- Container image settings; each component sets its own `image.repository`.
+  image:
+    # -- (string) Image tag. Unset → the chart's `appVersion`, so both images match the chart's release.
+    tag: ~
+    # -- Kubernetes image pull policy.
+    pullPolicy: IfNotPresent
+  # -- (list) Secrets used to pull the images, as `- name: <secret>`. The published images are public.
+  imagePullSecrets: []
+  # -- Number of pods per component. The API is stateless and migrates the database under a lock, so it can run several replicas.
+  replicaCount: 1
+  # -- Number of old ReplicaSets each Deployment keeps for rollback.
+  revisionHistoryLimit: 0
+  # -- ServiceAccount settings; each component gets its own ServiceAccount.
+  serviceAccount:
+    # -- Create a ServiceAccount per component. `false` → pods use `serviceAccount.name`, or the namespace's `default`.
+    create: true
+    # -- (object) Annotations added to the ServiceAccounts.
+    annotations: {}
+  # -- Service settings; each component sets its own `service.port`.
+  service:
+    # -- Kubernetes Service type.
+    type: ClusterIP
+  # -- (object) Annotations added to every pod.
+  podAnnotations: {}
+  # -- (object) Labels added to every pod.
+  podLabels: {}
+  # -- Pod-level security context; loosening it breaks the restricted Pod Security Standard.
+  podSecurityContext:
+    # -- Refuse to start a container whose image runs as UID 0.
+    runAsNonRoot: true
+    # -- UID the containers run as: the `nonroot` user both images are built with.
+    runAsUser: 65532
+    # -- Primary GID the containers run as.
+    runAsGroup: 65532
+    # -- GID that owns the mounted volumes.
+    fsGroup: 65532
+    # -- Seccomp profile applied to the pods.
+    seccompProfile:
+      # -- Seccomp profile type.
+      type: RuntimeDefault
+  # -- Container-level security context; loosening it breaks the restricted Pod Security Standard.
+  securityContext:
+    # -- Forbid gaining more privileges than the parent process.
+    allowPrivilegeEscalation: false
+    # -- Mount the image read-only; the webapp gets `emptyDir` volumes where nginx writes.
+    readOnlyRootFilesystem: true
+    # -- Linux capabilities.
+    capabilities:
+      # -- Capabilities removed from the containers.
+      drop:
+        - ALL
+  # -- Probe holding back liveness and readiness until the server answers; the API applies its migrations first.
+  startupProbe:
+    # -- HTTP request the probe sends.
+    httpGet:
+      # -- Path of the health endpoint.
+      path: /healthz
+      # -- Named container port probed.
+      port: http
+    # -- Seconds between two probes.
+    periodSeconds: 2
+    # -- Failed probes tolerated before the container is restarted.
+    failureThreshold: 60
+  # -- Probe restarting a container that stops answering.
+  livenessProbe:
+    # -- HTTP request the probe sends.
+    httpGet:
+      # -- Path of the health endpoint.
+      path: /healthz
+      # -- Named container port probed.
+      port: http
+    # -- Seconds between two probes.
+    periodSeconds: 10
+    # -- Failed probes tolerated before the container is restarted.
+    failureThreshold: 3
+  # -- Probe taking a pod out of its Service while it does not answer.
+  readinessProbe:
+    # -- HTTP request the probe sends.
+    httpGet:
+      # -- Path of the health endpoint.
+      path: /healthz
+      # -- Named container port probed.
+      port: http
+    # -- Seconds between two probes.
+    periodSeconds: 5
+    # -- Failed probes tolerated before the pod is marked unready.
+    failureThreshold: 3
+  # -- (object) Node labels the pods must run on.
+  nodeSelector: {}
+  # -- (list) Tolerations of the pods.
+  tolerations: []
+  # -- (object) Affinity rules of the pods.
+  affinity: {}
+  # -- (list) Extra environment variables added to the containers.
+  extraEnv: []
+  # -- (list) Extra volumes added to the pods.
+  extraVolumes: []
+  # -- (list) Extra volume mounts added to the containers.
+  extraVolumeMounts: []
+
+# -- The HTTP API (`repsheet-api`). It owns the database schema and applies its migrations on start-up.
+# @default -- See its keys below.
+api:
+  # -- Image of the API.
+  image:
+    # -- Image repository of the API.
+    repository: ghcr.io/therealm-tech/repsheet-api
+  # -- ServiceAccount of the API.
+  serviceAccount:
+    # -- (string) Name of the ServiceAccount. Unset → `<fullname>-api`.
+    name: ~
+  # -- Service in front of the API, reached by the webapp.
+  service:
+    # -- Port of the Service.
+    port: 3000
+  # -- PostgreSQL connection. The database is external: the chart only hands its URL to the API.
+  database:
+    # -- (string) Connection string, e.g. `postgres://user:password@host:5432/repsheet`. Stored in a generated Secret. Ignored when `existingSecret.name` is set.
+    url: ~
+    # -- Read the connection string from a Secret you manage instead of `url`.
+    existingSecret:
+      # -- (string) Name of the Secret. Set → takes precedence over `url`.
+      name: ~
+      # -- Key in that Secret holding the connection string.
+      key: DATABASE_URL
+    # -- Size of the connection pool of each replica (`DB_MAX_CONNECTIONS`); the database must accept `replicaCount` times this many connections.
+    maxConnections: 10
+  # -- Super admin account, created or restored on every start-up.
+  superAdmin:
+    # -- (string) Email of the super admin account (`SUPER_ADMIN_EMAIL`). Required.
+    email: ~
+    # -- (string) Password of the super admin account, at least 8 characters. Stored in a generated Secret. Ignored when `existingSecret.name` is set.
+    password: ~
+    # -- Read the password from a Secret you manage instead of `password`.
+    existingSecret:
+      # -- (string) Name of the Secret. Set → takes precedence over `password`.
+      name: ~
+      # -- Key in that Secret holding the password.
+      key: SUPER_ADMIN_PASSWORD
+  # -- Lifetime of a login token, in days (`TOKEN_TTL_DAYS`).
+  tokenTtlDays: 30
+  # -- Logging of the API.
+  log:
+    # -- `tracing` filter directive (`LOG_FILTER`), e.g. `repsheet_api=debug`.
+    filter: info
+    # -- Log format (`LOG_FORMAT`): `text` or `json`.
+    format: text
+  # -- Extra CA certificates to trust for the database connection, on top of the built-in public roots; supply only your private CA. Used when the connection string sets `sslmode=verify-ca` or `verify-full`.
+  caCerts:
+    # -- (string) Inline PEM bundle. Stored in a Secret and mounted. Ignored when `existing.name` is set.
+    inline: ~
+    # -- Mount the PEM bundle from a resource you already manage, instead of `inline`.
+    existing:
+      # -- Kind of the resource: `ConfigMap` or `Secret`.
+      kind: ConfigMap
+      # -- (string) Name of the resource. Set → mounts from it instead of generating a Secret from `inline`.
+      name: ~
+      # -- Key in the resource holding the PEM bundle (also the mounted file name).
+      key: ca-certificates.crt
+  # -- Resources of the API container. Hashing a password takes about 19 MiB, once per concurrent login.
+  resources:
+    # -- Resources reserved for the container.
+    requests:
+      # -- CPU reserved.
+      cpu: 50m
+      # -- Memory reserved.
+      memory: 64Mi
+      # -- Ephemeral storage reserved.
+      ephemeral-storage: 64Mi
+    # -- Resource caps; CPU is deliberately left unlimited.
+    limits:
+      # -- Memory cap.
+      memory: 256Mi
+      # -- Ephemeral storage cap.
+      ephemeral-storage: 256Mi
+
+# -- The webapp (`repsheet-webapp`): nginx serving the front end and proxying `/api/` to the API Service.
+# @default -- See its keys below.
+webapp:
+  # -- Image of the webapp.
+  image:
+    # -- Image repository of the webapp.
+    repository: ghcr.io/therealm-tech/repsheet-webapp
+  # -- ServiceAccount of the webapp.
+  serviceAccount:
+    # -- (string) Name of the ServiceAccount. Unset → `<fullname>-webapp`.
+    name: ~
+  # -- Service in front of the webapp, the one the Ingress and the HTTPRoute point at.
+  service:
+    # -- Port of the Service.
+    port: 8080
+  # -- Resources of the webapp container. Its `emptyDir` volumes count against the ephemeral storage.
+  resources:
+    # -- Resources reserved for the container.
+    requests:
+      # -- CPU reserved.
+      cpu: 10m
+      # -- Memory reserved.
+      memory: 32Mi
+      # -- Ephemeral storage reserved.
+      ephemeral-storage: 64Mi
+    # -- Resource caps; CPU is deliberately left unlimited.
+    limits:
+      # -- Memory cap.
+      memory: 128Mi
+      # -- Ephemeral storage cap.
+      ephemeral-storage: 256Mi
+
+# -- Ingress routing every path to the webapp Service. Put TLS in front of the webapp: tokens travel in an `Authorization` header.
+# @default -- See its keys below.
+ingress:
+  # -- Create the Ingress.
+  enabled: false
+  # -- (string) IngressClass of the Ingress. Unset → the cluster's default class.
+  className: ~
+  # -- (object) Annotations of the Ingress, e.g. for cert-manager.
+  annotations: {}
+  # -- (list) Host names served, e.g. `- repsheet.example.com`. Empty → every host.
+  hosts: []
+  # -- (list) TLS settings, as `- secretName: <secret>` with its `hosts`.
+  tls: []
+
+# -- Gateway API HTTPRoute routing every path to the webapp Service. The chart only creates the route; the Gateway is managed outside it.
+# @default -- See its keys below.
+httpRoute:
+  # -- Create the HTTPRoute.
+  enabled: false
+  # -- (object) Annotations of the HTTPRoute.
+  annotations: {}
+  # -- Gateway the route attaches to.
+  gateway:
+    # -- (string) Name of the Gateway. Required when the HTTPRoute is enabled.
+    name: ~
+    # -- (string) Namespace of the Gateway. Unset → the release namespace.
+    namespace: ~
+    # -- (string) Listener of the Gateway to attach to. Unset → every listener that accepts the route.
+    sectionName: ~
+  # -- (list) Host names matched, e.g. `- repsheet.example.com`. Empty → the Gateway listener's host names.
+  hostnames: []

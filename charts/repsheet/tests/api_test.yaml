@@ -1,0 +1,328 @@
+suite: api
+templates:
+  - api/deployment.yaml
+  - api/secret/database.yaml
+  - api/secret/super-admin.yaml
+  - api/secret/ca-certs.yaml
+  - api/service-account.yaml
+  - api/service.yaml
+set:
+  api:
+    database:
+      url: postgres://repsheet:secret@postgres:5432/repsheet
+    superAdmin:
+      email: admin@example.com
+      password: super-secret
+tests:
+  - it: fails without a database
+    template: api/secret/database.yaml
+    set:
+      api.database.url: null
+    asserts:
+      - failedTemplate:
+          errorPattern: api.database.url or api.database.existingSecret.name is required
+
+  - it: fails without a super admin email
+    template: api/deployment.yaml
+    set:
+      api.superAdmin.email: null
+    asserts:
+      - failedTemplate:
+          errorMessage: api.superAdmin.email is required
+
+  - it: fails without a super admin password
+    template: api/secret/super-admin.yaml
+    set:
+      api.superAdmin.password: null
+    asserts:
+      - failedTemplate:
+          errorPattern: api.superAdmin.password or api.superAdmin.existingSecret.name is required
+
+  - it: stores inline secrets in generated Secrets
+    template: api/secret/database.yaml
+    asserts:
+      - isKind:
+          of: Secret
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-repsheet-api-database
+      - equal:
+          path: stringData.DATABASE_URL
+          value: postgres://repsheet:secret@postgres:5432/repsheet
+
+  - it: reads the generated Secrets and rolls the pods when they change
+    template: api/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-repsheet-api-database
+                key: DATABASE_URL
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SUPER_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-repsheet-api-super-admin
+                key: SUPER_ADMIN_PASSWORD
+      - exists:
+          path: spec.template.metadata.annotations["checksum/database"]
+      - exists:
+          path: spec.template.metadata.annotations["checksum/super-admin"]
+
+  - it: reads existing Secrets under their own keys instead of generating them
+    set:
+      api.database.url: null
+      api.database.existingSecret.name: repsheet
+      api.database.existingSecret.key: url
+      api.superAdmin.password: null
+      api.superAdmin.existingSecret.name: repsheet
+      api.superAdmin.existingSecret.key: admin-password
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: api/secret/database.yaml
+      - hasDocuments:
+          count: 0
+        template: api/secret/super-admin.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: repsheet
+                key: url
+        template: api/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SUPER_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: repsheet
+                key: admin-password
+        template: api/deployment.yaml
+      - notExists:
+          path: spec.template.metadata.annotations
+        template: api/deployment.yaml
+
+  - it: maps the configuration onto the API's environment
+    template: api/deployment.yaml
+    set:
+      api.database.maxConnections: 25
+      api.tokenTtlDays: 7
+      api.log.filter: repsheet_api=debug
+      api.log.format: json
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: BIND_ADDR
+            value: 0.0.0.0:3000
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SUPER_ADMIN_EMAIL
+            value: admin@example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DB_MAX_CONNECTIONS
+            value: "25"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TOKEN_TTL_DAYS
+            value: "7"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOG_FILTER
+            value: repsheet_api=debug
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOG_FORMAT
+            value: json
+
+  - it: runs the image matching the chart's appVersion under the restricted profile
+    template: api/deployment.yaml
+    chart:
+      appVersion: 1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/therealm-tech/repsheet-api:1.2.3
+      - equal:
+          path: spec.revisionHistoryLimit
+          value: 0
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65532
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+      - exists:
+          path: spec.template.spec.containers[0].resources.limits.memory
+      - notExists:
+          path: spec.template.spec.volumes
+
+  - it: lets the component override a global value
+    template: api/deployment.yaml
+    set:
+      global.replicaCount: 3
+      global.image.tag: 9.9.9
+      api.replicaCount: 0
+      api.image.tag: 1.0.0
+      api.podSecurityContext.fsGroup: 70000
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 0
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/therealm-tech/repsheet-api:1.0.0
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 70000
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65532
+
+  - it: adds the extra environment, volumes and mounts
+    template: api/deployment.yaml
+    set:
+      global.extraEnv:
+        - name: RUST_BACKTRACE
+          value: "1"
+      api.extraVolumes:
+        - name: scratch
+          emptyDir: {}
+      api.extraVolumeMounts:
+        - name: scratch
+          mountPath: /scratch
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: RUST_BACKTRACE
+            value: "1"
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: scratch
+            emptyDir: {}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: scratch
+            mountPath: /scratch
+
+  - it: trusts an inline CA bundle for the database connection
+    set:
+      api.caCerts.inline: |
+        -----BEGIN CERTIFICATE-----
+        MIIB
+        -----END CERTIFICATE-----
+    asserts:
+      - isKind:
+          of: Secret
+        template: api/secret/ca-certs.yaml
+      - matchRegex:
+          path: stringData["ca-certificates.crt"]
+          pattern: BEGIN CERTIFICATE
+        template: api/secret/ca-certs.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PGSSLROOTCERT
+            value: /etc/repsheet/ca-certs/ca-certificates.crt
+        template: api/deployment.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certs
+            secret:
+              secretName: RELEASE-NAME-repsheet-api-ca-certs
+        template: api/deployment.yaml
+      - exists:
+          path: spec.template.metadata.annotations["checksum/ca-certs"]
+        template: api/deployment.yaml
+
+  - it: mounts a CA bundle from an existing ConfigMap
+    set:
+      api.caCerts.existing.name: corporate-ca
+      api.caCerts.existing.key: ca.pem
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: api/secret/ca-certs.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certs
+            configMap:
+              name: corporate-ca
+        template: api/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ca-certs
+            mountPath: /etc/repsheet/ca-certs/ca.pem
+            subPath: ca.pem
+            readOnly: true
+        template: api/deployment.yaml
+
+  - it: rejects a CA bundle in an unknown kind of resource
+    template: api/deployment.yaml
+    set:
+      api.caCerts.existing.name: corporate-ca
+      api.caCerts.existing.kind: Volume
+    asserts:
+      - failedTemplate:
+          errorPattern: api.caCerts.existing.kind must be ConfigMap or Secret
+
+  - it: creates a dedicated ServiceAccount
+    template: api/service-account.yaml
+    asserts:
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-repsheet-api
+      - equal:
+          path: automountServiceAccountToken
+          value: false
+
+  - it: uses a ServiceAccount it does not create
+    set:
+      global.serviceAccount.create: false
+      api.serviceAccount.name: shared
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: api/service-account.yaml
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: shared
+        template: api/deployment.yaml
+
+  - it: exposes the API on its Service port
+    template: api/service.yaml
+    set:
+      api.service.port: 80
+    asserts:
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+      - equal:
+          path: spec.ports[0].targetPort
+          value: http

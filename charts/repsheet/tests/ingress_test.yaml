@@ -1,0 +1,55 @@
+suite: ingress
+templates:
+  - ingress.yaml
+set:
+  api:
+    database:
+      url: postgres://repsheet:secret@postgres:5432/repsheet
+    superAdmin:
+      email: admin@example.com
+      password: super-secret
+tests:
+  - it: is disabled by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: routes every host to the webapp when none is given
+    set:
+      ingress.enabled: true
+    asserts:
+      - notExists:
+          path: spec.rules[0].host
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service
+          value:
+            name: RELEASE-NAME-repsheet-webapp
+            port:
+              number: 8080
+      - notExists:
+          path: spec.ingressClassName
+
+  - it: routes the given hosts with TLS
+    set:
+      ingress.enabled: true
+      ingress.className: nginx
+      ingress.hosts:
+        - repsheet.example.com
+        - www.repsheet.example.com
+      ingress.tls:
+        - secretName: repsheet-tls
+          hosts:
+            - repsheet.example.com
+    asserts:
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+      - lengthEqual:
+          path: spec.rules
+          count: 2
+      - equal:
+          path: spec.rules[1].host
+          value: www.repsheet.example.com
+      - equal:
+          path: spec.tls[0].secretName
+          value: repsheet-tls

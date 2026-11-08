@@ -11,6 +11,7 @@ repos:
       - id: check-yaml
         args:
           - --allow-multiple-documents
+        exclude: ^charts/[^/]+/templates/
       - id: check-toml
       - id: check-json
         # tsconfig files are JSONC (comments, trailing commas).
@@ -26,6 +27,8 @@ repos:
       - id: yamllint
         args:
           - --strict
+        # A Helm template is Go templating, not YAML, until it is rendered.
+        exclude: ^charts/[^/]+/templates/
 
   - repo: https://github.com/hadolint/hadolint
     rev: v2.15.1
@@ -64,6 +67,24 @@ repos:
         language: system
         pass_filenames: false
         files: ^Dockerfile$
+      - id: helm-docs
+        name: helm-docs
+        entry: helm-docs --chart-search-root charts
+        language: system
+        files: ^charts/
+        pass_filenames: false
+      - id: helm-lint
+        name: helm lint
+        entry: helm lint --strict --values charts/repsheet/values-lint.yaml charts/repsheet
+        language: system
+        files: ^charts/repsheet/
+        pass_filenames: false
+      - id: trivy-chart
+        name: trivy config (chart)
+        entry: trivy config --exit-code 1 --config-data .trivy --helm-values charts/repsheet/values-lint.yaml charts/repsheet
+        language: system
+        files: ^(charts/repsheet/|\.trivy/|\.trivyignore$)
+        pass_filenames: false
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --all

@@ -1,0 +1,88 @@
+{{- $c := include "repsheet.values" (dict "root" . "component" "webapp") | fromYaml }}
+{{- $api := include "repsheet.values" (dict "root" . "component" "api") | fromYaml }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "repsheet.componentName" (dict "root" . "component" "webapp") }}
+  labels:
+    {{- include "repsheet.labels" (dict "root" . "component" "webapp") | nindent 4 }}
+spec:
+  replicas: {{ $c.replicaCount }}
+  revisionHistoryLimit: {{ $c.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "repsheet.selectorLabels" (dict "root" . "component" "webapp") | nindent 6 }}
+  template:
+    metadata:
+      {{- with $c.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "repsheet.selectorLabels" (dict "root" . "component" "webapp") | nindent 8 }}
+        {{- with $c.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "repsheet.serviceAccountName" (dict "root" . "component" "webapp" "values" $c) }}
+      automountServiceAccountToken: false
+      {{- with $c.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      containers:
+        - name: webapp
+          image: {{ include "repsheet.image" (dict "root" . "values" $c) }}
+          imagePullPolicy: {{ $c.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: API_HOST
+              value: {{ printf "%s:%v" (include "repsheet.componentName" (dict "root" . "component" "api")) $api.service.port | quote }}
+            {{- with $c.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            {{- toYaml $c.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml $c.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $c.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $c.securityContext | nindent 12 }}
+          volumeMounts:
+            {{- /* The image's entrypoint renders its server block here, and exits when it cannot. */}}
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+            {{- /* nginx.conf puts the pid file and every temp path under /tmp. */}}
+            - name: tmp
+              mountPath: /tmp
+            {{- with $c.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: nginx-conf
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- with $c.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $c.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

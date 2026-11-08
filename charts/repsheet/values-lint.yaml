@@ -1,0 +1,16 @@
+# Required values for `helm lint` and the `trivy config` scan, which skips a
+# chart that fails to render. Not packaged: see .helmignore.
+api:
+  database:
+    url: postgres://repsheet:lint-only@postgres:5432/repsheet
+  superAdmin:
+    email: admin@repsheet.localhost
+    password: lint-only-password
+ingress:
+  enabled: true
+  hosts:
+    - repsheet.example.com
+httpRoute:
+  enabled: true
+  gateway:
+    name: lint-gateway
