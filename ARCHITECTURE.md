@@ -52,7 +52,10 @@ The React and TypeScript client in [repsheet-webapp/](repsheet-webapp/), served 
 nginx ([repsheet-webapp/nginx/](repsheet-webapp/nginx/)). Every API response is parsed with `zod`
 before use, so a contract mismatch fails loudly at the boundary. It keeps the bearer token in
 `localStorage` and derives everything else from the API: the logging sheet's pre-filled values, the
-planned blocks of a workout, the progression charts.
+planned blocks of a workout, the progression charts. It is an installable Progressive Web App:
+a web app manifest and a Workbox service worker are generated at build time
+([repsheet-webapp/pwa.config.ts](repsheet-webapp/pwa.config.ts)), and its PNG icons are rendered
+from `public/logo.svg` during the same build.
 
 ### PostgreSQL
 
@@ -197,6 +200,16 @@ package manager; its health check runs the binary itself (`repsheet-api healthch
 is plain static files, so nginx serves them and proxies the API, which keeps both on one origin and
 spares the API from CORS.
 
+**The service worker caches the shell, never the data.** It precaches the built front end (HTML,
+JS, CSS, fonts, icons), so the installed app starts without waiting on the network, and it routes no
+request to `/api/`: API calls always reach the server, and a cached answer can never show a workout
+that has since changed. Navigations to `/api/` and `/healthz` are excluded from the shell fallback,
+so the service worker never answers them with `index.html`. Updates are automatic: a new service
+worker activates as soon as it is installed, without a prompt, and the new front end takes effect at
+the next launch rather than reloading a page that may hold an unsaved set. This only works because
+nginx serves every unhashed file (`index.html`, `sw.js`, `registerSW.js`, the manifest) with
+`Cache-Control: no-cache`; only the content-hashed `/assets/` are cached for good.
+
 **The Helm chart deploys the application, not its database.** [charts/repsheet/](charts/repsheet/)
 runs the two images as Deployments and only hands the API a `DATABASE_URL`. Backups, upgrades and
 high availability of PostgreSQL belong to whatever operates it, a managed service or an operator; a
@@ -223,7 +236,8 @@ carries its own version, and its `appVersion` names the release of the images it
 
 ## Limitations
 
-- The client needs the network: a workout cannot be logged offline.
+- The client needs the network for data: the installed app opens offline, but shows no workout and
+  cannot log one until the API is reachable again.
 - There is no password reset and no email verification; an account is an email and a password.
 - One weight unit per user, applied to every exercise.
 - The exercise picker lists the first 50 matches of a search.

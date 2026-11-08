@@ -119,7 +119,9 @@ npm test --prefix repsheet-webapp -- block-sheet
 - **API integration tests** in [repsheet-api/tests/](repsheet-api/tests/) drive the HTTP router
   against PostgreSQL.
 - **Webapp tests** (Vitest and Testing Library) live in
-  [repsheet-webapp/src/\_\_tests\_\_/](repsheet-webapp/src/__tests__/) and run in jsdom.
+  [repsheet-webapp/src/\_\_tests\_\_/](repsheet-webapp/src/__tests__/) and run in jsdom;
+  [repsheet-webapp/pwa.test.ts](repsheet-webapp/pwa.test.ts) checks the web app manifest, the icons
+  rendered from the logo and the service worker's routing rules.
 - **Chart tests** (helm-unittest) live in [charts/repsheet/tests/](charts/repsheet/tests/) and
   render the chart with no cluster. One suite runs on its own with
   `helm unittest --strict --file 'tests/ingress_test.yaml' charts/repsheet`.
