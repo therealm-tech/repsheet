@@ -17,18 +17,6 @@ WHERE
                 SELECT 1 FROM coaching_links AS cl
                 WHERE cl.athlete_id = w.user_id AND cl.coach_id = $2
             )
-            AND (
-                EXISTS (
-                    SELECT 1 FROM workout_shares AS ws
-                    WHERE ws.workout_id = w.id AND ws.coach_id = $2
-                )
-                OR EXISTS (
-                    SELECT 1 FROM templates AS t
-                    WHERE
-                        t.id = w.template_id
-                        AND t.planned_on IS NOT NULL
-                        AND t.author_id = $2
-                )
-            )
+            AND coach_reads_workout(w.id, w.template_id, $2)
         )
     );

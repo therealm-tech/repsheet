@@ -8,6 +8,7 @@ WHERE
     AND ($4::TEXT IS NULL OR be.mode = $4)
     AND ($5::TEXT IS NULL OR be.equipment = $5)
     AND (NOT $6 OR be.grip IS NOT DISTINCT FROM $7::TEXT)
+    AND ($8::UUID IS NULL OR coach_reads_workout(w.id, w.template_id, $8))
     AND (
         $3::UUID IS NULL
         OR (w.performed_on, w.created_at) < (

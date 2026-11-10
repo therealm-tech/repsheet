@@ -11,6 +11,8 @@ pub struct PlannedSessionRow {
     pub planned_on: NaiveDate,
     pub name: String,
     pub note: Option<String>,
+    /// When its author sent it to the athlete; none while it is a draft.
+    pub sent_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -22,13 +24,14 @@ pub struct PlannedSessionSummaryRow {
     pub author_name: Option<String>,
     pub planned_on: NaiveDate,
     pub name: String,
+    pub sent_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub block_count: i64,
     pub workout_count: i64,
 }
 
 /// The planned sessions of `athlete_id`, only those written by `author_id`
-/// when it is set.
+/// when it is set. Drafts are listed only to their author.
 pub async fn list(
     exec: impl PgExecutor<'_>,
     athlete_id: Uuid,
@@ -57,8 +60,8 @@ pub async fn count(
         .await
 }
 
-/// The planned session as `user_id` may see it: as its athlete, or as its
-/// author while the athlete still has them as a coach.
+/// The planned session as `user_id` may see it: as its athlete once it is
+/// sent, or as its author while the athlete still has them as a coach.
 pub async fn find(
     exec: impl PgExecutor<'_>,
     id: Uuid,
@@ -92,6 +95,16 @@ pub async fn update(
 /// Callers check access with [`find`] first.
 pub async fn delete(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<()> {
     sqlx::query(include_str!("../../queries/planned_sessions/delete.sql"))
+        .bind(id)
+        .execute(exec)
+        .await?;
+    Ok(())
+}
+
+/// Shows the draft to its athlete; a session already sent stays as it is.
+/// Callers check access with [`find`] first.
+pub async fn send(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/planned_sessions/send.sql"))
         .bind(id)
         .execute(exec)
         .await?;

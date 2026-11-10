@@ -294,6 +294,8 @@ pub struct PerformanceFilter {
     /// Keeps only the blocks that did the exercise with this equipment.
     pub equipment: Option<Equipment>,
     pub grip: Option<GripFilter>,
+    /// Keeps only the workouts this coach of the user reads.
+    pub coach_id: Option<Uuid>,
 }
 
 /// Keeps only the blocks that held a grip, or only those that recorded none.
@@ -330,6 +332,7 @@ pub async fn list_performances(
     .bind(filter.equipment.map(Equipment::as_str))
     .bind(filter.grip.is_some())
     .bind(filter.grip.and_then(GripFilter::held).map(Grip::as_str))
+    .bind(filter.coach_id)
     .fetch_all(exec)
     .await
 }
@@ -348,6 +351,7 @@ pub async fn count_performances(
     .bind(filter.equipment.map(Equipment::as_str))
     .bind(filter.grip.is_some())
     .bind(filter.grip.and_then(GripFilter::held).map(Grip::as_str))
+    .bind(filter.coach_id)
     .fetch_one(exec)
     .await
 }

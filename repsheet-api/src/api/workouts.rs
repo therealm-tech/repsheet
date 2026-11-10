@@ -28,7 +28,7 @@ use crate::{
             WorkoutSummaryRow,
         },
     },
-    domain::{BlockKind, Mode, SetField, SetValues, SetViolation},
+    domain::{BlockKind, Locale, Mode, SetField, SetValues, SetViolation},
     error::{AppError, AppResult, FieldError},
 };
 
@@ -94,7 +94,9 @@ pub fn routes() -> ApiRouter<AppState> {
                     .summary("Log a block")
                     .description(
                         "Appends a block to the workout. Its kind follows from its \
-                         number of exercises: 1 simple, 2 superset, 3 or more circuit.",
+                         number of exercises: 1 simple, 2 superset, 3 or more circuit. \
+                         Logged from a planned block, each exercise's thread starts with \
+                         the note the coach wrote for it, as a comment of theirs.",
                     )
             }),
         )
@@ -532,6 +534,9 @@ async fn create_block(
         &exercises,
     )
     .await?;
+    if let Some(template_block_id) = body.template_block_id {
+        db::comments::insert_planned_notes(&mut *tx, block.id, template_block_id).await?;
+    }
     let mut loaded = db::workouts::load_blocks(&mut tx, vec![block], user.locale).await?;
     tx.commit().await?;
     let block = BlockResponse::from(loaded.remove(0));
@@ -589,17 +594,24 @@ async fn delete_block(
 }
 
 /// The sets of a block exercise, with how they are done.
-struct CheckedExercise {
-    chosen: Chosen,
-    sets: Vec<SetValues>,
+pub(super) struct CheckedExercise {
+    pub chosen: Chosen,
+    pub sets: Vec<SetValues>,
+}
+
+/// An exercise of a block and its sets, as a request gives them.
+pub(super) struct ExerciseSets<'a> {
+    pub exercise_id: Uuid,
+    pub mode: Option<ModeDto>,
+    pub equipment: Option<EquipmentDto>,
+    pub grip: Option<GripDto>,
+    pub sets: &'a [SetRequest],
 }
 
 /// Checks what field-level validation cannot: that the exercises and the
 /// template block are the user's, that each `id` names one of the block's
 /// `existing` exercises (by block exercise id) for the same exercise, at most
-/// once, that each exercise is counted in one of its modes and done with one
-/// of its equipment and grips, and that each set fits that mode and the
-/// exercise's load rule.
+/// once, and the exercises' sets as [`check_sets`] does.
 /// Returns the checked exercises, in request order.
 async fn check_block(
     conn: &mut sqlx::PgConnection,
@@ -624,16 +636,45 @@ async fn check_block(
     {
         errors.push(FieldError::new("templateBlockId", "unknown template block"));
     }
+    let exercises: Vec<ExerciseSets> = body
+        .exercises
+        .iter()
+        .map(|e| ExerciseSets {
+            exercise_id: e.exercise_id,
+            mode: e.mode,
+            equipment: e.equipment,
+            grip: e.grip,
+            sets: &e.sets,
+        })
+        .collect();
+    let checked = check_sets(conn, user.id, user.locale, &exercises, &mut errors).await?;
+    if errors.is_empty() {
+        Ok(checked)
+    } else {
+        Err(AppError::Validation(errors))
+    }
+}
 
-    let ids: Vec<Uuid> = body.exercises.iter().map(|e| e.exercise_id).collect();
-    let known: HashMap<Uuid, _> = db::exercises::find_many(&mut *conn, &ids, user.id, user.locale)
+/// Checks that each exercise is one `owner_id` can use, counted in one of its
+/// modes and done with one of its equipment and grips, and that each set fits
+/// that mode and the exercise's load rule. Adds what is wrong to `errors`, by
+/// field path from `exercises[i]`; returns the checked exercises, in order.
+pub(super) async fn check_sets(
+    conn: &mut sqlx::PgConnection,
+    owner_id: Uuid,
+    locale: Locale,
+    exercises: &[ExerciseSets<'_>],
+    errors: &mut Vec<FieldError>,
+) -> AppResult<Vec<CheckedExercise>> {
+    let ids: Vec<Uuid> = exercises.iter().map(|e| e.exercise_id).collect();
+    let known: HashMap<Uuid, _> = db::exercises::find_many(&mut *conn, &ids, owner_id, locale)
         .await?
         .into_iter()
         .map(|e| (e.id, e))
         .collect();
 
-    let mut checked = Vec::with_capacity(body.exercises.len());
-    for (i, exercise) in body.exercises.iter().enumerate() {
+    let mut checked = Vec::with_capacity(exercises.len());
+    for (i, exercise) in exercises.iter().enumerate() {
         let sets: Vec<SetValues> = exercise.sets.iter().map(Into::into).collect();
         let Some(known) = known.get(&exercise.exercise_id) else {
             errors.push(FieldError::new(
@@ -648,7 +689,7 @@ async fn check_block(
             exercise.equipment,
             exercise.grip,
             &format!("exercises[{i}]"),
-            &mut errors,
+            errors,
         ) else {
             continue;
         };
@@ -666,12 +707,7 @@ async fn check_block(
         }
         checked.push(CheckedExercise { chosen, sets });
     }
-
-    if errors.is_empty() {
-        Ok(checked)
-    } else {
-        Err(AppError::Validation(errors))
-    }
+    Ok(checked)
 }
 
 fn violation_message(violation: SetViolation, mode: Mode) -> String {

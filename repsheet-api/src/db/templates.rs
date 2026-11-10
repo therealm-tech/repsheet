@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     db::exercises::{ExerciseRow, ExerciseSummaryRow},
-    domain::{Equipment, Grip, Locale, Mode},
+    domain::{Equipment, Grip, Locale, Mode, SetValues},
 };
 
 #[derive(FromRow)]
@@ -15,6 +15,9 @@ pub struct TemplateRow {
     pub name: String,
     pub note: Option<String>,
     pub updated_at: DateTime<Utc>,
+    /// The coach who planned it, for a planned session.
+    pub author_id: Option<Uuid>,
+    pub author_name: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -49,6 +52,17 @@ struct TemplateBlockExerciseRow {
     exercise: ExerciseSummaryRow,
 }
 
+#[derive(FromRow)]
+struct TemplateSetRow {
+    template_block_exercise_id: Uuid,
+    round: i32,
+    reps: Option<i32>,
+    weight_kg: Option<f64>,
+    duration_seconds: Option<i32>,
+    distance_meters: Option<i32>,
+    warmup: bool,
+}
+
 pub struct LoadedTemplateBlock {
     pub row: TemplateBlockRow,
     pub exercises: Vec<LoadedTemplateExercise>,
@@ -62,6 +76,8 @@ pub struct LoadedTemplateExercise {
     pub grip: Option<Grip>,
     pub target: Option<String>,
     pub note: Option<String>,
+    /// The sets planned round by round; none in a template of the library.
+    pub sets: Vec<SetValues>,
 }
 
 pub struct TemplateExerciseInput<'a> {
@@ -71,6 +87,7 @@ pub struct TemplateExerciseInput<'a> {
     pub grip: Option<Grip>,
     pub target: Option<&'a str>,
     pub note: Option<&'a str>,
+    pub sets: &'a [SetValues],
 }
 
 /// What makes a template a planned session: its day and the coach who wrote it.
@@ -245,6 +262,8 @@ pub async fn load_blocks(
     .bind(locale.as_str())
     .fetch_all(&mut *conn)
     .await?;
+    let exercise_ids: Vec<Uuid> = rows.iter().map(|r| r.template_block_exercise_id).collect();
+    let mut sets = load_sets(&mut *conn, &exercise_ids).await?;
     let mut exercises_by_block: HashMap<Uuid, Vec<LoadedTemplateExercise>> = HashMap::new();
     for row in rows {
         exercises_by_block
@@ -257,6 +276,9 @@ pub async fn load_blocks(
                 grip: row.grip,
                 target: row.target,
                 note: row.note,
+                sets: sets
+                    .remove(&row.template_block_exercise_id)
+                    .unwrap_or_default(),
                 exercise: row.exercise,
             });
     }
@@ -267,6 +289,96 @@ pub async fn load_blocks(
             row,
         })
         .collect())
+}
+
+async fn load_sets(
+    exec: impl PgExecutor<'_>,
+    template_block_exercise_ids: &[Uuid],
+) -> sqlx::Result<HashMap<Uuid, Vec<SetValues>>> {
+    let rows: Vec<TemplateSetRow> =
+        sqlx::query_as(include_str!("../../queries/templates/list_sets.sql"))
+            .bind(template_block_exercise_ids)
+            .fetch_all(exec)
+            .await?;
+    let mut sets: HashMap<Uuid, Vec<SetValues>> = HashMap::new();
+    for row in rows {
+        sets.entry(row.template_block_exercise_id)
+            .or_default()
+            .push(SetValues {
+                round: row.round,
+                reps: row.reps,
+                weight_kg: row.weight_kg,
+                duration_seconds: row.duration_seconds,
+                distance_meters: row.distance_meters,
+                warmup: row.warmup,
+            });
+    }
+    Ok(sets)
+}
+
+/// Adds a block after the template's last one; returns its id.
+pub async fn append_block(
+    conn: &mut PgConnection,
+    template_id: Uuid,
+    exercises: &[TemplateExerciseInput<'_>],
+) -> sqlx::Result<Uuid> {
+    let id = sqlx::query_scalar(include_str!("../../queries/templates/append_block.sql"))
+        .bind(template_id)
+        .bind(planned_rounds(exercises))
+        .fetch_one(&mut *conn)
+        .await?;
+    write_block_exercises(conn, id, exercises).await?;
+    Ok(id)
+}
+
+/// Replaces the exercises and sets of block `id` of the template, which keeps
+/// its identity and its place; `false` when the template has no such block.
+pub async fn update_block(
+    conn: &mut PgConnection,
+    id: Uuid,
+    template_id: Uuid,
+    exercises: &[TemplateExerciseInput<'_>],
+) -> sqlx::Result<bool> {
+    let updated: Option<Uuid> = sqlx::query_scalar(include_str!(
+        "../../queries/templates/update_block_rounds.sql"
+    ))
+    .bind(id)
+    .bind(template_id)
+    .bind(planned_rounds(exercises))
+    .fetch_optional(&mut *conn)
+    .await?;
+    if updated.is_none() {
+        return Ok(false);
+    }
+    sqlx::query(include_str!(
+        "../../queries/templates/delete_block_exercises.sql"
+    ))
+    .bind(id)
+    .execute(&mut *conn)
+    .await?;
+    write_block_exercises(conn, id, exercises).await?;
+    Ok(true)
+}
+
+pub async fn delete_block(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    template_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/templates/delete_block.sql"))
+        .bind(id)
+        .bind(template_id)
+        .execute(exec)
+        .await?;
+    Ok(())
+}
+
+/// The rounds a block planned set by set spans.
+fn planned_rounds(exercises: &[TemplateExerciseInput<'_>]) -> Option<i32> {
+    exercises
+        .iter()
+        .flat_map(|e| e.sets.iter().map(|s| s.round))
+        .max()
 }
 
 async fn write_blocks(
@@ -300,44 +412,61 @@ async fn write_blocks(
                 .fetch_one(&mut *conn)
                 .await?
         };
-        let positions: Vec<i32> = (1..).take(block.exercises.len()).collect();
-        sqlx::query(include_str!(
-            "../../queries/templates/insert_block_exercises.sql"
-        ))
-        .bind(block_id)
-        .bind(&positions)
-        .bind(
-            block
-                .exercises
-                .iter()
-                .map(|e| e.exercise_id)
-                .collect::<Vec<_>>(),
-        )
-        .bind(
-            block
-                .exercises
-                .iter()
-                .map(|e| e.mode.as_str())
-                .collect::<Vec<_>>(),
-        )
-        .bind(
-            block
-                .exercises
-                .iter()
-                .map(|e| e.equipment.as_str())
-                .collect::<Vec<_>>(),
-        )
-        .bind(
-            block
-                .exercises
-                .iter()
-                .map(|e| e.grip.map(Grip::as_str))
-                .collect::<Vec<_>>(),
-        )
-        .bind(block.exercises.iter().map(|e| e.target).collect::<Vec<_>>())
-        .bind(block.exercises.iter().map(|e| e.note).collect::<Vec<_>>())
-        .execute(&mut *conn)
-        .await?;
+        write_block_exercises(conn, block_id, &block.exercises).await?;
+    }
+    Ok(())
+}
+
+async fn write_block_exercises(
+    conn: &mut PgConnection,
+    block_id: Uuid,
+    exercises: &[TemplateExerciseInput<'_>],
+) -> sqlx::Result<()> {
+    let positions: Vec<i32> = (1..).take(exercises.len()).collect();
+    let mut inserted: Vec<(Uuid, i32)> = sqlx::query_as(include_str!(
+        "../../queries/templates/insert_block_exercises.sql"
+    ))
+    .bind(block_id)
+    .bind(&positions)
+    .bind(exercises.iter().map(|e| e.exercise_id).collect::<Vec<_>>())
+    .bind(
+        exercises
+            .iter()
+            .map(|e| e.mode.as_str())
+            .collect::<Vec<_>>(),
+    )
+    .bind(
+        exercises
+            .iter()
+            .map(|e| e.equipment.as_str())
+            .collect::<Vec<_>>(),
+    )
+    .bind(
+        exercises
+            .iter()
+            .map(|e| e.grip.map(Grip::as_str))
+            .collect::<Vec<_>>(),
+    )
+    .bind(exercises.iter().map(|e| e.target).collect::<Vec<_>>())
+    .bind(exercises.iter().map(|e| e.note).collect::<Vec<_>>())
+    .fetch_all(&mut *conn)
+    .await?;
+    inserted.sort_by_key(|(_, position)| *position);
+    for ((id, _), exercise) in inserted.into_iter().zip(exercises) {
+        let sets = exercise.sets;
+        if sets.is_empty() {
+            continue;
+        }
+        sqlx::query(include_str!("../../queries/templates/insert_sets.sql"))
+            .bind(id)
+            .bind(sets.iter().map(|s| s.round).collect::<Vec<_>>())
+            .bind(sets.iter().map(|s| s.reps).collect::<Vec<_>>())
+            .bind(sets.iter().map(|s| s.weight_kg).collect::<Vec<_>>())
+            .bind(sets.iter().map(|s| s.duration_seconds).collect::<Vec<_>>())
+            .bind(sets.iter().map(|s| s.distance_meters).collect::<Vec<_>>())
+            .bind(sets.iter().map(|s| s.warmup).collect::<Vec<_>>())
+            .execute(&mut *conn)
+            .await?;
     }
     Ok(())
 }

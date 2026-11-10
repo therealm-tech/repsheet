@@ -2,7 +2,8 @@
 -- first. $5, when set, keeps only the workouts that come before that workout;
 -- $6, when set, only the blocks that counted the exercise in that mode; $7,
 -- when set, only those that did it with that equipment; when $8, only those
--- that held the grip $9, or recorded none when $9 is NULL.
+-- that held the grip $9, or recorded none when $9 is NULL; $10, when set,
+-- only the workouts that coach reads.
 SELECT
     be.id AS block_exercise_id,
     w.id AS workout_id,
@@ -24,6 +25,7 @@ WHERE
     AND ($6::TEXT IS NULL OR be.mode = $6)
     AND ($7::TEXT IS NULL OR be.equipment = $7)
     AND (NOT $8 OR be.grip IS NOT DISTINCT FROM $9::TEXT)
+    AND ($10::UUID IS NULL OR coach_reads_workout(w.id, w.template_id, $10))
     AND (
         $5::UUID IS NULL
         OR (w.performed_on, w.created_at) < (

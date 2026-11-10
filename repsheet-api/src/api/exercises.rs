@@ -9,6 +9,7 @@ use validator::{Validate, ValidationError};
 use crate::{
     api::{
         AppState, authenticated,
+        coaching::require_coach,
         comments::CommentResponse,
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
@@ -84,7 +85,12 @@ pub fn routes() -> ApiRouter<AppState> {
                     .tag("Exercises")
                     .id("listExercisePerformances")
                     .summary("List the times the user performed an exercise")
-                    .description("Newest first, one item per block the exercise was logged in.")
+                    .description(
+                        "Newest first, one item per block the exercise was logged in. With \
+                         `athleteId`, the times that athlete performed it in the workouts the \
+                         caller reads as their coach (403 when the caller is not): shared \
+                         with them, or logged from a session they planned.",
+                    )
             }),
         )
 }
@@ -524,8 +530,12 @@ pub struct ExercisePath {
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ListPerformancesQuery {
+    /// An athlete who has the caller as a coach, whose performances to list
+    /// instead of the caller's.
+    pub athlete_id: Option<Uuid>,
     /// Only the workouts that come before this one: by day, then by creation
-    /// for a same day. What "last time" means when logging that workout.
+    /// for a same day. What "last time" means when logging that workout. Not
+    /// with `athleteId`.
     pub before_workout_id: Option<Uuid>,
     /// Only the blocks that counted the exercise in this mode.
     pub mode: Option<ModeDto>,
@@ -775,7 +785,21 @@ async fn list_performances(
     PathParams(path): PathParams<ExercisePath>,
     ValidQuery(query): ValidQuery<ListPerformancesQuery>,
 ) -> AppResult<Json<PageResponse<PerformanceResponse>>> {
-    db::exercises::find(&state.pool, path.exercise_id, user.id, user.locale)
+    let mut conn = state.pool.acquire().await?;
+    let (performer_id, coach_id) = match query.athlete_id {
+        Some(athlete_id) => {
+            if query.before_workout_id.is_some() {
+                return Err(AppError::Validation(vec![FieldError::new(
+                    "beforeWorkoutId",
+                    "not allowed with athleteId",
+                )]));
+            }
+            require_coach(&mut conn, &user, athlete_id).await?;
+            (athlete_id, Some(user.id))
+        }
+        None => (user.id, None),
+    };
+    db::exercises::find(&mut *conn, path.exercise_id, performer_id, user.locale)
         .await?
         .ok_or(AppError::NotFound)?;
     let paging = PageQuery {
@@ -784,19 +808,20 @@ async fn list_performances(
     };
     let filter = PerformanceFilter {
         exercise_id: path.exercise_id,
-        user_id: user.id,
+        user_id: performer_id,
+        coach_id,
         before_workout_id: query.before_workout_id,
         mode: query.mode.map(Into::into),
         equipment: query.equipment.map(Into::into),
         grip: query.grip.map(Into::into),
     };
     let rows =
-        db::exercises::list_performances(&state.pool, &filter, paging.limit(), paging.offset())
+        db::exercises::list_performances(&mut *conn, &filter, paging.limit(), paging.offset())
             .await?;
-    let total = db::exercises::count_performances(&state.pool, &filter).await?;
+    let total = db::exercises::count_performances(&mut *conn, &filter).await?;
     let ids: Vec<Uuid> = rows.iter().map(|r| r.block_exercise_id).collect();
-    let mut sets = db::workouts::load_sets(&state.pool, &ids).await?;
-    let mut comments = db::comments::list(&state.pool, &ids).await?;
+    let mut sets = db::workouts::load_sets(&mut *conn, &ids).await?;
+    let mut comments = db::comments::list(&mut *conn, &ids).await?;
     let items = rows
         .into_iter()
         .map(|row| PerformanceResponse {
