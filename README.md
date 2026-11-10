@@ -12,7 +12,8 @@ RepSheet records what you actually did at the gym: each workout is a sequence of
 is one exercise (simple), two alternated exercises (superset) or three or more in rotation
 (circuit), and each block holds the **sets** of every round. An exercise is counted in reps, time or
 distance — some either way, like a crunch done for reps or for a minute, chosen block by block — and
-carries a weight when it takes one. The weight can change from one set to the next, never within a
+carries a weight when it takes one. Likewise, an exercise done with a barbell or with dumbbells is one
+exercise, and each block says which. The weight can change from one set to the next, never within a
 set.
 
 It is built for someone who trains with a coach: a session can follow a **template** written from the
@@ -22,8 +23,8 @@ block during it. Each set is pre-filled from the template's target, the previous
 performance of the workout before, so that logging a session takes a few minutes.
 
 - Built-in catalog of common exercises, plus your own
-- Progression per exercise and per mode: max weight, most reps or longest set over time, records,
-  full history (warm-up sets excluded)
+- Progression per exercise, mode and equipment: max weight, most reps or longest set over time,
+  records, full history (warm-up sets excluded)
 - Templates built by hand or from a workout you already logged
 - Multi-user: anyone can sign up; each account only sees its own data
 - A super admin, configured on the server, manages the accounts and the built-in catalog

@@ -71,13 +71,13 @@ sequenceDiagram
     participant A as repsheet-api
     participant P as PostgreSQL
 
-    W->>A: GET /v1/exercises/{id}/performances?beforeWorkoutId={id}&mode={mode}&perPage=1
-    A->>P: sets of this exercise in that mode, in the workout before
+    W->>A: GET /v1/exercises/{id}/performances?beforeWorkoutId={id}&mode={mode}&equipment={equipment}&perPage=1
+    A->>P: sets of this exercise in that mode and with that equipment, in the workout before
     A-->>W: previous performance (prefill)
     W->>A: POST /v1/workouts/{id}/blocks
     A->>A: validate fields (validator)
     A->>P: BEGIN, check workout, exercises and template block belong to the user
-    A->>A: check each exercise's mode, and every set against it and the load rule
+    A->>A: check each exercise's mode and equipment, and every set against the mode and the load rule
     A->>P: insert block, block exercises, sets, COMMIT
     A-->>W: 201 BlockResponse (kind derived)
 ```
@@ -109,10 +109,12 @@ erDiagram
   load rule. A superset's sets are therefore read round by round (A1, B1, A2, B2…), the order they
   are performed in.
 - An **exercise** declares the `modes` it can be counted in (a non-empty set of `reps`, `time` and
-  `distance`), a `default_mode` among them and a `load` rule (`none`, `optional` or `required`).
-  Table checks keep the modes a set and the default one of them. A template exercise also records its
-  `mode`, next to its target.
-- **Exercises** with no owner form the built-in catalog, seeded by the first migration and visible to
+  `distance`), a `default_mode` among them and a `load` rule (`none`, `optional` or `required`). It
+  likewise declares the `equipment` it can be done with (a non-empty set of `barbell`, `dumbbell`,
+  `kettlebell`, `machine`, `cable`, `bodyweight` and `other`) and a `default_equipment` among them.
+  Table checks keep each list a set and its default one of it. A block exercise records the `mode`
+  and the `equipment` chosen for it; a template exercise records both too, next to its target.
+- **Exercises** with no owner form the built-in catalog, seeded by the migrations and visible to
   everyone; the others belong to the user who created them. Names are unique per user, built-ins
   included, compared through the SQL function `fold()` (lowercase, accents stripped), which also
   powers the search.
@@ -145,10 +147,20 @@ follow from how it is counted: a farmer's walk is a distance with a required loa
 with an optional one, a crunch takes none. `weightKg` is therefore required, optional (an extra load,
 negative when assisted) or rejected according to the exercise's load rule, whatever the mode.
 
-**Progress is compared within a mode.** Performances can be filtered by mode, so "last time" and the
-pre-filled values of a block come from the last block counted the same way, and the client charts one
-mode at a time: twenty reps and one minute never share a curve. The history still lists every
-performance, each with its mode.
+**The exercise says what it can be done with; each block picks one.** A bench press is the same
+movement with a barbell or with dumbbells, and a coach switches between them from one week to the
+next. Two catalog entries would split one movement's history and make the user pick between near
+duplicates, so an exercise lists its equipment and a default one, and each block exercise records
+the equipment used, exactly as it does its mode. A movement that differs, not just its equipment,
+stays an exercise of its own: a one-arm dumbbell row is not a barbell row done with dumbbells. The
+choice covers every round of the block, and only the load depends on it: the sets follow the same
+rules whatever the equipment.
+
+**Progress is compared within a mode and an equipment.** Performances can be filtered by mode and
+by equipment, so "last time" and the pre-filled values of a block come from the last block counted
+the same way and done with the same equipment, and the client charts one mode and one equipment at a
+time: twenty reps and one minute never share a curve, and neither do 60 kg on a barbell and 22 kg
+dumbbells. The history still lists every performance, each with its mode and its equipment.
 
 **Weights are stored in kilograms.** The user's unit (`kg` or `lb`) is a display preference applied
 by the client; history stays consistent if the preference changes.
@@ -185,10 +197,11 @@ table. Error responses stay in English: they are for developers, and the client 
 the problem `type` and the HTTP status.
 
 **Built-in and custom exercises share one table and one API.** A super admin edits the catalog with
-the same endpoints a user edits their own exercises with. Two rules protect history: a mode the
-exercise was logged in cannot be removed from it (`409`, problem type `mode-locked`), and an exercise
-referenced by a workout or a template cannot be deleted. Template exercises counted in a mode that is
-removed move to the new default mode, since a plan is not history. The load rule can change at any
+the same endpoints a user edits their own exercises with. Three rules protect history: a mode the
+exercise was logged in cannot be removed from it (`409`, problem type `mode-locked`), nor can
+equipment it was logged with (`409`, `equipment-locked`), and an exercise referenced by a workout or
+a template cannot be deleted. Template exercises counted in a mode, or done with equipment, that is
+removed move to the new default one, since a plan is not history. The load rule can change at any
 time: it applies to the sets written from then on, including those of a logged block being edited.
 
 **SQL lives in `.sql` files.** Queries are loaded with `include_str!`, so `sqlfluff` lints them like
@@ -224,9 +237,9 @@ carries its own version, and its `appVersion` names the release of the images it
 - Every error response is an RFC 9457 problem document (`application/problem+json`) with a stable
   `type` URN; validation failures list the offending fields by their JSON path
   (`exercises[0].sets[2].reps`).
-- A block or template exercise is counted in one of its exercise's modes. No table check can see
-  across the two tables: the API checks it on every write, and refusing to remove a logged mode
-  keeps it true afterwards.
+- A block or template exercise is counted in one of its exercise's modes and done with one of its
+  equipment. No table check can see across the two tables: the API checks it on every write, and
+  refusing to remove a logged mode or equipment keeps it true afterwards.
 - Every collection endpoint is paginated (`page`, `perPage` ≤ 100) and returns
   `{ items, page, perPage, total }`.
 - A migration that has been applied is never edited: `sqlx` checksums them and refuses to start on
