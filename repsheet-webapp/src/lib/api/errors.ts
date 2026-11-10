@@ -19,6 +19,7 @@ const FIELD_MESSAGES: Record<string, ErrorKey> = {
 	defaultMode: "defaultModeInvalid",
 	equipment: "equipmentRequired",
 	defaultEquipment: "defaultEquipmentInvalid",
+	defaultGrip: "defaultGripInvalid",
 	performedOn: "dateRequired",
 	durationMinutes: "durationRange",
 };
@@ -47,6 +48,8 @@ function byType(error: ApiError): ErrorKey | null {
 			return "modeLocked";
 		case `${PROBLEM}equipment-locked`:
 			return "equipmentLocked";
+		case `${PROBLEM}grip-locked`:
+			return "gripLocked";
 		case `${PROBLEM}exercise-in-use`:
 			return "exerciseInUse";
 		case `${PROBLEM}own-role`:

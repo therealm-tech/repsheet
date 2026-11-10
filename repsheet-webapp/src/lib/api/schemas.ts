@@ -22,6 +22,18 @@ export const EquipmentSchema = z.enum([
 ]);
 export type Equipment = z.infer<typeof EquipmentSchema>;
 
+/** How the hands hold the bar or the handles. */
+export const GripSchema = z.enum([
+	"pronation",
+	"supination",
+	"neutral",
+	"mixed",
+]);
+export type Grip = z.infer<typeof GripSchema>;
+
+/** A grip to filter performances by; `none` for those with no grip recorded. */
+export type GripFilter = Grip | "none";
+
 export const BlockKindSchema = z.enum(["simple", "superset", "circuit"]);
 export type BlockKind = z.infer<typeof BlockKindSchema>;
 
@@ -76,6 +88,8 @@ export const ExerciseSummarySchema = z.object({
 	load: LoadSchema,
 	equipment: z.array(EquipmentSchema).min(1),
 	defaultEquipment: EquipmentSchema,
+	grips: z.array(GripSchema),
+	defaultGrip: GripSchema.nullable(),
 	unilateral: z.boolean(),
 });
 export type ExerciseSummary = z.infer<typeof ExerciseSummarySchema>;
@@ -110,6 +124,7 @@ export const PerformanceSchema = z.object({
 	blockKind: BlockKindSchema,
 	mode: ModeSchema,
 	equipment: EquipmentSchema,
+	grip: GripSchema.nullable(),
 	sets: z.array(SetSchema),
 });
 export type Performance = z.infer<typeof PerformanceSchema>;
@@ -125,6 +140,7 @@ export const BlockSchema = z.object({
 			exercise: ExerciseSummarySchema,
 			mode: ModeSchema,
 			equipment: EquipmentSchema,
+			grip: GripSchema.nullable(),
 			sets: z.array(SetSchema),
 		}),
 	),
@@ -163,6 +179,7 @@ export const TemplateBlockSchema = z.object({
 			exercise: ExerciseSummarySchema,
 			mode: ModeSchema,
 			equipment: EquipmentSchema,
+			grip: GripSchema.nullable(),
 			target: z.string().nullable(),
 		}),
 	),
@@ -202,6 +219,7 @@ export interface BlockInput {
 		exerciseId: string;
 		mode: Mode;
 		equipment: Equipment;
+		grip: Grip | null;
 		sets: SetInput[];
 	}[];
 }
@@ -218,6 +236,8 @@ export interface UpdateExerciseInput {
 	load: Load;
 	equipment: Equipment[];
 	defaultEquipment: Equipment;
+	grips: Grip[];
+	defaultGrip: Grip | null;
 	unilateral: boolean;
 }
 
@@ -248,6 +268,7 @@ export interface TemplateBlockInput {
 		exerciseId: string;
 		mode: Mode;
 		equipment: Equipment;
+		grip: Grip | null;
 		target?: string;
 	}[];
 }

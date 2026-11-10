@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { BlockKind, Equipment, Mode, Role } from "@/lib/api/schemas";
-import { equipmentLabel, kindLabel } from "@/lib/blocks";
+import type { BlockKind, ExerciseSummary, Role } from "@/lib/api/schemas";
+import { equipmentLabel, gripLabel, kindLabel } from "@/lib/blocks";
+import { type ChoiceChange, type Choices, hasChoice } from "@/lib/choices";
 
 export function KindTag({ kind, auto }: { kind: BlockKind; auto?: boolean }) {
 	const { t } = useTranslation();
@@ -48,72 +49,90 @@ export function Segmented<T extends string>({
 	);
 }
 
-/** A compact "Reps | Time" switch between the modes of an exercise. */
-export function ModeSwitch({
-	modes,
+/**
+ * A compact "Reps | Time" switch between the values an exercise offers for
+ * one choice. No value is on while the current one is unknown.
+ */
+export function ChoiceSwitch<T extends string>({
+	options,
 	value,
 	label,
+	optionLabel,
 	onChange,
 }: {
-	modes: Mode[];
-	value: Mode;
+	options: readonly T[];
+	value: T | null;
 	label: string;
-	onChange: (mode: Mode) => void;
+	optionLabel: (option: T) => string;
+	onChange: (option: T) => void;
 }) {
-	const { t } = useTranslation();
 	return (
 		<fieldset className="mini-seg">
 			<legend className="sr-only">{label}</legend>
-			{modes.map((mode) => (
+			{options.map((option) => (
 				<button
-					key={mode}
+					key={option}
 					type="button"
-					className={mode === value ? "on" : undefined}
-					aria-pressed={mode === value}
+					className={option === value ? "on" : undefined}
+					aria-pressed={option === value}
 					onClick={() => {
-						if (mode !== value) {
-							onChange(mode);
+						if (option !== value) {
+							onChange(option);
 						}
 					}}
 				>
-					{t(`modesShort.${mode}`)}
+					{optionLabel(option)}
 				</button>
 			))}
 		</fieldset>
 	);
 }
 
-/** A compact "Barbell | Dumbbells" switch between the equipment of an exercise. */
-export function EquipmentSwitch({
-	equipment,
-	value,
-	label,
+/**
+ * The switches of the choices an exercise leaves open to a block or a
+ * template: its mode, its equipment and its grip.
+ */
+export function ChoiceSwitches({
+	exercise,
+	chosen,
 	onChange,
 }: {
-	equipment: Equipment[];
-	value: Equipment;
-	label: string;
-	onChange: (equipment: Equipment) => void;
+	exercise: ExerciseSummary;
+	chosen: Choices;
+	onChange: (change: ChoiceChange) => void;
 }) {
+	const { t } = useTranslation();
+	const name = exercise.name;
 	return (
-		<fieldset className="mini-seg">
-			<legend className="sr-only">{label}</legend>
-			{equipment.map((kind) => (
-				<button
-					key={kind}
-					type="button"
-					className={kind === value ? "on" : undefined}
-					aria-pressed={kind === value}
-					onClick={() => {
-						if (kind !== value) {
-							onChange(kind);
-						}
-					}}
-				>
-					{equipmentLabel(kind)}
-				</button>
-			))}
-		</fieldset>
+		<>
+			{hasChoice(exercise.modes, chosen.mode) ? (
+				<ChoiceSwitch
+					options={exercise.modes}
+					value={chosen.mode}
+					label={t("block.modeOf", { name })}
+					optionLabel={(mode) => t(`modesShort.${mode}`)}
+					onChange={(mode) => onChange({ mode })}
+				/>
+			) : null}
+			{hasChoice(exercise.equipment, chosen.equipment) ? (
+				<ChoiceSwitch
+					options={exercise.equipment}
+					value={chosen.equipment}
+					label={t("block.equipmentOf", { name })}
+					optionLabel={equipmentLabel}
+					onChange={(equipment) => onChange({ equipment })}
+				/>
+			) : null}
+			{hasChoice(exercise.grips, chosen.grip) ? (
+				<ChoiceSwitch
+					options={exercise.grips}
+					value={chosen.grip}
+					label={t("block.gripOf", { name })}
+					optionLabel={gripLabel}
+					onChange={(grip) => onChange({ grip })}
+				/>
+			) : null}
+		</>
 	);
 }
 

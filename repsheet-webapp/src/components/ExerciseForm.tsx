@@ -1,24 +1,22 @@
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-	EquipmentSwitch,
-	ErrorText,
-	ModeSwitch,
-	Segmented,
-} from "@/components/ui";
+import { ChoiceSwitch, ErrorText, Segmented } from "@/components/ui";
 import { currentLocale } from "@/i18n";
 import type { ErrorKey } from "@/lib/api/errors";
 import {
 	type Equipment,
 	EquipmentSchema,
 	type ExerciseNamesInput,
+	type Grip,
+	GripSchema,
 	type Load,
 	LoadSchema,
 	type Locale,
 	type Mode,
 	ModeSchema,
 } from "@/lib/api/schemas";
-import { equipmentLabel } from "@/lib/blocks";
+import { equipmentLabel, gripLabel } from "@/lib/blocks";
+import { type Offer, toggleOffer } from "@/lib/choices";
 
 export interface ExerciseFormValues {
 	names: Record<Locale, string>;
@@ -27,6 +25,8 @@ export interface ExerciseFormValues {
 	load: Load;
 	equipment: Equipment[];
 	defaultEquipment: Equipment;
+	grips: Grip[];
+	defaultGrip: Grip | null;
 	unilateral: boolean;
 	builtIn: boolean;
 }
@@ -38,6 +38,8 @@ export interface ExerciseFormOutput {
 	load: Load;
 	equipment: Equipment[];
 	defaultEquipment: Equipment;
+	grips: Grip[];
+	defaultGrip: Grip | null;
 	unilateral: boolean;
 	builtIn: boolean;
 }
@@ -78,6 +80,72 @@ export function checkNames(
 		out.en = en;
 	}
 	return { names: out };
+}
+
+/**
+ * The values an exercise offers for one choice, as chips to toggle, and the
+ * default one when there is more than one. A `required` offer keeps at least
+ * one value.
+ */
+function OfferField<T extends string>({
+	legend,
+	defaultLabel,
+	all,
+	offer,
+	required,
+	optionLabel,
+	shortLabel = optionLabel,
+	onChange,
+}: {
+	legend: string;
+	defaultLabel: string;
+	all: readonly T[];
+	offer: Offer<T>;
+	required: boolean;
+	optionLabel: (option: T) => string;
+	/** The label in the compact default switch, when it differs. */
+	shortLabel?: (option: T) => string;
+	onChange: (offer: Offer<T>) => void;
+}) {
+	return (
+		<>
+			<fieldset className="field-group">
+				<legend className="label">{legend}</legend>
+				<div className="chips">
+					{all.map((option) => {
+						const on = offer.values.includes(option);
+						return (
+							<button
+								key={option}
+								type="button"
+								className={on ? "chip on" : "chip"}
+								aria-pressed={on}
+								onClick={() =>
+									onChange(toggleOffer(all, offer, option, required))
+								}
+							>
+								{on ? <span aria-hidden="true">✓ </span> : null}
+								{optionLabel(option)}
+							</button>
+						);
+					})}
+				</div>
+			</fieldset>
+			{offer.values.length > 1 ? (
+				<div className="row small">
+					<span className="muted">{defaultLabel}</span>
+					<span className="grow" />
+					<ChoiceSwitch
+						options={offer.values}
+						value={offer.defaultValue}
+						label={defaultLabel}
+						optionLabel={shortLabel}
+						onChange={(defaultValue) => onChange({ ...offer, defaultValue })}
+					/>
+				</div>
+			) : null}
+		</>
+	);
 }
 
 export function ExerciseForm({
@@ -123,36 +191,6 @@ export function ExerciseForm({
 		});
 	}
 
-	/** Adds or removes a mode, keeping at least one and a default among them. */
-	function toggleMode(mode: Mode) {
-		const selected = values.modes.includes(mode);
-		if (selected && values.modes.length === 1) {
-			return;
-		}
-		const modes = ModeSchema.options.filter((m) =>
-			m === mode ? !selected : values.modes.includes(m),
-		);
-		const defaultMode = modes.includes(values.defaultMode)
-			? values.defaultMode
-			: (modes[0] ?? mode);
-		setValues({ ...values, modes, defaultMode });
-	}
-
-	/** Adds or removes an equipment, keeping at least one and a default among them. */
-	function toggleEquipment(kind: Equipment) {
-		const selected = values.equipment.includes(kind);
-		if (selected && values.equipment.length === 1) {
-			return;
-		}
-		const equipment = EquipmentSchema.options.filter((e) =>
-			e === kind ? !selected : values.equipment.includes(e),
-		);
-		const defaultEquipment = equipment.includes(values.defaultEquipment)
-			? values.defaultEquipment
-			: (equipment[0] ?? kind);
-		setValues({ ...values, equipment, defaultEquipment });
-	}
-
 	function submit(event: FormEvent) {
 		event.preventDefault();
 		const checked = checkNames(values.names, bothRequired);
@@ -186,38 +224,22 @@ export function ExerciseForm({
 					/>
 				</div>
 			))}
-			<fieldset className="field-group">
-				<legend className="label">{t("exerciseForm.modes")}</legend>
-				<div className="chips">
-					{ModeSchema.options.map((mode) => {
-						const on = values.modes.includes(mode);
-						return (
-							<button
-								key={mode}
-								type="button"
-								className={on ? "chip on" : "chip"}
-								aria-pressed={on}
-								onClick={() => toggleMode(mode)}
-							>
-								{on ? <span aria-hidden="true">✓ </span> : null}
-								{t(`modes.${mode}`)}
-							</button>
-						);
-					})}
-				</div>
-			</fieldset>
-			{values.modes.length > 1 ? (
-				<div className="row small">
-					<span className="muted">{t("exerciseForm.defaultMode")}</span>
-					<span className="grow" />
-					<ModeSwitch
-						modes={values.modes}
-						value={values.defaultMode}
-						label={t("exerciseForm.defaultMode")}
-						onChange={(defaultMode) => setValues({ ...values, defaultMode })}
-					/>
-				</div>
-			) : null}
+			<OfferField
+				legend={t("exerciseForm.modes")}
+				defaultLabel={t("exerciseForm.defaultMode")}
+				all={ModeSchema.options}
+				offer={{ values: values.modes, defaultValue: values.defaultMode }}
+				required
+				optionLabel={(mode) => t(`modes.${mode}`)}
+				shortLabel={(mode) => t(`modesShort.${mode}`)}
+				onChange={(offer) =>
+					setValues({
+						...values,
+						modes: offer.values,
+						defaultMode: offer.defaultValue ?? values.defaultMode,
+					})
+				}
+			/>
 			<div>
 				<span className="label">{t("exerciseForm.load")}</span>
 				<Segmented
@@ -230,40 +252,39 @@ export function ExerciseForm({
 					}))}
 				/>
 			</div>
-			<fieldset className="field-group">
-				<legend className="label">{t("exerciseForm.equipment")}</legend>
-				<div className="chips">
-					{EquipmentSchema.options.map((e) => {
-						const on = values.equipment.includes(e);
-						return (
-							<button
-								key={e}
-								type="button"
-								className={on ? "chip on" : "chip"}
-								aria-pressed={on}
-								onClick={() => toggleEquipment(e)}
-							>
-								{on ? <span aria-hidden="true">✓ </span> : null}
-								{equipmentLabel(e)}
-							</button>
-						);
-					})}
-				</div>
-			</fieldset>
-			{values.equipment.length > 1 ? (
-				<div className="row small">
-					<span className="muted">{t("exerciseForm.defaultEquipment")}</span>
-					<span className="grow" />
-					<EquipmentSwitch
-						equipment={values.equipment}
-						value={values.defaultEquipment}
-						label={t("exerciseForm.defaultEquipment")}
-						onChange={(defaultEquipment) =>
-							setValues({ ...values, defaultEquipment })
-						}
-					/>
-				</div>
-			) : null}
+			<OfferField
+				legend={t("exerciseForm.equipment")}
+				defaultLabel={t("exerciseForm.defaultEquipment")}
+				all={EquipmentSchema.options}
+				offer={{
+					values: values.equipment,
+					defaultValue: values.defaultEquipment,
+				}}
+				required
+				optionLabel={equipmentLabel}
+				onChange={(offer) =>
+					setValues({
+						...values,
+						equipment: offer.values,
+						defaultEquipment: offer.defaultValue ?? values.defaultEquipment,
+					})
+				}
+			/>
+			<OfferField
+				legend={t("exerciseForm.grips")}
+				defaultLabel={t("exerciseForm.defaultGrip")}
+				all={GripSchema.options}
+				offer={{ values: values.grips, defaultValue: values.defaultGrip }}
+				required={false}
+				optionLabel={gripLabel}
+				onChange={(offer) =>
+					setValues({
+						...values,
+						grips: offer.values,
+						defaultGrip: offer.defaultValue,
+					})
+				}
+			/>
 			<label className="row small">
 				<input
 					type="checkbox"

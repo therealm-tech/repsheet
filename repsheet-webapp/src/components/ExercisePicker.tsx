@@ -62,6 +62,8 @@ function CreateExerciseForm({
 				load: "required",
 				equipment: ["barbell"],
 				defaultEquipment: "barbell",
+				grips: [],
+				defaultGrip: null,
 				unilateral: false,
 				builtIn: false,
 			}}

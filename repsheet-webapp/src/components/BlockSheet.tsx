@@ -4,11 +4,10 @@ import { useTranslation } from "react-i18next";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import { Stepper } from "@/components/Stepper";
 import {
+	ChoiceSwitches,
 	ConfirmButton,
-	EquipmentSwitch,
 	ErrorText,
 	KindTag,
-	ModeSwitch,
 	Sheet,
 } from "@/components/ui";
 import i18n from "@/i18n";
@@ -17,7 +16,6 @@ import { errorMessage } from "@/lib/api/errors";
 import type {
 	Block,
 	BlockInput,
-	Equipment,
 	ExerciseSummary,
 	Load,
 	Mode,
@@ -28,11 +26,13 @@ import type {
 import {
 	choicesText,
 	equipmentWith,
+	gripWith,
 	kindOf,
 	letter,
 	modeInLower,
 	summarizeSets,
 } from "@/lib/blocks";
+import type { ChoiceChange, Choices } from "@/lib/choices";
 import { formatShortDay } from "@/lib/dates";
 import {
 	addExercise,
@@ -49,9 +49,8 @@ import {
 	setCell,
 	stepFor,
 	stepValue,
+	switchChoice,
 	switchDiscards,
-	switchEquipment,
-	switchMode,
 	toBlockExercises,
 	toggleWarmup,
 	weightRequired,
@@ -162,9 +161,30 @@ interface Active {
 	col: number;
 }
 
-type PendingSwitch =
-	| { kind: "mode"; col: number; mode: Mode }
-	| { kind: "equipment"; col: number; equipment: Equipment };
+interface PendingSwitch {
+	col: number;
+	change: ChoiceChange;
+}
+
+/** What a switch that would clear values asks before going ahead. */
+function switchQuestion(
+	name: string,
+	change: ChoiceChange,
+	chosen: Choices,
+): string {
+	if ("mode" in change) {
+		return i18n.t("block.switchConfirm", {
+			name,
+			mode: modeInLower(change.mode),
+			previous: modeInLower(chosen.mode),
+		});
+	}
+	const [how, previous] =
+		"equipment" in change
+			? [equipmentWith(change.equipment), equipmentWith(chosen.equipment)]
+			: [gripWith(change.grip), gripWith(chosen.grip)];
+	return i18n.t("block.switchLoadsConfirm", { name, how, previous });
+}
 
 export function BlockSheet({
 	workoutId,
@@ -194,12 +214,10 @@ export function BlockSheet({
 	);
 
 	const planned =
-		templateBlock?.exercises.map((e) =>
-			withChoices(e.exercise, e.mode, e.equipment),
-		) ?? [];
+		templateBlock?.exercises.map((e) => withChoices(e.exercise, e)) ?? [];
 	const prefill = useQueries({
 		queries: planned.map((e) =>
-			previousPerformanceQuery(e.id, workoutId, e.mode, e.chosenEquipment),
+			previousPerformanceQuery(e.id, workoutId, e.chosen),
 		),
 	});
 	const prefillDone = prefill.every((q) => !q.isPending);
@@ -209,9 +227,7 @@ export function BlockSheet({
 			return;
 		}
 		const next = initialGrid({
-			exercises: templateBlock.exercises.map((e) =>
-				withChoices(e.exercise, e.mode, e.equipment),
-			),
+			exercises: templateBlock.exercises.map((e) => withChoices(e.exercise, e)),
 			targets: templateBlock.exercises.map((e) => e.target),
 			rounds: templateBlock.rounds,
 			lastSets: prefill.map((q) => q.data?.items[0]?.sets),
@@ -226,7 +242,7 @@ export function BlockSheet({
 	const exerciseIds = grid?.exercises.map((e) => e.id) ?? [];
 	const lastPerformances = useQueries({
 		queries: (grid?.exercises ?? []).map((e) =>
-			previousPerformanceQuery(e.id, workoutId, e.mode, e.chosenEquipment),
+			previousPerformanceQuery(e.id, workoutId, e.chosen),
 		),
 	});
 
@@ -260,12 +276,11 @@ export function BlockSheet({
 
 	async function lastSetsIn(
 		exerciseId: string,
-		mode: Mode,
-		equipment: Equipment,
+		chosen: Choices,
 	): Promise<WorkoutSet[] | undefined> {
 		try {
 			const page = await queryClient.fetchQuery(
-				previousPerformanceQuery(exerciseId, workoutId, mode, equipment),
+				previousPerformanceQuery(exerciseId, workoutId, chosen),
 			);
 			return page.items[0]?.sets;
 		} catch {
@@ -275,15 +290,12 @@ export function BlockSheet({
 
 	async function pick(exercise: ExerciseSummary) {
 		setPicking(false);
-		const lastSets = await lastSetsIn(
-			exercise.id,
-			exercise.defaultMode,
-			exercise.defaultEquipment,
-		);
+		const added = withChoices(exercise);
+		const lastSets = await lastSetsIn(added.id, added.chosen);
 		setGrid((current) =>
 			addExercise(
 				current ?? { exercises: [], rows: [] },
-				withChoices(exercise),
+				added,
 				lastSets,
 				unit,
 			),
@@ -291,42 +303,26 @@ export function BlockSheet({
 		setFocusExercise(exercise.id);
 	}
 
-	async function applySwitch(change: PendingSwitch) {
+	async function applySwitch({ col, change }: PendingSwitch) {
 		setPendingSwitch(null);
-		const exercise = grid?.exercises[change.col];
+		const exercise = grid?.exercises[col];
 		if (!exercise) {
 			return;
 		}
-		if (change.kind === "mode") {
-			const lastSets = await lastSetsIn(
-				exercise.id,
-				change.mode,
-				exercise.chosenEquipment,
-			);
-			setGrid((current) =>
-				current
-					? switchMode(current, change.col, change.mode, lastSets, unit)
-					: current,
-			);
-			return;
-		}
-		const lastSets = await lastSetsIn(
-			exercise.id,
-			exercise.mode,
-			change.equipment,
-		);
+		const lastSets = await lastSetsIn(exercise.id, {
+			...exercise.chosen,
+			...change,
+		});
 		setGrid((current) =>
-			current
-				? switchEquipment(current, change.col, change.equipment, lastSets, unit)
-				: current,
+			current ? switchChoice(current, col, change, lastSets, unit) : current,
 		);
 	}
 
-	function requestSwitch(change: PendingSwitch) {
-		if (grid && switchDiscards(grid, change.col, change.kind)) {
-			setPendingSwitch(change);
+	function requestSwitch(pending: PendingSwitch) {
+		if (grid && switchDiscards(grid, pending.col, pending.change)) {
+			setPendingSwitch(pending);
 		} else {
-			void applySwitch(change);
+			void applySwitch(pending);
 		}
 	}
 
@@ -436,19 +432,15 @@ export function BlockSheet({
 								const details = {
 									date: formatShortDay(last.performedOn),
 									summary: summarizeSets(
-										exercise.mode,
+										exercise.chosen.mode,
 										exercise.load,
 										last.sets,
 										unit,
 									),
 								};
-								const how = choicesText(
-									exercise,
-									exercise.mode,
-									exercise.chosenEquipment,
-								);
+								const how = choicesText(exercise, exercise.chosen);
 								return (
-									<li key={exercise.id} className="muted small">
+									<li key={`${i}-${exercise.id}`} className="muted small">
 										<b className="accent">{letter(i)}</b>{" "}
 										{how
 											? t("block.lastTimeIn", { ...details, how })
@@ -461,17 +453,11 @@ export function BlockSheet({
 						{pendingSwitch && switching ? (
 							<div className="switch-confirm">
 								<p>
-									{pendingSwitch.kind === "mode"
-										? t("block.switchConfirm", {
-												name: switching.name,
-												mode: modeInLower(pendingSwitch.mode),
-												previous: modeInLower(switching.mode),
-											})
-										: t("block.switchEquipmentConfirm", {
-												name: switching.name,
-												equipment: equipmentWith(pendingSwitch.equipment),
-												previous: equipmentWith(switching.chosenEquipment),
-											})}
+									{switchQuestion(
+										switching.name,
+										pendingSwitch.change,
+										switching.chosen,
+									)}
 								</p>
 								<div className="row">
 									<button
@@ -501,29 +487,14 @@ export function BlockSheet({
 							>
 								<div />
 								{grid.exercises.map((exercise, col) => (
-									<div key={exercise.id} className="grid-head">
+									<div key={`${col}-${exercise.id}`} className="grid-head">
 										<b className="accent">{letter(col)}</b>
 										<span className="truncate">{exercise.name}</span>
-										{exercise.modes.length > 1 ? (
-											<ModeSwitch
-												modes={exercise.modes}
-												value={exercise.mode}
-												label={t("block.modeOf", { name: exercise.name })}
-												onChange={(mode) =>
-													requestSwitch({ kind: "mode", col, mode })
-												}
-											/>
-										) : null}
-										{exercise.equipment.length > 1 ? (
-											<EquipmentSwitch
-												equipment={exercise.equipment}
-												value={exercise.chosenEquipment}
-												label={t("block.equipmentOf", { name: exercise.name })}
-												onChange={(equipment) =>
-													requestSwitch({ kind: "equipment", col, equipment })
-												}
-											/>
-										) : null}
+										<ChoiceSwitches
+											exercise={exercise}
+											chosen={exercise.chosen}
+											onChange={(change) => requestSwitch({ col, change })}
+										/>
 										<button
 											type="button"
 											className="grid-head-remove"
@@ -698,14 +669,15 @@ function RowView({
 			</div>
 			{grid.exercises.map((exercise, col) => {
 				const cell = row.cells[col];
+				const key = `${col}-${exercise.id}`;
 				if (!cell) {
-					return <div key={exercise.id} />;
+					return <div key={key} />;
 				}
-				const text = cellText(exercise.mode, exercise.load, cell, unit);
+				const text = cellText(exercise.chosen.mode, exercise.load, cell, unit);
 				const isActive = isActiveRow && active?.col === col;
 				return (
 					<button
-						key={exercise.id}
+						key={key}
 						type="button"
 						className={[
 							"cell",

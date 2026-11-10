@@ -29,6 +29,8 @@ const press: Exercise = exercise({
 	name: "Développé militaire",
 	equipment: ["barbell", "dumbbell"],
 	defaultEquipment: "barbell",
+	grips: [],
+	defaultGrip: null,
 });
 
 function lifted(weightKg: number): WorkoutSet[] {
@@ -76,6 +78,8 @@ describe("exercise form", () => {
 			expect(calls.find((c) => c.method === "POST")?.body).toMatchObject({
 				equipment: ["barbell", "dumbbell"],
 				defaultEquipment: "dumbbell",
+				grips: [],
+				defaultGrip: null,
 			}),
 		);
 	});
@@ -193,6 +197,7 @@ describe("BlockSheet", () => {
 					exerciseId: "press",
 					mode: "reps",
 					equipment: "dumbbell",
+					grip: null,
 					sets: [{ round: 1, warmup: false, reps: 8, weightKg: 22 }],
 				},
 			],
@@ -266,6 +271,7 @@ describe("template editor", () => {
 							exercise: press,
 							mode: "reps",
 							equipment: "barbell",
+							grip: null,
 							target: "8",
 						},
 					],
@@ -303,6 +309,7 @@ describe("template editor", () => {
 								exerciseId: "press",
 								mode: "reps",
 								equipment: "dumbbell",
+								grip: null,
 								target: "8",
 							},
 						],

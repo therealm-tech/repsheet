@@ -2,7 +2,6 @@ import i18n from "@/i18n";
 import type {
 	Block,
 	BlockInput,
-	Equipment,
 	ExerciseSummary,
 	Load,
 	Mode,
@@ -10,6 +9,11 @@ import type {
 	WeightUnit,
 	WorkoutSet,
 } from "@/lib/api/schemas";
+import {
+	type ChoiceChange,
+	type Choices,
+	startingChoices,
+} from "@/lib/choices";
 import { formatDuration, kgToUnit, unitToKg } from "@/lib/units";
 
 /** A cell holds one set; the weight is expressed in the user's unit. */
@@ -34,14 +38,8 @@ function nextRowId(): number {
 	return lastRowId;
 }
 
-/**
- * An exercise of the block, with the mode it is counted in and the equipment
- * it is done with, for every round.
- */
-export type GridExercise = ExerciseSummary & {
-	mode: Mode;
-	chosenEquipment: Equipment;
-};
+/** An exercise of the block, with how it is done for every round. */
+export type GridExercise = ExerciseSummary & { chosen: Choices };
 
 export interface Grid {
 	exercises: GridExercise[];
@@ -68,7 +66,7 @@ export function primaryField(mode: Mode): Field {
 
 /** What a cell asks for: the count of its mode, and a weight unless the exercise takes none. */
 export function fieldsFor(exercise: GridExercise): Field[] {
-	const primary = primaryField(exercise.mode);
+	const primary = primaryField(exercise.chosen.mode);
 	return exercise.load === "none" ? [primary] : [primary, "weight"];
 }
 
@@ -76,26 +74,12 @@ export function weightRequired(load: Load): boolean {
 	return load === "required";
 }
 
-/**
- * The exercise counted in `mode` and done with `equipment` when it offers
- * them, in its default mode and with its default equipment otherwise.
- */
+/** The exercise done as `planned` where it still allows it, the default way otherwise. */
 export function withChoices(
 	exercise: ExerciseSummary,
-	mode?: Mode,
-	equipment?: Equipment,
+	planned?: Choices,
 ): GridExercise {
-	return {
-		...exercise,
-		mode:
-			mode !== undefined && exercise.modes.includes(mode)
-				? mode
-				: exercise.defaultMode,
-		chosenEquipment:
-			equipment !== undefined && exercise.equipment.includes(equipment)
-				? equipment
-				: exercise.defaultEquipment,
-	};
+	return { ...exercise, chosen: startingChoices(exercise, planned) };
 }
 
 /** Reads a coach's target ("8", "6–8", "45 s", "1 min 30", "500 m", "max") as a number to prefill. */
@@ -176,7 +160,7 @@ function prefillCell(
 		last.find((s) => s.round === round) ?? (round === 1 ? last[0] : undefined),
 		unit,
 	);
-	const primary = primaryField(exercise.mode);
+	const primary = primaryField(exercise.chosen.mode);
 	const cell = emptyCell();
 	cell[primary] = target ?? fromLast?.[primary] ?? previous?.[primary] ?? null;
 	if (exercise.load !== "none") {
@@ -208,7 +192,7 @@ export function initialGrid(source: PrefillSource): Grid {
 					exercise,
 					r,
 					previous?.cells[i],
-					parseTarget(source.targets?.[i], exercise.mode),
+					parseTarget(source.targets?.[i], exercise.chosen.mode),
 					last[i] ?? [],
 					unit,
 				),
@@ -235,8 +219,7 @@ export function gridFromBlock(block: Block, unit: WeightUnit): Grid {
 	return {
 		exercises: block.exercises.map((e) => ({
 			...e.exercise,
-			mode: e.mode,
-			chosenEquipment: e.equipment,
+			chosen: { mode: e.mode, equipment: e.equipment, grip: e.grip },
 		})),
 		rows,
 	};
@@ -316,41 +299,55 @@ export function addExercise(
 }
 
 /**
- * Whether counting a column in another mode, or doing it with other
- * equipment, would clear values already entered: the counts for a mode, the
- * loads for equipment.
+ * The cell field a change empties: the count for another mode, the load for
+ * other equipment or another grip.
  */
+function changedField(exercise: GridExercise, change: ChoiceChange): Field {
+	return "mode" in change ? primaryField(exercise.chosen.mode) : "weight";
+}
+
+/** Whether a change of how a column is done would clear values already entered. */
 export function switchDiscards(
 	grid: Grid,
 	col: number,
-	change: "mode" | "equipment",
+	change: ChoiceChange,
 ): boolean {
 	const exercise = grid.exercises[col];
 	if (!exercise) {
 		return false;
 	}
-	const field = change === "mode" ? primaryField(exercise.mode) : "weight";
+	const field = changedField(exercise, change);
 	return grid.rows.some((row) => (row.cells[col]?.[field] ?? null) !== null);
 }
 
 /**
- * Counts a column in another mode, for every round: each cell drops the old
- * count and takes the new one from the last performance in that mode; the
- * load stays.
+ * Changes how a column is done, for every round. Another mode changes what is
+ * counted: each cell drops its count and takes the one of the last
+ * performance done the new way, and keeps its load. Other equipment or another
+ * grip changes the load: each cell drops it and takes the last performance's,
+ * and keeps its count, since the movement is the same.
  */
-export function switchMode(
+export function switchChoice(
 	grid: Grid,
 	col: number,
-	mode: Mode,
+	change: ChoiceChange,
 	lastSets: WorkoutSet[] | undefined,
 	unit: WeightUnit,
 ): Grid {
 	const current = grid.exercises[col];
-	if (!current || current.mode === mode) {
+	if (!current) {
 		return grid;
 	}
-	const exercise: GridExercise = { ...current, mode };
-	const field = primaryField(mode);
+	const chosen = { ...current.chosen, ...change };
+	if (
+		chosen.mode === current.chosen.mode &&
+		chosen.equipment === current.chosen.equipment &&
+		chosen.grip === current.chosen.grip
+	) {
+		return grid;
+	}
+	const exercise: GridExercise = { ...current, chosen };
+	const field = changedField(exercise, change);
 	const last = workingSets(lastSets);
 	let previous: Cell | undefined;
 	return {
@@ -364,54 +361,12 @@ export function switchMode(
 				last,
 				unit,
 			);
-			const cell: Cell = {
-				...emptyCell(),
-				[field]: prefilled[field],
-				weight: row.cells[col]?.weight ?? null,
-			};
-			previous = cell;
-			return {
-				...row,
-				cells: row.cells.map((c, i) => (i === col ? cell : c)),
-			};
-		}),
-	};
-}
-
-/**
- * Does a column with other equipment, for every round: each cell drops its
- * load and takes the one of the last performance with that equipment; the
- * counts stay, since the movement is the same.
- */
-export function switchEquipment(
-	grid: Grid,
-	col: number,
-	equipment: Equipment,
-	lastSets: WorkoutSet[] | undefined,
-	unit: WeightUnit,
-): Grid {
-	const current = grid.exercises[col];
-	if (!current || current.chosenEquipment === equipment) {
-		return grid;
-	}
-	const exercise: GridExercise = { ...current, chosenEquipment: equipment };
-	const last = workingSets(lastSets);
-	let previous: Cell | undefined;
-	return {
-		exercises: grid.exercises.map((e, i) => (i === col ? exercise : e)),
-		rows: grid.rows.map((row, r) => {
-			const prefilled = prefillCell(
-				exercise,
-				r + 1,
-				previous,
-				null,
-				last,
-				unit,
-			);
-			const cell: Cell = {
-				...(row.cells[col] ?? emptyCell()),
-				weight: prefilled.weight,
-			};
+			const old = row.cells[col];
+			const kept: Cell =
+				"mode" in change
+					? { ...emptyCell(), weight: old?.weight ?? null }
+					: (old ?? emptyCell());
+			const cell: Cell = { ...kept, [field]: prefilled[field] };
 			previous = cell;
 			return {
 				...row,
@@ -474,7 +429,7 @@ export function toBlockExercises(grid: Grid, unit: WeightUnit): BuildResult {
 	}
 	const exercises: BlockInput["exercises"] = [];
 	for (const [col, exercise] of grid.exercises.entries()) {
-		const primary = primaryField(exercise.mode);
+		const primary = primaryField(exercise.chosen.mode);
 		const sets: SetInput[] = [];
 		for (const [r, row] of grid.rows.entries()) {
 			const cell = row.cells[col];
@@ -509,12 +464,7 @@ export function toBlockExercises(grid: Grid, unit: WeightUnit): BuildResult {
 				error: i18n.t("grid.noSet", { name: exercise.name }),
 			};
 		}
-		exercises.push({
-			exerciseId: exercise.id,
-			mode: exercise.mode,
-			equipment: exercise.chosenEquipment,
-			sets,
-		});
+		exercises.push({ exerciseId: exercise.id, ...exercise.chosen, sets });
 	}
 	return { ok: true, exercises };
 }

@@ -169,10 +169,13 @@ describe("WorkoutPage", () => {
 							load: "required",
 							equipment: ["barbell"],
 							defaultEquipment: "barbell",
+							grips: [],
+							defaultGrip: null,
 							unilateral: false,
 						},
 						mode: "reps",
 						equipment: "barbell",
+						grip: null,
 						sets: [1, 2].map((round) => ({
 							round,
 							reps: 8,

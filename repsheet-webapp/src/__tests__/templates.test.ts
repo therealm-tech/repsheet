@@ -10,6 +10,8 @@ const squat: ExerciseSummary = {
 	load: "required",
 	equipment: ["barbell"],
 	defaultEquipment: "barbell",
+	grips: [],
+	defaultGrip: null,
 	unilateral: false,
 };
 const crunch: ExerciseSummary = {
@@ -20,6 +22,8 @@ const crunch: ExerciseSummary = {
 	load: "none",
 	equipment: ["bodyweight"],
 	defaultEquipment: "bodyweight",
+	grips: [],
+	defaultGrip: null,
 	unilateral: false,
 };
 
@@ -42,6 +46,7 @@ const workout: Workout = {
 					exercise: squat,
 					mode: "reps",
 					equipment: "barbell",
+					grip: null,
 					sets: [1, 2, 3].map((round) => ({
 						round,
 						reps: 8,
@@ -55,6 +60,7 @@ const workout: Workout = {
 					exercise: crunch,
 					mode: "time",
 					equipment: "bodyweight",
+					grip: null,
 					sets: [1, 2, 3].map((round) => ({
 						round,
 						reps: null,
@@ -83,12 +89,14 @@ describe("template drafts", () => {
 							exerciseId: "squat",
 							mode: "reps",
 							equipment: "barbell",
+							grip: null,
 							target: "8",
 						},
 						{
 							exerciseId: "crunch",
 							mode: "time",
 							equipment: "bodyweight",
+							grip: null,
 							target: "1 min",
 						},
 					],
@@ -112,6 +120,7 @@ describe("template drafts", () => {
 							exercise: squat,
 							mode: "reps",
 							equipment: "barbell",
+							grip: null,
 							target: "  ",
 						},
 					],
@@ -126,7 +135,12 @@ describe("template drafts", () => {
 				{
 					id: "tb1",
 					exercises: [
-						{ exerciseId: "squat", mode: "reps", equipment: "barbell" },
+						{
+							exerciseId: "squat",
+							mode: "reps",
+							equipment: "barbell",
+							grip: null,
+						},
 					],
 				},
 			],

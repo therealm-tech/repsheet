@@ -3,11 +3,13 @@ import type {
 	BlockKind,
 	Equipment,
 	ExerciseSummary,
+	Grip,
 	Load,
 	Mode,
 	WeightUnit,
 	WorkoutSet,
 } from "@/lib/api/schemas";
+import { type Choices, hasChoice } from "@/lib/choices";
 import {
 	formatDistance,
 	formatDuration,
@@ -77,20 +79,57 @@ export function equipmentWith(equipment: Equipment): string {
 	return i18n.t(`equipmentWith.${equipment}`);
 }
 
+/** "Neutral": a grip as a switch shows it. */
+export function gripLabel(grip: Grip): string {
+	return i18n.t(`grips.${grip}`);
+}
+
+/** "Neutral grip", "Grip not recorded": a grip as a tag shows it. */
+export function gripTag(grip: Grip | null): string {
+	return i18n.t(`gripTags.${grip ?? "none"}`);
+}
+
+/** "with a neutral grip": a grip as an adverbial phrase, inside a sentence. */
+export function gripWith(grip: Grip | null): string {
+	return i18n.t(`gripWith.${grip ?? "none"}`);
+}
+
 /**
- * "in reps, with dumbbells": how a block does an exercise, naming only the
- * choices the exercise leaves open; null when it leaves none.
+ * "in reps, with dumbbells, with a neutral grip": how a block does an
+ * exercise, naming only the choices the exercise leaves open; null when it
+ * leaves none.
  */
 export function choicesText(
 	exercise: ExerciseSummary,
-	mode: Mode,
-	equipment: Equipment,
+	chosen: Choices,
 ): string | null {
 	const parts = [
-		exercise.modes.length > 1 ? modeInLower(mode) : null,
-		exercise.equipment.length > 1 ? equipmentWith(equipment) : null,
+		hasChoice(exercise.modes, chosen.mode) ? modeInLower(chosen.mode) : null,
+		hasChoice(exercise.equipment, chosen.equipment)
+			? equipmentWith(chosen.equipment)
+			: null,
+		hasChoice(exercise.grips, chosen.grip) ? gripWith(chosen.grip) : null,
 	].filter((part): part is string => part !== null);
 	return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/**
+ * "Dumbbells", "Neutral grip": the equipment and the grip a block chose where
+ * its exercise leaves a choice; an unknown grip goes unsaid. Its sets already
+ * tell the mode.
+ */
+export function choiceTags(
+	exercise: ExerciseSummary,
+	chosen: Choices,
+): string[] {
+	return [
+		hasChoice(exercise.equipment, chosen.equipment)
+			? equipmentLabel(chosen.equipment)
+			: null,
+		chosen.grip !== null && hasChoice(exercise.grips, chosen.grip)
+			? gripTag(chosen.grip)
+			: null,
+	].filter((tag): tag is string => tag !== null);
 }
 
 function allEqual(values: number[]): boolean {

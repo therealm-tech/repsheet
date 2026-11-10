@@ -29,12 +29,16 @@ const crunch: Exercise = exercise({
 	load: "none",
 	equipment: ["bodyweight"],
 	defaultEquipment: "bodyweight",
+	grips: [],
+	defaultGrip: null,
 });
 const cableCrunch: Exercise = exercise({
 	id: "cable-crunch",
 	name: "Crunch à la poulie",
 	equipment: ["cable"],
 	defaultEquipment: "cable",
+	grips: [],
+	defaultGrip: null,
 });
 
 function sets(field: "reps" | "durationSeconds", values: number[]) {
@@ -95,6 +99,8 @@ describe("exercise form", () => {
 				load: "none",
 				equipment: ["bodyweight"],
 				defaultEquipment: "bodyweight",
+				grips: [],
+				defaultGrip: null,
 				unilateral: false,
 			}),
 		);
@@ -223,6 +229,7 @@ describe("template editor", () => {
 							exercise: crunch,
 							mode: "reps",
 							equipment: "bodyweight",
+							grip: null,
 							target: "20",
 						},
 					],
@@ -262,6 +269,7 @@ describe("template editor", () => {
 								exerciseId: "crunch",
 								mode: "time",
 								equipment: "bodyweight",
+								grip: null,
 								target: "1 min",
 							},
 						],
