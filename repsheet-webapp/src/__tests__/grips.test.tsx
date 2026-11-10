@@ -176,7 +176,7 @@ describe("exercise form", () => {
 });
 
 describe("BlockSheet", () => {
-	it("opens with the default grip and switches grips, confirming before it replaces the loads", async () => {
+	it("opens with the default grip and switches grips, keeping the loads already entered without asking", async () => {
 		const calls = mockApi({
 			"GET /v1/exercises": () => ({ status: 200, body: page([pulldown]) }),
 			"GET /v1/exercises/pulldown/performances": (call) => ({
@@ -225,15 +225,10 @@ describe("BlockSheet", () => {
 			grip.getByRole("button", { name: "Pronation", pressed: true }),
 		).toBeInTheDocument();
 		await ui.click(grip.getByRole("button", { name: "Supination" }));
-		expect(
-			screen.getByText(
-				"Faire Tirage vertical en supination ? Les charges déjà saisies en pronation seront effacées.",
-			),
-		).toBeInTheDocument();
-		await ui.click(screen.getByRole("button", { name: "Changer" }));
+		expect(screen.queryByRole("button", { name: "Changer" })).toBeNull();
 		expect(
 			await screen.findByRole("button", {
-				name: "Tour 1, A Tirage vertical : 10 reps 60 kg",
+				name: "Tour 1, A Tirage vertical : 10 reps 50 kg",
 			}),
 		).toBeInTheDocument();
 
@@ -246,7 +241,7 @@ describe("BlockSheet", () => {
 					mode: "reps",
 					equipment: "cable",
 					grip: "supination",
-					sets: [{ round: 1, warmup: false, reps: 10, weightKg: 60 }],
+					sets: [{ round: 1, warmup: false, reps: 10, weightKg: 50 }],
 				},
 			],
 		});

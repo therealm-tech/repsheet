@@ -126,8 +126,6 @@ export const en: Catalog = {
 		stepHint: "± {{step}} · or type the value",
 		switchConfirm:
 			"Count {{name}} {{mode}}? The values already entered {{previous}} will be cleared.",
-		switchLoadsConfirm:
-			"Do {{name}} {{how}}? The loads already entered {{previous}} will be cleared.",
 		switchMode: "Switch",
 		tapToLog: "Tap to log →",
 		title: "Block {{position}}",

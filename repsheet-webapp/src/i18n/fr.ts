@@ -124,8 +124,6 @@ export const fr = {
 		stepHint: "± {{step}} · ou tape la valeur",
 		switchConfirm:
 			"Compter {{name}} {{mode}} ? Les valeurs déjà saisies {{previous}} seront effacées.",
-		switchLoadsConfirm:
-			"Faire {{name}} {{how}} ? Les charges déjà saisies {{previous}} seront effacées.",
 		switchMode: "Changer",
 		tapToLog: "Toucher pour logger →",
 		title: "Bloc {{position}}",

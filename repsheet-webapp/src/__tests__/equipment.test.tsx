@@ -128,7 +128,7 @@ describe("exercise picker", () => {
 });
 
 describe("BlockSheet", () => {
-	it("switches a column to other equipment, confirming before it replaces the loads", async () => {
+	it("switches a column to other equipment, keeping the loads already entered without asking", async () => {
 		const calls = mockApi({
 			"GET /v1/exercises": () => ({ status: 200, body: page([press]) }),
 			"GET /v1/exercises/press/performances": (call) => ({
@@ -174,15 +174,10 @@ describe("BlockSheet", () => {
 			screen.getByRole("group", { name: "Matériel de Développé militaire" }),
 		);
 		await ui.click(equipment.getByRole("button", { name: "Haltères" }));
-		expect(
-			screen.getByText(
-				"Faire Développé militaire aux haltères ? Les charges déjà saisies à la barre seront effacées.",
-			),
-		).toBeInTheDocument();
-		await ui.click(screen.getByRole("button", { name: "Changer" }));
+		expect(screen.queryByRole("button", { name: "Changer" })).toBeNull();
 		expect(
 			await screen.findByRole("button", {
-				name: "Tour 1, A Développé militaire : 8 reps 22 kg",
+				name: "Tour 1, A Développé militaire : 8 reps 60 kg",
 			}),
 		).toBeInTheDocument();
 		expect(await screen.findByText(/Dernière fois/)).toHaveTextContent(
@@ -198,7 +193,7 @@ describe("BlockSheet", () => {
 					mode: "reps",
 					equipment: "dumbbell",
 					grip: null,
-					sets: [{ round: 1, warmup: false, reps: 8, weightKg: 22 }],
+					sets: [{ round: 1, warmup: false, reps: 8, weightKg: 60 }],
 				},
 			],
 		});

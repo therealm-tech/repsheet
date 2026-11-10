@@ -331,24 +331,20 @@ export function addExercise(
 }
 
 /**
- * The cell field a change empties: the count for another mode, the load for
- * other equipment or another grip.
+ * Whether a change of how a column is done would clear values already
+ * entered: only another mode does, by dropping the counts. Other equipment or
+ * another grip never clears anything.
  */
-function changedField(exercise: GridExercise, change: ChoiceChange): Field {
-	return "mode" in change ? primaryField(exercise.chosen.mode) : "weight";
-}
-
-/** Whether a change of how a column is done would clear values already entered. */
 export function switchDiscards(
 	grid: Grid,
 	col: number,
 	change: ChoiceChange,
 ): boolean {
 	const exercise = grid.exercises[col];
-	if (!exercise) {
+	if (!exercise || !("mode" in change)) {
 		return false;
 	}
-	const field = changedField(exercise, change);
+	const field = primaryField(exercise.chosen.mode);
 	return grid.rows.some((row) => (row.cells[col]?.[field] ?? null) !== null);
 }
 
@@ -356,8 +352,8 @@ export function switchDiscards(
  * Changes how a column is done, for every round. Another mode changes what is
  * counted: each cell drops its count and takes the one of the last
  * performance done the new way, and keeps its load. Other equipment or another
- * grip changes the load: each cell drops it and takes the last performance's,
- * and keeps its count, since the movement is the same.
+ * grip keeps every cell as entered, since the movement is the same; a cell
+ * with no load takes the last performance's, or stays empty without one.
  */
 export function switchChoice(
 	grid: Grid,
@@ -379,7 +375,6 @@ export function switchChoice(
 		return grid;
 	}
 	const exercise: GridExercise = { ...current, chosen };
-	const field = changedField(exercise, change);
 	const last = workingSets(lastSets);
 	let previous: Cell | undefined;
 	return {
@@ -394,11 +389,18 @@ export function switchChoice(
 				unit,
 			);
 			const old = row.cells[col];
-			const kept: Cell =
+			const cell: Cell =
 				"mode" in change
-					? { ...emptyCell(), weight: old?.weight ?? null }
-					: (old ?? emptyCell());
-			const cell: Cell = { ...kept, [field]: prefilled[field] };
+					? {
+							...emptyCell(),
+							weight: old?.weight ?? null,
+							[primaryField(exercise.chosen.mode)]:
+								prefilled[primaryField(exercise.chosen.mode)],
+						}
+					: {
+							...(old ?? emptyCell()),
+							weight: old?.weight ?? prefilled.weight,
+						};
 			previous = cell;
 			return {
 				...row,
