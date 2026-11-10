@@ -16,7 +16,7 @@ use crate::{
         AppState, authenticated,
         coaching::require_coach,
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
-        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
     },
     auth::AuthUser,
@@ -482,11 +482,7 @@ async fn update(
     let mut conn = state.pool.acquire().await?;
     let changes = WorkoutChanges {
         name: request.name.trim(),
-        note: request
-            .note
-            .as_deref()
-            .map(str::trim)
-            .filter(|n| !n.is_empty()),
+        note: trimmed(request.note.as_deref()),
         performed_on: request.performed_on,
         duration_minutes: request.duration_minutes,
     };

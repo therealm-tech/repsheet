@@ -10,11 +10,11 @@ use crate::{
     api::{
         AppState, authenticated,
         coaching::require_coach,
-        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
         templates::{
             BlockRequest, CreateTemplateBlockRequest, TemplateBlockResponse,
-            UpdateTemplateBlockRequest, check_block_ids, clean_note, resolve_blocks,
+            UpdateTemplateBlockRequest, check_block_ids, resolve_blocks,
         },
         workouts::WorkoutResponse,
     },
@@ -265,7 +265,7 @@ async fn create(
         &mut tx,
         request.athlete_id,
         request.name.trim(),
-        clean_note(request.note.as_deref()),
+        trimmed(request.note.as_deref()),
         Some(&Planned {
             on: request.planned_on,
             author_id: user.id,
@@ -321,7 +321,7 @@ async fn update(
         current.id,
         request.planned_on,
         request.name.trim(),
-        clean_note(request.note.as_deref()),
+        trimmed(request.note.as_deref()),
     )
     .await?;
     db::templates::replace_blocks(&mut tx, current.id, &blocks).await?;

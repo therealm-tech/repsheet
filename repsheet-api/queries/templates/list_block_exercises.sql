@@ -5,6 +5,7 @@ SELECT
     tbe.equipment AS chosen_equipment,
     tbe.grip AS chosen_grip,
     tbe.target,
+    tbe.note,
     e.id,
     e.modes,
     e.default_mode,

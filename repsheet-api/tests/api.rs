@@ -2957,3 +2957,85 @@ async fn planned_sessions_plan_the_grip(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(field_paths(&problem), vec!["blocks[0].exercises[0].grip"]);
 }
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn templates_give_instructions_per_exercise(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let bench = app.exercise_id(&token, "Développé couché").await;
+    let squat = app.exercise_id(&token, "Squat").await;
+    let template_body = |bench_note: Value, squat_note: Value| {
+        json!({ "name": "Full body", "blocks": [{ "exercises": [
+            { "exerciseId": bench, "target": "8", "note": bench_note },
+            { "exerciseId": squat, "target": "5", "note": squat_note }
+        ]}]})
+    };
+
+    let (status, template) = app
+        .post(
+            "/v1/templates",
+            &token,
+            template_body(json!(" Tempo 3-1-1 "), json!("")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let exercises = &template["blocks"][0]["exercises"];
+    assert_eq!(exercises[0]["note"], "Tempo 3-1-1");
+    assert!(exercises[1]["note"].is_null(), "blank is no note");
+    let template_uri = format!("/v1/templates/{}", template["id"].as_str().unwrap());
+
+    let (status, template) = app
+        .put(
+            &template_uri,
+            &token,
+            template_body(Value::Null, json!("Prise serrée")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let exercises = &template["blocks"][0]["exercises"];
+    assert!(exercises[0]["note"].is_null());
+    assert_eq!(exercises[1]["note"], "Prise serrée");
+
+    let (_, fetched) = app.get(&template_uri, &token).await;
+    assert_eq!(fetched["blocks"][0]["exercises"][1]["note"], "Prise serrée");
+
+    let (status, problem) = app
+        .put(
+            &template_uri,
+            &token,
+            template_body(Value::Null, json!("x".repeat(2001))),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(field_paths(&problem), vec!["blocks[0].exercises[1].note"]);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn planned_sessions_carry_the_coach_instructions(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let bench = app.exercise_id(&coach, "Développé couché").await;
+    let (status, planned) = app
+        .post(
+            "/v1/planned-sessions",
+            &coach,
+            json!({
+                "athleteId": athlete_id,
+                "plannedOn": "2026-11-12",
+                "name": "Upper push",
+                "blocks": [{ "exercises": [
+                    { "exerciseId": bench, "target": "5", "note": " Prise serrée " }
+                ]}]
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{planned}");
+
+    let (_, read) = app
+        .get(
+            &format!("/v1/planned-sessions/{}", planned["id"].as_str().unwrap()),
+            &athlete,
+        )
+        .await;
+    assert_eq!(read["blocks"][0]["exercises"][0]["note"], "Prise serrée");
+}
