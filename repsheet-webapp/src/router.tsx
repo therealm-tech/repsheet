@@ -1,12 +1,15 @@
 import {
+	createBrowserHistory,
 	createRootRoute,
 	createRoute,
 	createRouter,
 	Outlet,
+	type RouterHistory,
 	redirect,
 } from "@tanstack/react-router";
 import { z } from "zod";
 import { tokenStore } from "@/lib/auth";
+import { APP_SCROLLER } from "@/lib/scroll";
 import { AccountsPage } from "@/pages/AccountsPage";
 import { AppLayout } from "@/pages/AppLayout";
 import { ExerciseDetailPage } from "@/pages/ExerciseDetailPage";
@@ -132,7 +135,18 @@ export const routeTree = rootRoute.addChildren([
 	]),
 ]);
 
-export const router = createRouter({ routeTree });
+export function createAppRouter(
+	history: RouterHistory = createBrowserHistory(),
+) {
+	return createRouter({
+		routeTree,
+		history,
+		scrollRestoration: true,
+		scrollToTopSelectors: [APP_SCROLLER],
+	});
+}
+
+export const router = createAppRouter();
 
 declare module "@tanstack/react-router" {
 	interface Register {

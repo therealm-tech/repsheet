@@ -78,13 +78,22 @@ ol {
 
 /* ---------- layout ---------- */
 
+/* The tab bar stays in the flow under a scrolling main area: iOS home-screen apps leave a fixed
+   bottom bar floating above an empty band once the keyboard has closed. */
 .app {
-	min-height: 100dvh;
+	height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 	position: relative;
 }
 
-.app.with-tabs {
-	padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+.app-main {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	/* Keeps iOS from rubber-banding the whole page, tab bar included, past the end of the list. */
+	overscroll-behavior-y: contain;
 }
 
 .screen {
@@ -1075,10 +1084,7 @@ ol {
 /* ---------- tab bar ---------- */
 
 .tabbar {
-	position: fixed;
-	left: 0;
-	right: 0;
-	bottom: 0;
+	flex: none;
 	height: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
 	padding-bottom: env(safe-area-inset-bottom, 0px);
 	background: var(--bg);
@@ -1086,7 +1092,6 @@ ol {
 	display: flex;
 	justify-content: space-around;
 	align-items: center;
-	z-index: 5;
 }
 
 .tabbar a {
@@ -1255,11 +1260,10 @@ ol {
 		display: flex;
 	}
 
-	.app,
-	.app.with-tabs {
+	.app {
 		display: grid;
 		grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-		padding-bottom: 0;
+		grid-template-rows: minmax(0, 1fr);
 	}
 
 	.tabbar,
@@ -1268,9 +1272,7 @@ ol {
 	}
 
 	.sidebar {
-		position: sticky;
-		top: 0;
-		height: 100dvh;
+		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
 		gap: 28px;
