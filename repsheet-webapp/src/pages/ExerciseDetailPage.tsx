@@ -9,6 +9,7 @@ import i18n from "@/i18n";
 import { api, keys } from "@/lib/api/endpoints";
 import type {
 	Equipment,
+	GripFilter,
 	Load,
 	Mode,
 	WeightUnit,
@@ -17,9 +18,12 @@ import type {
 import {
 	describeExercise,
 	equipmentLabel,
+	gripLabel,
+	gripTag,
 	modeIn,
 	modeInLower,
 } from "@/lib/blocks";
+import { gripFilter } from "@/lib/choices";
 import { formatDay } from "@/lib/dates";
 import { useUnit } from "@/lib/hooks";
 import {
@@ -109,6 +113,22 @@ function formatRecord(
 		: formatSet(mode, load, set, unit);
 }
 
+/**
+ * The value the page shows first: the one picked, else the latest
+ * performance's while the exercise still offers it, else the default one.
+ */
+function shownFirst<T>(
+	picked: T | null,
+	latest: T | undefined,
+	options: readonly T[],
+	fallback: T,
+): T {
+	if (picked !== null) {
+		return picked;
+	}
+	return latest !== undefined && options.includes(latest) ? latest : fallback;
+}
+
 export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 	const { t } = useTranslation();
 	const unit = useUnit();
@@ -124,6 +144,7 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 	const [chosenEquipment, setChosenEquipment] = useState<Equipment | null>(
 		null,
 	);
+	const [chosenGrip, setChosenGrip] = useState<GripFilter | null>(null);
 
 	if (exercise.isError) {
 		return (
@@ -138,31 +159,45 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 	const items = performances.data?.items ?? [];
 	const load = ex?.load ?? "required";
 	const modes = ex?.modes ?? [];
-	const latestMode = items[0]?.mode;
-	const mode =
-		chosenMode ??
-		(latestMode !== undefined && modes.includes(latestMode)
-			? latestMode
-			: (ex?.defaultMode ?? "reps"));
+	const latest = items[0];
+	const mode = shownFirst(
+		chosenMode,
+		latest?.mode,
+		modes,
+		ex?.defaultMode ?? "reps",
+	);
 	const equipmentOptions = ex?.equipment ?? [];
-	const latestEquipment = items[0]?.equipment;
-	const equipment =
-		chosenEquipment ??
-		(latestEquipment !== undefined && equipmentOptions.includes(latestEquipment)
-			? latestEquipment
-			: (ex?.defaultEquipment ?? "other"));
-	// Loads lifted with different equipment are not comparable: progress,
-	// records and volume only ever look at one equipment.
-	const withEquipment = items.filter((p) => p.equipment === equipment);
-	const inMode = withEquipment.filter((p) => p.mode === mode);
+	const equipment = shownFirst(
+		chosenEquipment,
+		latest?.equipment,
+		equipmentOptions,
+		ex?.defaultEquipment ?? "other",
+	);
+	// The history logged with no grip forms a series of its own.
+	const gripOptions: GripFilter[] = [
+		...(ex?.grips ?? []),
+		...(items.some((p) => p.grip === null) ? ["none" as const] : []),
+	];
+	const grip = shownFirst(
+		chosenGrip,
+		latest ? gripFilter(latest.grip) : undefined,
+		gripOptions,
+		gripFilter(ex?.defaultGrip ?? null),
+	);
+	// Loads lifted with different equipment or another grip are not
+	// comparable: progress, records and volume only ever look at one of each.
+	const comparable = items.filter(
+		(p) => p.equipment === equipment && gripFilter(p.grip) === grip,
+	);
+	const inMode = comparable.filter((p) => p.mode === mode);
 	const metric = metricFor(mode, load);
 	const points = progression(metric, inMode);
-	const latest = points[points.length - 1];
+	const last = points[points.length - 1];
 	const first = points[0];
 	const records = [mode, ...modes.filter((m) => m !== mode)].flatMap((m) => {
 		const set = bestSet(
 			metricFor(m, load),
-			withEquipment.filter((p) => p.mode === m),
+			comparable.filter((p) => p.mode === m),
 		);
 		return set ? [{ mode: m, set }] : [];
 	});
@@ -170,6 +205,7 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 	const metricFormat = (v: number) => formatMetric(metric, v, unit);
 	const multiMode = modes.length > 1;
 	const multiEquipment = equipmentOptions.length > 1;
+	const multiGrip = gripOptions.length > 1;
 
 	return (
 		<main className="screen">
@@ -212,11 +248,23 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 						/>
 					) : null}
 
+					{multiGrip ? (
+						<Segmented
+							label={t("exercise.gripShown")}
+							value={grip}
+							onChange={setChosenGrip}
+							options={gripOptions.map((g) => ({
+								value: g,
+								label: g === "none" ? t("exercise.gripUnknown") : gripLabel(g),
+							}))}
+						/>
+					) : null}
+
 					{performances.isSuccess && items.length === 0 ? (
 						<Empty>{t("exercise.noSets")}</Empty>
 					) : null}
 
-					{latest && first ? (
+					{last && first ? (
 						<section
 							className="card chart-card"
 							aria-label={t(`metrics.${metric}`)}
@@ -225,20 +273,18 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 								<span className="muted small">{t(`metrics.${metric}`)}</span>
 							</div>
 							<div className="row">
-								<b className="display big-number">
-									{metricFormat(latest.value)}
-								</b>
+								<b className="display big-number">{metricFormat(last.value)}</b>
 								<span className="grow" />
-								{points.length > 1 && latest.value !== first.value ? (
+								{points.length > 1 && last.value !== first.value ? (
 									<span
 										className={
-											latest.value > first.value ? "small up" : "small down"
+											last.value > first.value ? "small up" : "small down"
 										}
 									>
 										{t("exercise.sinceStart", {
 											delta: formatDelta(
 												metric,
-												latest.value - first.value,
+												last.value - first.value,
 												unit,
 											),
 										})}
@@ -286,9 +332,10 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 							{items.map((p) => {
 								const otherMode = p.mode !== mode;
 								const otherEquipment = p.equipment !== equipment;
-								const other = otherMode || otherEquipment;
+								const otherGrip = gripFilter(p.grip) !== grip;
+								const other = otherMode || otherEquipment || otherGrip;
 								return (
-									<li key={`${p.workoutId}-${p.mode}-${p.equipment}`}>
+									<li key={p.blockExerciseId}>
 										<Link
 											to="/workouts/$workoutId"
 											params={{ workoutId: p.workoutId }}
@@ -307,6 +354,9 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 														<span className="tag">
 															{equipmentLabel(p.equipment)}
 														</span>
+													) : null}
+													{otherGrip ? (
+														<span className="tag">{gripTag(p.grip)}</span>
 													) : null}
 												</span>
 												<span className="muted small line-block">

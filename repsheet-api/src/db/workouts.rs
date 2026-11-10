@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     db::exercises::ExerciseSummaryRow,
-    domain::{Equipment, Locale, Mode, SetValues},
+    domain::{Equipment, Grip, Locale, Mode, SetValues},
 };
 
 #[derive(FromRow)]
@@ -45,6 +45,8 @@ struct BlockExerciseRow {
     mode: Mode,
     #[sqlx(rename = "chosen_equipment", try_from = "String")]
     equipment: Equipment,
+    #[sqlx(rename = "chosen_grip")]
+    grip: Option<Grip>,
     #[sqlx(flatten)]
     exercise: ExerciseSummaryRow,
 }
@@ -66,9 +68,11 @@ pub struct LoadedBlock {
 }
 
 pub struct LoadedBlockExercise {
+    pub id: Uuid,
     pub exercise: ExerciseSummaryRow,
     pub mode: Mode,
     pub equipment: Equipment,
+    pub grip: Option<Grip>,
     pub sets: Vec<SetValues>,
 }
 
@@ -83,6 +87,7 @@ pub struct NewBlockExercise<'a> {
     pub exercise_id: Uuid,
     pub mode: Mode,
     pub equipment: Equipment,
+    pub grip: Option<Grip>,
     pub sets: &'a [SetValues],
 }
 
@@ -199,9 +204,11 @@ pub async fn load_blocks(
             .entry(row.block_id)
             .or_default()
             .push(LoadedBlockExercise {
+                id: row.block_exercise_id,
                 sets: sets.remove(&row.block_exercise_id).unwrap_or_default(),
                 mode: row.mode,
                 equipment: row.equipment,
+                grip: row.grip,
                 exercise: row.exercise,
             });
     }
@@ -310,6 +317,7 @@ async fn insert_block_exercises(
                 .bind(exercise.exercise_id)
                 .bind(exercise.mode.as_str())
                 .bind(exercise.equipment.as_str())
+                .bind(exercise.grip.map(Grip::as_str))
                 .fetch_one(&mut *conn)
                 .await?;
         let sets = exercise.sets;

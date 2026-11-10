@@ -22,6 +22,8 @@ const bench: ExerciseSummary = {
 	load: "required",
 	equipment: ["barbell"],
 	defaultEquipment: "barbell",
+	grips: [],
+	defaultGrip: null,
 	unilateral: false,
 };
 const plank: ExerciseSummary = {
@@ -32,6 +34,8 @@ const plank: ExerciseSummary = {
 	load: "optional",
 	equipment: ["bodyweight"],
 	defaultEquipment: "bodyweight",
+	grips: [],
+	defaultGrip: null,
 	unilateral: false,
 };
 const crunch: ExerciseSummary = {
@@ -42,6 +46,8 @@ const crunch: ExerciseSummary = {
 	load: "none",
 	equipment: ["bodyweight"],
 	defaultEquipment: "bodyweight",
+	grips: [],
+	defaultGrip: null,
 	unilateral: false,
 };
 
@@ -87,11 +93,20 @@ describe("BlockSheet", () => {
 			rounds: 2,
 			restSeconds: 90,
 			exercises: [
-				{ exercise: bench, mode: "reps", equipment: "barbell", target: "6–8" },
 				{
+					id: "ex1",
+					exercise: bench,
+					mode: "reps",
+					equipment: "barbell",
+					grip: null,
+					target: "6–8",
+				},
+				{
+					id: "ex2",
 					exercise: plank,
 					mode: "time",
 					equipment: "bodyweight",
+					grip: null,
 					target: "45 s",
 				},
 			],
@@ -181,6 +196,7 @@ describe("BlockSheet", () => {
 					exerciseId: "bench",
 					mode: "reps",
 					equipment: "barbell",
+					grip: null,
 					sets: [
 						{ round: 1, warmup: false, reps: 8, weightKg: 60 },
 						{ round: 2, warmup: false, reps: 8, weightKg: 62.5 },
@@ -190,6 +206,7 @@ describe("BlockSheet", () => {
 					exerciseId: "plank",
 					mode: "time",
 					equipment: "bodyweight",
+					grip: null,
 					sets: [
 						{ round: 1, warmup: false, durationSeconds: 45 },
 						{ round: 2, warmup: false, durationSeconds: 40 },
@@ -265,6 +282,7 @@ describe("BlockSheet", () => {
 					exerciseId: "bench",
 					mode: "reps",
 					equipment: "barbell",
+					grip: null,
 					sets: [
 						{ round: 1, warmup: true, reps: 5, weightKg: 80 },
 						{ round: 2, warmup: false, reps: 5, weightKg: 82.5 },
@@ -396,6 +414,7 @@ describe("BlockSheet", () => {
 					exerciseId: "crunch",
 					mode: "time",
 					equipment: "bodyweight",
+					grip: null,
 					sets: [{ round: 1, warmup: false, durationSeconds: 75 }],
 				},
 			],
@@ -432,9 +451,11 @@ describe("BlockSheet", () => {
 						restSeconds: null,
 						exercises: [
 							{
+								id: "ex3",
 								exercise: crunch,
 								mode: "time",
 								equipment: "bodyweight",
+								grip: null,
 								target: "1 min",
 							},
 						],
@@ -466,9 +487,11 @@ describe("BlockSheet", () => {
 			restSeconds: null,
 			exercises: [
 				{
+					id: "ex4",
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",
+					grip: null,
 					sets: [
 						{
 							round: 1,
@@ -518,6 +541,7 @@ describe("BlockSheet", () => {
 					exerciseId: "bench",
 					mode: "reps",
 					equipment: "barbell",
+					grip: null,
 					sets: [{ round: 1, warmup: false, reps: 9, weightKg: 60 }],
 				},
 			],

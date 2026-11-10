@@ -22,6 +22,8 @@ const custom = exercise({
 	name: "Dév. Arnold",
 	equipment: ["dumbbell"],
 	defaultEquipment: "dumbbell",
+	grips: [],
+	defaultGrip: null,
 	custom: true,
 });
 
@@ -142,6 +144,8 @@ describe("exercise detail permissions", () => {
 			load: "required",
 			equipment: ["dumbbell"],
 			defaultEquipment: "dumbbell",
+			grips: [],
+			defaultGrip: null,
 			unilateral: false,
 		});
 	});
@@ -214,6 +218,8 @@ describe("catalog toggle on creation", () => {
 				load: "required",
 				equipment: ["barbell"],
 				defaultEquipment: "barbell",
+				grips: [],
+				defaultGrip: null,
 				unilateral: false,
 				builtIn: true,
 			}),
@@ -244,6 +250,8 @@ describe("catalog toggle on creation", () => {
 				load: "required",
 				equipment: ["barbell"],
 				defaultEquipment: "barbell",
+				grips: [],
+				defaultGrip: null,
 				unilateral: false,
 			}),
 		);

@@ -10,6 +10,8 @@ const incline = exercise({
 	name: "Développé incliné haltères",
 	equipment: ["dumbbell"],
 	defaultEquipment: "dumbbell",
+	grips: [],
+	defaultGrip: null,
 });
 const dips = exercise({
 	id: "dips",
@@ -19,6 +21,8 @@ const dips = exercise({
 	load: "optional",
 	equipment: ["bodyweight"],
 	defaultEquipment: "bodyweight",
+	grips: [],
+	defaultGrip: null,
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -82,6 +86,8 @@ describe("ExercisePicker", () => {
 			name: "Dév. Arnold",
 			equipment: ["dumbbell"],
 			defaultEquipment: "dumbbell",
+			grips: [],
+			defaultGrip: null,
 			custom: true,
 		});
 		const calls = mockApi({
@@ -111,6 +117,8 @@ describe("ExercisePicker", () => {
 			load: "required",
 			equipment: ["dumbbell"],
 			defaultEquipment: "dumbbell",
+			grips: [],
+			defaultGrip: null,
 			unilateral: true,
 		});
 	});

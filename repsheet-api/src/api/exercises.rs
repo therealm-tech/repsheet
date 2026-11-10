@@ -17,9 +17,9 @@ use crate::{
     auth::AuthUser,
     db::{
         self,
-        exercises::{ExerciseRow, ExerciseSummaryRow, NewExercise, PerformanceFilter},
+        exercises::{ExerciseRow, ExerciseSummaryRow, GripFilter, NewExercise, PerformanceFilter},
     },
-    domain::{BlockKind, Equipment, EquipmentSet, Load, Mode, Modes},
+    domain::{BlockKind, Choices, Equipment, Grip, Load, Mode, TextEnum},
     error::{AppError, AppResult, Conflict, FieldError, conflict_on_reference, conflict_on_unique},
 };
 
@@ -58,10 +58,11 @@ pub fn routes() -> ApiRouter<AppState> {
                     .id("updateExercise")
                     .summary("Replace an exercise")
                     .description(
-                        "Custom exercises by their owner, built-in ones by super admins. A mode \
-                         or equipment the exercise was logged with cannot be removed; template \
-                         exercises counted in another removed mode, or done with other removed \
-                         equipment, move to the default one.",
+                        "Custom exercises by their owner, built-in ones by super admins. A mode, \
+                         equipment or grip the exercise was logged with cannot be removed; \
+                         template exercises counted in another removed mode, or done with other \
+                         removed equipment or grip, move to the default one, or to no grip when \
+                         the exercise offers none.",
                     )
             })
             .delete_with(delete, |op| {
@@ -87,6 +88,28 @@ pub fn routes() -> ApiRouter<AppState> {
         )
 }
 
+/// Converts both ways between a wire enum and the domain enum with the same
+/// variants.
+macro_rules! mirror_enum {
+    ($dto:ident, $domain:ident, [$($variant:ident),+ $(,)?]) => {
+        impl From<$dto> for $domain {
+            fn from(value: $dto) -> Self {
+                match value {
+                    $($dto::$variant => Self::$variant),+
+                }
+            }
+        }
+
+        impl From<$domain> for $dto {
+            fn from(value: $domain) -> Self {
+                match value {
+                    $($domain::$variant => Self::$variant),+
+                }
+            }
+        }
+    };
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "Mode")]
@@ -98,25 +121,7 @@ pub enum ModeDto {
     Distance,
 }
 
-impl From<ModeDto> for Mode {
-    fn from(mode: ModeDto) -> Self {
-        match mode {
-            ModeDto::Reps => Self::Reps,
-            ModeDto::Time => Self::Time,
-            ModeDto::Distance => Self::Distance,
-        }
-    }
-}
-
-impl From<Mode> for ModeDto {
-    fn from(mode: Mode) -> Self {
-        match mode {
-            Mode::Reps => Self::Reps,
-            Mode::Time => Self::Time,
-            Mode::Distance => Self::Distance,
-        }
-    }
-}
+mirror_enum!(ModeDto, Mode, [Reps, Time, Distance]);
 
 #[derive(Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -129,29 +134,7 @@ pub enum LoadDto {
     Required,
 }
 
-impl From<LoadDto> for Load {
-    fn from(load: LoadDto) -> Self {
-        match load {
-            LoadDto::None => Self::None,
-            LoadDto::Optional => Self::Optional,
-            LoadDto::Required => Self::Required,
-        }
-    }
-}
-
-impl From<Load> for LoadDto {
-    fn from(load: Load) -> Self {
-        match load {
-            Load::None => Self::None,
-            Load::Optional => Self::Optional,
-            Load::Required => Self::Required,
-        }
-    }
-}
-
-fn mode_dtos(modes: &Modes) -> Vec<ModeDto> {
-    modes.iter().map(Into::into).collect()
-}
+mirror_enum!(LoadDto, Load, [None, Optional, Required]);
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -166,36 +149,109 @@ pub enum EquipmentDto {
     Other,
 }
 
-impl From<EquipmentDto> for Equipment {
-    fn from(equipment: EquipmentDto) -> Self {
-        match equipment {
-            EquipmentDto::Barbell => Self::Barbell,
-            EquipmentDto::Dumbbell => Self::Dumbbell,
-            EquipmentDto::Kettlebell => Self::Kettlebell,
-            EquipmentDto::Machine => Self::Machine,
-            EquipmentDto::Cable => Self::Cable,
-            EquipmentDto::Bodyweight => Self::Bodyweight,
-            EquipmentDto::Other => Self::Other,
+mirror_enum!(
+    EquipmentDto,
+    Equipment,
+    [
+        Barbell, Dumbbell, Kettlebell, Machine, Cable, Bodyweight, Other
+    ]
+);
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(rename = "Grip")]
+/// How the hands hold the bar or the handles: `pronation` palms facing down
+/// or away, `supination` palms facing up or towards the body, `neutral` palms
+/// facing each other, `mixed` one hand each way.
+pub enum GripDto {
+    Pronation,
+    Supination,
+    Neutral,
+    Mixed,
+}
+
+mirror_enum!(GripDto, Grip, [Pronation, Supination, Neutral, Mixed]);
+
+#[derive(Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(rename = "GripFilter")]
+/// A grip, or `none` for the blocks that recorded no grip.
+pub enum GripFilterDto {
+    Pronation,
+    Supination,
+    Neutral,
+    Mixed,
+    None,
+}
+
+impl From<GripFilterDto> for GripFilter {
+    fn from(filter: GripFilterDto) -> Self {
+        match filter {
+            GripFilterDto::Pronation => Self::Held(Grip::Pronation),
+            GripFilterDto::Supination => Self::Held(Grip::Supination),
+            GripFilterDto::Neutral => Self::Held(Grip::Neutral),
+            GripFilterDto::Mixed => Self::Held(Grip::Mixed),
+            GripFilterDto::None => Self::Unrecorded,
         }
     }
 }
 
-impl From<Equipment> for EquipmentDto {
-    fn from(equipment: Equipment) -> Self {
-        match equipment {
-            Equipment::Barbell => Self::Barbell,
-            Equipment::Dumbbell => Self::Dumbbell,
-            Equipment::Kettlebell => Self::Kettlebell,
-            Equipment::Machine => Self::Machine,
-            Equipment::Cable => Self::Cable,
-            Equipment::Bodyweight => Self::Bodyweight,
-            Equipment::Other => Self::Other,
-        }
-    }
+fn dtos<T: TextEnum, D: From<T>>(choices: &Choices<T>) -> Vec<D> {
+    choices.iter().map(Into::into).collect()
 }
 
-fn equipment_dtos(equipment: &EquipmentSet) -> Vec<EquipmentDto> {
-    equipment.iter().map(Into::into).collect()
+/// How a block or template exercise is done, among what its exercise offers.
+pub struct Chosen {
+    pub mode: Mode,
+    pub equipment: Equipment,
+    pub grip: Option<Grip>,
+}
+
+impl Chosen {
+    /// What a block or template exercise asks for: the mode and the
+    /// equipment default to the exercise's own, while a missing grip stays
+    /// unknown. Files an error under `path` for each value the exercise does
+    /// not offer.
+    pub fn check(
+        exercise: &ExerciseSummaryRow,
+        mode: Option<ModeDto>,
+        equipment: Option<EquipmentDto>,
+        grip: Option<GripDto>,
+        path: &str,
+        errors: &mut Vec<FieldError>,
+    ) -> Option<Self> {
+        let mode = mode.map_or(exercise.default_mode, Mode::from);
+        let equipment = equipment.map_or(exercise.default_equipment, Equipment::from);
+        let grip = grip.map(Grip::from);
+        let before = errors.len();
+        errors.extend(
+            [
+                (
+                    exercise.modes.contains(mode),
+                    "mode",
+                    "not a mode of the exercise",
+                ),
+                (
+                    exercise.equipment.contains(equipment),
+                    "equipment",
+                    "not an equipment of the exercise",
+                ),
+                (
+                    grip.is_none_or(|grip| exercise.grips.contains(grip)),
+                    "grip",
+                    "not a grip of the exercise",
+                ),
+            ]
+            .into_iter()
+            .filter(|(offered, ..)| !offered)
+            .map(|(_, field, message)| FieldError::new(format!("{path}.{field}"), message)),
+        );
+        (errors.len() == before).then_some(Self {
+            mode,
+            equipment,
+            grip,
+        })
+    }
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -215,6 +271,11 @@ pub struct ExerciseResponse {
     pub equipment: Vec<EquipmentDto>,
     /// The equipment a new block does the exercise with.
     pub default_equipment: EquipmentDto,
+    /// The grips the exercise can be done with, in a fixed order; none when
+    /// the grip does not apply to it.
+    pub grips: Vec<GripDto>,
+    /// The grip a new block holds; null exactly when `grips` is empty.
+    pub default_grip: Option<GripDto>,
     /// Reps and loads are counted per side.
     pub unilateral: bool,
     /// Created by the user rather than part of the built-in catalog.
@@ -232,11 +293,13 @@ impl From<ExerciseRow> for ExerciseResponse {
                 fr: row.name_fr,
                 en: row.name_en,
             },
-            modes: mode_dtos(&row.modes),
+            modes: dtos(&row.modes),
             default_mode: row.default_mode.into(),
             load: row.load.into(),
-            equipment: equipment_dtos(&row.equipment),
+            equipment: dtos(&row.equipment),
             default_equipment: row.default_equipment.into(),
+            grips: dtos(&row.grips),
+            default_grip: row.default_grip.map(Into::into),
             unilateral: row.unilateral,
             custom: row.owner_id.is_some(),
             last_used_on: row.last_used_on,
@@ -255,6 +318,8 @@ pub struct ExerciseSummaryResponse {
     pub load: LoadDto,
     pub equipment: Vec<EquipmentDto>,
     pub default_equipment: EquipmentDto,
+    pub grips: Vec<GripDto>,
+    pub default_grip: Option<GripDto>,
     pub unilateral: bool,
 }
 
@@ -263,11 +328,13 @@ impl From<ExerciseSummaryRow> for ExerciseSummaryResponse {
         Self {
             id: row.id,
             name: row.name,
-            modes: mode_dtos(&row.modes),
+            modes: dtos(&row.modes),
             default_mode: row.default_mode.into(),
             load: row.load.into(),
-            equipment: equipment_dtos(&row.equipment),
+            equipment: dtos(&row.equipment),
             default_equipment: row.default_equipment.into(),
+            grips: dtos(&row.grips),
+            default_grip: row.default_grip.map(Into::into),
             unilateral: row.unilateral,
         }
     }
@@ -352,72 +419,43 @@ impl ExerciseNamesRequest {
     }
 }
 
-fn distinct_modes(modes: &[ModeDto]) -> Result<(), ValidationError> {
-    if modes
+fn distinct<T: PartialEq>(values: &[T]) -> Result<(), ValidationError> {
+    if values
         .iter()
         .enumerate()
-        .any(|(i, mode)| modes[..i].contains(mode))
+        .any(|(i, value)| values[..i].contains(value))
     {
-        let mut error = ValidationError::new("duplicate_mode");
-        error.message = Some("a mode appears twice".into());
+        let mut error = ValidationError::new("duplicate");
+        error.message = Some("a value appears twice".into());
         return Err(error);
     }
     Ok(())
 }
 
-/// The modes and the default mode of a create or update request; the default
-/// mode must be one of the modes.
-fn counting(modes: &[ModeDto], default_mode: ModeDto) -> AppResult<(Modes, Mode)> {
-    let modes = Modes::new(modes.iter().copied().map(Mode::from)).ok_or_else(|| {
-        AppError::Validation(vec![FieldError::new(
-            "modes",
-            "give at least one mode, each once",
-        )])
+/// The values an exercise offers for one choice, from a create or update
+/// request, checked against the default one the request gives with them.
+fn offered<T: TextEnum>(
+    values: impl IntoIterator<Item = impl Into<T>>,
+    default: Option<impl Into<T>>,
+    field: &str,
+    default_field: &str,
+) -> AppResult<Choices<T>> {
+    let choices = Choices::new(values.into_iter().map(Into::into)).ok_or_else(|| {
+        AppError::Validation(vec![FieldError::new(field, "give each value once")])
     })?;
-    let default_mode = Mode::from(default_mode);
-    if !modes.contains(default_mode) {
+    let default = default.map(Into::into);
+    if !choices.admits_default(default) {
+        let message = if default.is_some() {
+            format!("must be one of `{field}`")
+        } else {
+            format!("required when `{field}` is not empty")
+        };
         return Err(AppError::Validation(vec![FieldError::new(
-            "defaultMode",
-            "must be one of the modes",
+            default_field,
+            message,
         )]));
     }
-    Ok((modes, default_mode))
-}
-
-fn distinct_equipment(equipment: &[EquipmentDto]) -> Result<(), ValidationError> {
-    if equipment
-        .iter()
-        .enumerate()
-        .any(|(i, kind)| equipment[..i].contains(kind))
-    {
-        let mut error = ValidationError::new("duplicate_equipment");
-        error.message = Some("an equipment appears twice".into());
-        return Err(error);
-    }
-    Ok(())
-}
-
-/// The equipment and the default equipment of a create or update request; the
-/// default must be one of the equipment.
-fn equipping(
-    equipment: &[EquipmentDto],
-    default_equipment: EquipmentDto,
-) -> AppResult<(EquipmentSet, Equipment)> {
-    let equipment =
-        EquipmentSet::new(equipment.iter().copied().map(Equipment::from)).ok_or_else(|| {
-            AppError::Validation(vec![FieldError::new(
-                "equipment",
-                "give at least one equipment, each once",
-            )])
-        })?;
-    let default_equipment = Equipment::from(default_equipment);
-    if !equipment.contains(default_equipment) {
-        return Err(AppError::Validation(vec![FieldError::new(
-            "defaultEquipment",
-            "must be one of the equipment",
-        )]));
-    }
-    Ok((equipment, default_equipment))
+    Ok(choices)
 }
 
 #[derive(Deserialize, JsonSchema, Validate)]
@@ -426,16 +464,21 @@ pub struct CreateExerciseRequest {
     #[validate(nested)]
     pub names: ExerciseNamesRequest,
     /// Distinct modes, at least one.
-    #[validate(length(min = 1, max = 3), custom(function = distinct_modes))]
+    #[validate(length(min = 1, max = 3), custom(function = distinct))]
     pub modes: Vec<ModeDto>,
     /// One of `modes`.
     pub default_mode: ModeDto,
     pub load: LoadDto,
     /// Distinct equipment, at least one.
-    #[validate(length(min = 1, max = 7), custom(function = distinct_equipment))]
+    #[validate(length(min = 1, max = 7), custom(function = distinct))]
     pub equipment: Vec<EquipmentDto>,
     /// One of `equipment`.
     pub default_equipment: EquipmentDto,
+    /// Distinct grips; empty when the grip does not apply to the exercise.
+    #[validate(length(max = 4), custom(function = distinct))]
+    pub grips: Vec<GripDto>,
+    /// One of `grips`; null or omitted exactly when `grips` is empty.
+    pub default_grip: Option<GripDto>,
     #[serde(default)]
     pub unilateral: bool,
     /// Add the exercise to the built-in catalog (super admins only).
@@ -450,7 +493,7 @@ pub struct UpdateExerciseRequest {
     pub names: ExerciseNamesRequest,
     /// Distinct modes, at least one. A mode the exercise was logged in cannot
     /// be removed.
-    #[validate(length(min = 1, max = 3), custom(function = distinct_modes))]
+    #[validate(length(min = 1, max = 3), custom(function = distinct))]
     pub modes: Vec<ModeDto>,
     /// One of `modes`.
     pub default_mode: ModeDto,
@@ -458,10 +501,16 @@ pub struct UpdateExerciseRequest {
     pub load: LoadDto,
     /// Distinct equipment, at least one. Equipment the exercise was logged
     /// with cannot be removed.
-    #[validate(length(min = 1, max = 7), custom(function = distinct_equipment))]
+    #[validate(length(min = 1, max = 7), custom(function = distinct))]
     pub equipment: Vec<EquipmentDto>,
     /// One of `equipment`.
     pub default_equipment: EquipmentDto,
+    /// Distinct grips; empty when the grip does not apply to the exercise. A
+    /// grip the exercise was logged with cannot be removed.
+    #[validate(length(max = 4), custom(function = distinct))]
+    pub grips: Vec<GripDto>,
+    /// One of `grips`; null or omitted exactly when `grips` is empty.
+    pub default_grip: Option<GripDto>,
     pub unilateral: bool,
 }
 
@@ -481,6 +530,9 @@ pub struct ListPerformancesQuery {
     pub mode: Option<ModeDto>,
     /// Only the blocks that did the exercise with this equipment.
     pub equipment: Option<EquipmentDto>,
+    /// Only the blocks that held this grip, or with `none` only those that
+    /// recorded no grip. Every block, whatever its grip, when omitted.
+    pub grip: Option<GripFilterDto>,
     /// 1-based page number (default 1)
     #[validate(range(min = 1))]
     pub page: Option<u32>,
@@ -492,6 +544,8 @@ pub struct ListPerformancesQuery {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PerformanceResponse {
+    /// The block exercise this performance is, unique in the list.
+    pub block_exercise_id: Uuid,
     pub workout_id: Uuid,
     pub workout_name: String,
     pub performed_on: NaiveDate,
@@ -500,6 +554,8 @@ pub struct PerformanceResponse {
     pub mode: ModeDto,
     /// The equipment the exercise was done with for this block.
     pub equipment: EquipmentDto,
+    /// The grip held for this block; null when not recorded.
+    pub grip: Option<GripDto>,
     pub sets: Vec<SetResponse>,
 }
 
@@ -536,16 +592,31 @@ async fn create(
     user: AuthUser,
     ValidJson(request): ValidJson<CreateExerciseRequest>,
 ) -> AppResult<Created<ExerciseResponse>> {
-    let (modes, default_mode) = counting(&request.modes, request.default_mode)?;
-    let (equipment, default_equipment) = equipping(&request.equipment, request.default_equipment)?;
     let exercise = NewExercise {
         name_fr: request.names.fr(),
         name_en: request.names.en(),
-        modes,
-        default_mode,
+        modes: offered(
+            request.modes.iter().copied(),
+            Some(request.default_mode),
+            "modes",
+            "defaultMode",
+        )?,
+        default_mode: request.default_mode.into(),
         load: request.load.into(),
-        equipment,
-        default_equipment,
+        equipment: offered(
+            request.equipment.iter().copied(),
+            Some(request.default_equipment),
+            "equipment",
+            "defaultEquipment",
+        )?,
+        default_equipment: request.default_equipment.into(),
+        grips: offered(
+            request.grips.iter().copied(),
+            request.default_grip,
+            "grips",
+            "defaultGrip",
+        )?,
+        default_grip: request.default_grip.map(Into::into),
         unilateral: request.unilateral,
     };
     let row = if request.built_in {
@@ -591,36 +662,62 @@ async fn update(
     if current.owner_id.is_none() {
         request.names.require_both()?;
     }
-    let (modes, default_mode) = counting(&request.modes, request.default_mode)?;
-    let (equipment, default_equipment) = equipping(&request.equipment, request.default_equipment)?;
     let exercise = NewExercise {
         name_fr: request.names.fr(),
         name_en: request.names.en(),
-        modes,
-        default_mode,
+        modes: offered(
+            request.modes.iter().copied(),
+            Some(request.default_mode),
+            "modes",
+            "defaultMode",
+        )?,
+        default_mode: request.default_mode.into(),
         load: request.load.into(),
-        equipment,
-        default_equipment,
+        equipment: offered(
+            request.equipment.iter().copied(),
+            Some(request.default_equipment),
+            "equipment",
+            "defaultEquipment",
+        )?,
+        default_equipment: request.default_equipment.into(),
+        grips: offered(
+            request.grips.iter().copied(),
+            request.default_grip,
+            "grips",
+            "defaultGrip",
+        )?,
+        default_grip: request.default_grip.map(Into::into),
         unilateral: request.unilateral,
     };
-    let removed: Vec<Mode> = current
-        .modes
-        .iter()
-        .filter(|mode| !exercise.modes.contains(*mode))
-        .collect();
-    let removed_equipment: Vec<Equipment> = current
-        .equipment
-        .iter()
-        .filter(|kind| !exercise.equipment.contains(*kind))
-        .collect();
+    let removed_modes: Vec<Mode> = current.modes.removed(&exercise.modes).collect();
+    let removed_equipment: Vec<Equipment> =
+        current.equipment.removed(&exercise.equipment).collect();
+    let removed_grips: Vec<Grip> = current.grips.removed(&exercise.grips).collect();
+    let narrowed =
+        !(removed_modes.is_empty() && removed_equipment.is_empty() && removed_grips.is_empty());
     let mut tx = state.pool.begin().await?;
-    if !removed.is_empty() && db::exercises::has_sets(&mut *tx, current.id, &removed).await? {
-        return Err(AppError::Conflict(Conflict::ModeLocked));
-    }
-    if !removed_equipment.is_empty()
-        && db::exercises::equipment_used(&mut *tx, current.id, &removed_equipment).await?
-    {
-        return Err(AppError::Conflict(Conflict::EquipmentLocked));
+    if narrowed {
+        let logged = db::exercises::logged_choices(&mut *tx, current.id).await?;
+        for (locked, conflict) in [
+            (
+                removed_modes.iter().any(|&m| logged.modes.contains(m)),
+                Conflict::ModeLocked,
+            ),
+            (
+                removed_equipment
+                    .iter()
+                    .any(|&e| logged.equipment.contains(e)),
+                Conflict::EquipmentLocked,
+            ),
+            (
+                removed_grips.iter().any(|&g| logged.grips.contains(g)),
+                Conflict::GripLocked,
+            ),
+        ] {
+            if locked {
+                return Err(AppError::Conflict(conflict));
+            }
+        }
     }
     if db::exercises::name_taken_except(&mut *tx, current.id, &exercise, current.owner_id).await? {
         return Err(AppError::Conflict(Conflict::ExerciseNameTaken));
@@ -628,18 +725,15 @@ async fn update(
     let row = db::exercises::update(&mut *tx, current.id, &exercise, user.id, user.locale)
         .await
         .map_err(|e| conflict_on_unique(e, Conflict::ExerciseNameTaken))?;
-    if !removed.is_empty() {
-        db::templates::reset_modes(&mut *tx, row.id, &row.modes, row.default_mode).await?;
-    }
-    if !removed_equipment.is_empty() {
-        db::templates::reset_equipment(&mut *tx, row.id, &row.equipment, row.default_equipment)
-            .await?;
+    if narrowed {
+        db::templates::reset_choices(&mut *tx, &row).await?;
     }
     tx.commit().await?;
     tracing::debug!(
         exercise_id = %row.id,
-        removed_modes = removed.len(),
+        removed_modes = removed_modes.len(),
         removed_equipment = removed_equipment.len(),
+        removed_grips = removed_grips.len(),
         "exercise updated"
     );
     Ok(Json(row.into()))
@@ -691,6 +785,7 @@ async fn list_performances(
         before_workout_id: query.before_workout_id,
         mode: query.mode.map(Into::into),
         equipment: query.equipment.map(Into::into),
+        grip: query.grip.map(Into::into),
     };
     let rows =
         db::exercises::list_performances(&state.pool, &filter, paging.limit(), paging.offset())
@@ -701,12 +796,14 @@ async fn list_performances(
     let items = rows
         .into_iter()
         .map(|row| PerformanceResponse {
+            block_exercise_id: row.block_exercise_id,
             block_kind: BlockKind::from_exercise_count(
                 usize::try_from(row.block_exercise_count).unwrap_or(1),
             )
             .into(),
             mode: row.mode.into(),
             equipment: row.equipment.into(),
+            grip: row.grip.map(Into::into),
             sets: sets
                 .remove(&row.block_exercise_id)
                 .unwrap_or_default()

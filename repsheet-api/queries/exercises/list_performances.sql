@@ -1,7 +1,8 @@
 -- One row per time the exercise appears in one of the user's blocks, newest
 -- first. $5, when set, keeps only the workouts that come before that workout;
 -- $6, when set, only the blocks that counted the exercise in that mode; $7,
--- when set, only those that did it with that equipment.
+-- when set, only those that did it with that equipment; when $8, only those
+-- that held the grip $9, or recorded none when $9 is NULL.
 SELECT
     be.id AS block_exercise_id,
     w.id AS workout_id,
@@ -9,6 +10,7 @@ SELECT
     w.performed_on,
     be.mode,
     be.equipment,
+    be.grip,
     (
         SELECT count(*) FROM block_exercises AS sibling
         WHERE sibling.block_id = b.id)
@@ -21,6 +23,7 @@ WHERE
     AND w.user_id = $2
     AND ($6::TEXT IS NULL OR be.mode = $6)
     AND ($7::TEXT IS NULL OR be.equipment = $7)
+    AND (NOT $8 OR be.grip IS NOT DISTINCT FROM $9::TEXT)
     AND (
         $5::UUID IS NULL
         OR (w.performed_on, w.created_at) < (

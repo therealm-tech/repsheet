@@ -6,6 +6,7 @@ import {
 	type CreateWorkoutInput,
 	type Equipment,
 	ExerciseSchema,
+	type GripFilter,
 	type Locale,
 	type Mode,
 	PerformanceSchema,
@@ -22,6 +23,7 @@ import {
 	WorkoutSchema,
 	WorkoutSummarySchema,
 } from "@/lib/api/schemas";
+import { type Choices, gripFilter } from "@/lib/choices";
 
 export const UserPageSchema = pageOf(UserSchema);
 export const ExercisePageSchema = pageOf(ExerciseSchema);
@@ -70,6 +72,7 @@ export const api = {
 			beforeWorkoutId?: string;
 			mode?: Mode;
 			equipment?: Equipment;
+			grip?: GripFilter;
 		} = {},
 	) =>
 		request("GET", `/exercises/${id}/performances`, PerformancePageSchema, {
@@ -114,6 +117,7 @@ export const keys = {
 		beforeWorkoutId?: string,
 		mode?: Mode,
 		equipment?: Equipment,
+		grip?: GripFilter,
 	) =>
 		[
 			"performances",
@@ -122,6 +126,7 @@ export const keys = {
 			beforeWorkoutId ?? null,
 			mode ?? null,
 			equipment ?? null,
+			grip ?? null,
 		] as const,
 	workouts: ["workouts"] as const,
 	workout: (id: string) => ["workout", id] as const,
@@ -130,15 +135,17 @@ export const keys = {
 };
 
 /**
- * The latest performance of an exercise in `mode` and with `equipment`,
- * logged before the given workout.
+ * The latest performance of an exercise done the way `chosen` says, logged
+ * before the given workout. A block with no grip recorded compares with the
+ * history that has none either.
  */
 export function previousPerformanceQuery(
 	exerciseId: string,
 	beforeWorkoutId: string,
-	mode: Mode,
-	equipment: Equipment,
+	chosen: Choices,
 ) {
+	const { mode, equipment } = chosen;
+	const grip = gripFilter(chosen.grip);
 	return {
 		queryKey: keys.performances(
 			exerciseId,
@@ -146,6 +153,7 @@ export function previousPerformanceQuery(
 			beforeWorkoutId,
 			mode,
 			equipment,
+			grip,
 		),
 		queryFn: () =>
 			api.performances(exerciseId, {
@@ -153,6 +161,7 @@ export function previousPerformanceQuery(
 				beforeWorkoutId,
 				mode,
 				equipment,
+				grip,
 			}),
 		staleTime: 60_000,
 	};

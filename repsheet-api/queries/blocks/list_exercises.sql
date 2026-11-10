@@ -3,12 +3,15 @@ SELECT
     be.block_id,
     be.mode,
     be.equipment AS chosen_equipment,
+    be.grip AS chosen_grip,
     e.id,
     e.modes,
     e.default_mode,
     e.load,
     e.equipment,
     e.default_equipment,
+    e.grips,
+    e.default_grip,
     e.unilateral,
     exercise_name(e.name_fr, e.name_en, $2) AS name
 FROM block_exercises AS be

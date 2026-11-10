@@ -4,36 +4,38 @@ import { KindTag } from "@/components/ui";
 import { previousPerformanceQuery } from "@/lib/api/endpoints";
 import type {
 	Block,
-	Equipment,
 	ExerciseSummary,
-	Mode,
 	TemplateBlock,
 	WeightUnit,
 	WorkoutSet,
 } from "@/lib/api/schemas";
 import {
-	equipmentLabel,
+	choiceTags,
 	letter,
 	maxWorkingWeight,
 	summarizeSets,
 } from "@/lib/blocks";
+import type { Choices } from "@/lib/choices";
 import { formatShortDay } from "@/lib/dates";
 import { formatNumber, kgToUnit } from "@/lib/units";
 
-/** The exercise's name, followed by the equipment used when it offers a choice. */
+/** The exercise's name, followed by the equipment and grip chosen where it offers a choice. */
 function ExerciseName({
 	exercise,
-	equipment,
+	chosen,
 }: {
 	exercise: ExerciseSummary;
-	equipment: Equipment;
+	chosen: Choices;
 }) {
 	return (
 		<span className="ex-name">
 			{exercise.name}
-			{exercise.equipment.length > 1 ? (
-				<span className="muted"> · {equipmentLabel(equipment)}</span>
-			) : null}
+			{choiceTags(exercise, chosen).map((tag) => (
+				<span key={tag} className="muted">
+					{" "}
+					· {tag}
+				</span>
+			))}
 		</span>
 	);
 }
@@ -41,15 +43,13 @@ function ExerciseName({
 /** "+2,5 kg vs 14 oct." against the last time this exercise was done the same way before this workout. */
 function Progress({
 	exercise,
-	mode,
-	equipment,
+	chosen,
 	sets,
 	workoutId,
 	unit,
 }: {
 	exercise: ExerciseSummary;
-	mode: Mode;
-	equipment: Equipment;
+	chosen: Choices;
 	sets: WorkoutSet[];
 	workoutId: string;
 	unit: WeightUnit;
@@ -57,9 +57,11 @@ function Progress({
 	const { t } = useTranslation();
 	const current = maxWorkingWeight(sets);
 	const performances = useQuery({
-		...previousPerformanceQuery(exercise.id, workoutId, mode, equipment),
+		...previousPerformanceQuery(exercise.id, workoutId, chosen),
 		enabled:
-			mode === "reps" && exercise.load === "required" && current !== null,
+			chosen.mode === "reps" &&
+			exercise.load === "required" &&
+			current !== null,
 	});
 	const previous = performances.data?.items[0];
 	const before = previous ? maxWorkingWeight(previous.sets) : null;
@@ -114,13 +116,10 @@ export function BlockCard({
 				</span>
 			</span>
 			{block.exercises.map((entry, i) => (
-				<span key={entry.exercise.id} className="block-exercise">
+				<span key={entry.id} className="block-exercise">
 					<span className="ex">
 						<span className="ex-letter">{letter(i)}</span>
-						<ExerciseName
-							exercise={entry.exercise}
-							equipment={entry.equipment}
-						/>
+						<ExerciseName exercise={entry.exercise} chosen={entry} />
 						<span className="ex-value">
 							{summarizeSets(entry.mode, entry.exercise.load, entry.sets, unit)}
 						</span>
@@ -128,8 +127,7 @@ export function BlockCard({
 					{block.exercises.length === 1 ? (
 						<Progress
 							exercise={entry.exercise}
-							mode={entry.mode}
-							equipment={entry.equipment}
+							chosen={entry}
 							sets={entry.sets}
 							workoutId={workoutId}
 							unit={unit}
@@ -165,9 +163,9 @@ export function PlannedBlockCard({
 				<span className="muted small">{t("block.planned")}</span>
 			</span>
 			{block.exercises.map((entry, i) => (
-				<span key={entry.exercise.id} className="ex muted">
+				<span key={entry.id} className="ex muted">
 					<span className="ex-letter">{letter(i)}</span>
-					<ExerciseName exercise={entry.exercise} equipment={entry.equipment} />
+					<ExerciseName exercise={entry.exercise} chosen={entry} />
 					<span className="ex-value">
 						{[
 							block.rounds && i === 0

@@ -11,7 +11,7 @@ use validator::Validate;
 use crate::{
     api::{
         AppState, authenticated,
-        exercises::{EquipmentDto, ExerciseSummaryResponse, ModeDto},
+        exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{PageQuery, PageResponse},
         workouts::BlockKindDto,
@@ -123,9 +123,11 @@ impl TemplateResponse {
                         .exercises
                         .into_iter()
                         .map(|e| TemplateExerciseResponse {
+                            id: e.id,
                             exercise: e.exercise.into(),
                             mode: e.mode.into(),
                             equipment: e.equipment.into(),
+                            grip: e.grip.map(Into::into),
                             target: e.target,
                         })
                         .collect(),
@@ -149,11 +151,16 @@ pub struct TemplateBlockResponse {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateExerciseResponse {
+    /// Tells apart the exercises of the block, which may plan the same
+    /// exercise twice. Replacing the template gives its exercises new ids.
+    pub id: Uuid,
     pub exercise: ExerciseSummaryResponse,
     /// The mode a block logged from this one counts the exercise in.
     pub mode: ModeDto,
     /// The equipment a block logged from this one does the exercise with.
     pub equipment: EquipmentDto,
+    /// The grip a block logged from this one holds; null when not planned.
+    pub grip: Option<GripDto>,
     /// Free-form goal written by the coach, e.g. `6–8`, `max`, `45 s`.
     pub target: Option<String>,
 }
@@ -166,6 +173,8 @@ pub struct TemplateExerciseRequest {
     pub mode: Option<ModeDto>,
     /// One of the exercise's equipment; its default equipment when omitted.
     pub equipment: Option<EquipmentDto>,
+    /// One of the exercise's grips; null or omitted leaves it to the block.
+    pub grip: Option<GripDto>,
     #[validate(length(max = 50))]
     pub target: Option<String>,
 }
@@ -235,8 +244,8 @@ fn clean_note(note: Option<&str>) -> Option<&str> {
 }
 
 /// Checks that every exercise is one the user can use, counted in one of its
-/// modes and done with one of its equipment, and turns the blocks into what is
-/// stored.
+/// modes and done with one of its equipment and grips, and turns the blocks
+/// into what is stored.
 async fn resolve_blocks<'a>(
     conn: &mut sqlx::PgConnection,
     user: &AuthUser,
@@ -263,32 +272,21 @@ async fn resolve_blocks<'a>(
                 ));
                 continue;
             };
-            let mode = exercise
-                .modes
-                .choose(request.mode.map(Into::into), exercise.default_mode);
-            if mode.is_none() {
-                errors.push(FieldError::new(
-                    format!("blocks[{i}].exercises[{j}].mode"),
-                    "not a mode of the exercise",
-                ));
-            }
-            let equipment = exercise.equipment.choose(
-                request.equipment.map(Into::into),
-                exercise.default_equipment,
-            );
-            if equipment.is_none() {
-                errors.push(FieldError::new(
-                    format!("blocks[{i}].exercises[{j}].equipment"),
-                    "not an equipment of the exercise",
-                ));
-            }
-            let (Some(mode), Some(equipment)) = (mode, equipment) else {
+            let Some(chosen) = Chosen::check(
+                exercise,
+                request.mode,
+                request.equipment,
+                request.grip,
+                &format!("blocks[{i}].exercises[{j}]"),
+                &mut errors,
+            ) else {
                 continue;
             };
             exercises.push(TemplateExerciseInput {
                 exercise_id: request.exercise_id,
-                mode,
-                equipment,
+                mode: chosen.mode,
+                equipment: chosen.equipment,
+                grip: chosen.grip,
                 target: request
                     .target
                     .as_deref()

@@ -4,17 +4,17 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import {
+	ChoiceSwitches,
 	ConfirmButton,
-	EquipmentSwitch,
 	ErrorText,
 	KindTag,
-	ModeSwitch,
 	Sheet,
 } from "@/components/ui";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import type { ExerciseSummary } from "@/lib/api/schemas";
 import { kindOf, letter } from "@/lib/blocks";
+import { startingChoices } from "@/lib/choices";
 import { parseTyped } from "@/lib/grid";
 import {
 	type Draft,
@@ -89,39 +89,21 @@ function BlockEditor({
 				</button>
 			</div>
 			{block.exercises.map((entry, i) => (
-				<div key={entry.exercise.id} className="ex">
+				<div key={entry.key} className="ex">
 					<span className="ex-letter">{letter(i)}</span>
 					<span className="ex-name">{entry.exercise.name}</span>
-					{entry.exercise.modes.length > 1 ? (
-						<ModeSwitch
-							modes={entry.exercise.modes}
-							value={entry.mode}
-							label={t("block.modeOf", { name: entry.exercise.name })}
-							onChange={(mode) =>
-								onChange({
-									...block,
-									exercises: block.exercises.map((x, j) =>
-										j === i ? { ...x, mode } : x,
-									),
-								})
-							}
-						/>
-					) : null}
-					{entry.exercise.equipment.length > 1 ? (
-						<EquipmentSwitch
-							equipment={entry.exercise.equipment}
-							value={entry.equipment}
-							label={t("block.equipmentOf", { name: entry.exercise.name })}
-							onChange={(equipment) =>
-								onChange({
-									...block,
-									exercises: block.exercises.map((x, j) =>
-										j === i ? { ...x, equipment } : x,
-									),
-								})
-							}
-						/>
-					) : null}
+					<ChoiceSwitches
+						exercise={entry.exercise}
+						chosen={entry}
+						onChange={(change) =>
+							onChange({
+								...block,
+								exercises: block.exercises.map((x, j) =>
+									j === i ? { ...x, ...change } : x,
+								),
+							})
+						}
+					/>
 					<input
 						className="input input-small"
 						aria-label={t("templateEditor.targetFor", {
@@ -287,9 +269,9 @@ export function TemplateEditorPage({
 
 	function pick(exercise: ExerciseSummary) {
 		const entry = {
+			key: newKey(),
 			exercise,
-			mode: exercise.defaultMode,
-			equipment: exercise.defaultEquipment,
+			...startingChoices(exercise),
 			target: "",
 		};
 		const target = pickTarget;

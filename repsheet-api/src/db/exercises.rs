@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use sqlx::{FromRow, PgExecutor};
 use uuid::Uuid;
 
-use crate::domain::{Equipment, EquipmentSet, Load, Locale, Mode, Modes};
+use crate::domain::{Equipment, EquipmentSet, Grip, Grips, Load, Locale, Mode, Modes};
 
 #[derive(FromRow)]
 pub struct ExerciseRow {
@@ -22,6 +22,9 @@ pub struct ExerciseRow {
     pub equipment: EquipmentSet,
     #[sqlx(try_from = "String")]
     pub default_equipment: Equipment,
+    #[sqlx(try_from = "Vec<String>")]
+    pub grips: Grips,
+    pub default_grip: Option<Grip>,
     pub unilateral: bool,
     pub last_used_on: Option<NaiveDate>,
 }
@@ -40,6 +43,9 @@ pub struct ExerciseSummaryRow {
     pub equipment: EquipmentSet,
     #[sqlx(try_from = "String")]
     pub default_equipment: Equipment,
+    #[sqlx(try_from = "Vec<String>")]
+    pub grips: Grips,
+    pub default_grip: Option<Grip>,
     pub unilateral: bool,
 }
 
@@ -53,7 +59,20 @@ pub struct PerformanceRow {
     pub mode: Mode,
     #[sqlx(try_from = "String")]
     pub equipment: Equipment,
+    pub grip: Option<Grip>,
     pub block_exercise_count: i64,
+}
+
+/// What any user logged an exercise with: the modes, the equipment and the
+/// grips of its block exercises.
+#[derive(FromRow)]
+pub struct LoggedChoices {
+    #[sqlx(try_from = "Vec<String>")]
+    pub modes: Modes,
+    #[sqlx(try_from = "Vec<String>")]
+    pub equipment: EquipmentSet,
+    #[sqlx(try_from = "Vec<String>")]
+    pub grips: Grips,
 }
 
 /// At least one of the names is set.
@@ -65,6 +84,8 @@ pub struct NewExercise<'a> {
     pub load: Load,
     pub equipment: EquipmentSet,
     pub default_equipment: Equipment,
+    pub grips: Grips,
+    pub default_grip: Option<Grip>,
     pub unilateral: bool,
 }
 
@@ -175,6 +196,8 @@ pub async fn insert(
         .bind(exercise.load.as_str())
         .bind(exercise.equipment.as_strs())
         .bind(exercise.default_equipment.as_str())
+        .bind(exercise.grips.as_strs())
+        .bind(exercise.default_grip.map(Grip::as_str))
         .bind(exercise.unilateral)
         .bind(locale.as_str())
         .fetch_one(exec)
@@ -194,6 +217,8 @@ pub async fn insert_builtin(
         .bind(exercise.load.as_str())
         .bind(exercise.equipment.as_strs())
         .bind(exercise.default_equipment.as_str())
+        .bind(exercise.grips.as_strs())
+        .bind(exercise.default_grip.map(Grip::as_str))
         .bind(exercise.unilateral)
         .bind(locale.as_str())
         .fetch_one(exec)
@@ -218,6 +243,8 @@ pub async fn update(
         .bind(exercise.load.as_str())
         .bind(exercise.equipment.as_strs())
         .bind(exercise.default_equipment.as_str())
+        .bind(exercise.grips.as_strs())
+        .bind(exercise.default_grip.map(Grip::as_str))
         .bind(exercise.unilateral)
         .bind(viewer_id)
         .bind(locale.as_str())
@@ -233,24 +260,9 @@ pub async fn delete(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<()> {
     Ok(())
 }
 
-/// Whether any user logged sets of the exercise in one of `modes`.
-pub async fn has_sets(exec: impl PgExecutor<'_>, id: Uuid, modes: &[Mode]) -> sqlx::Result<bool> {
-    sqlx::query_scalar(include_str!("../../queries/exercises/has_sets.sql"))
+pub async fn logged_choices(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<LoggedChoices> {
+    sqlx::query_as(include_str!("../../queries/exercises/logged_choices.sql"))
         .bind(id)
-        .bind(modes.iter().map(|m| m.as_str()).collect::<Vec<_>>())
-        .fetch_one(exec)
-        .await
-}
-
-/// Whether any user logged the exercise with one of `equipment`.
-pub async fn equipment_used(
-    exec: impl PgExecutor<'_>,
-    id: Uuid,
-    equipment: &[Equipment],
-) -> sqlx::Result<bool> {
-    sqlx::query_scalar(include_str!("../../queries/exercises/equipment_used.sql"))
-        .bind(id)
-        .bind(equipment.iter().map(|e| e.as_str()).collect::<Vec<_>>())
         .fetch_one(exec)
         .await
 }
@@ -281,6 +293,23 @@ pub struct PerformanceFilter {
     pub mode: Option<Mode>,
     /// Keeps only the blocks that did the exercise with this equipment.
     pub equipment: Option<Equipment>,
+    pub grip: Option<GripFilter>,
+}
+
+/// Keeps only the blocks that held a grip, or only those that recorded none.
+#[derive(Clone, Copy)]
+pub enum GripFilter {
+    Held(Grip),
+    Unrecorded,
+}
+
+impl GripFilter {
+    fn held(self) -> Option<Grip> {
+        match self {
+            Self::Held(grip) => Some(grip),
+            Self::Unrecorded => None,
+        }
+    }
 }
 
 pub async fn list_performances(
@@ -299,6 +328,8 @@ pub async fn list_performances(
     .bind(filter.before_workout_id)
     .bind(filter.mode.map(Mode::as_str))
     .bind(filter.equipment.map(Equipment::as_str))
+    .bind(filter.grip.is_some())
+    .bind(filter.grip.and_then(GripFilter::held).map(Grip::as_str))
     .fetch_all(exec)
     .await
 }
@@ -315,6 +346,8 @@ pub async fn count_performances(
     .bind(filter.before_workout_id)
     .bind(filter.mode.map(Mode::as_str))
     .bind(filter.equipment.map(Equipment::as_str))
+    .bind(filter.grip.is_some())
+    .bind(filter.grip.and_then(GripFilter::held).map(Grip::as_str))
     .fetch_one(exec)
     .await
 }

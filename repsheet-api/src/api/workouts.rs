@@ -14,7 +14,7 @@ use validator::{Validate, ValidationErrors};
 use crate::{
     api::{
         AppState, authenticated,
-        exercises::{EquipmentDto, ExerciseSummaryResponse, ModeDto},
+        exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{PageQuery, PageResponse},
     },
@@ -26,7 +26,7 @@ use crate::{
             WorkoutSummaryRow,
         },
     },
-    domain::{BlockKind, Equipment, Mode, SetField, SetValues, SetViolation},
+    domain::{BlockKind, Mode, SetField, SetValues, SetViolation},
     error::{AppError, AppResult, FieldError},
 };
 
@@ -222,9 +222,11 @@ impl From<LoadedBlock> for BlockResponse {
                 .exercises
                 .into_iter()
                 .map(|e| BlockExerciseResponse {
+                    id: e.id,
                     exercise: e.exercise.into(),
                     mode: e.mode.into(),
                     equipment: e.equipment.into(),
+                    grip: e.grip.map(Into::into),
                     sets: e.sets.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
@@ -235,11 +237,16 @@ impl From<LoadedBlock> for BlockResponse {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockExerciseResponse {
+    /// Tells apart the exercises of the block, which may hold the same
+    /// exercise twice. Replacing the block gives its exercises new ids.
+    pub id: Uuid,
     pub exercise: ExerciseSummaryResponse,
     /// The mode the exercise is counted in for every round of the block.
     pub mode: ModeDto,
     /// The equipment the exercise is done with for every round of the block.
     pub equipment: EquipmentDto,
+    /// The grip held for every round of the block; null when not recorded.
+    pub grip: Option<GripDto>,
     pub sets: Vec<SetResponse>,
 }
 
@@ -308,6 +315,10 @@ pub struct BlockExerciseRequest {
     pub mode: Option<ModeDto>,
     /// One of the exercise's equipment; its default equipment when omitted.
     pub equipment: Option<EquipmentDto>,
+    /// One of the exercise's grips. Null or omitted records that the grip is
+    /// not known, the only value an exercise offering no grip takes: unlike
+    /// `mode` and `equipment`, it never defaults to the exercise's.
+    pub grip: Option<GripDto>,
     #[validate(length(min = 1, max = 50), nested)]
     pub sets: Vec<SetRequest>,
 }
@@ -525,18 +536,16 @@ async fn delete_block(
     Ok(NoContent)
 }
 
-/// The sets of a block exercise, with the mode they are counted in and the
-/// equipment they are done with.
+/// The sets of a block exercise, with how they are done.
 struct CheckedExercise {
-    mode: Mode,
-    equipment: Equipment,
+    chosen: Chosen,
     sets: Vec<SetValues>,
 }
 
 /// Checks what field-level validation cannot: that the exercises and the
 /// template block are the user's, that each exercise is counted in one of its
-/// modes and done with one of its equipment, and that each set fits that mode
-/// and the exercise's load rule.
+/// modes and done with one of its equipment and grips, and that each set fits
+/// that mode and the exercise's load rule.
 /// Returns the checked exercises, in request order.
 async fn check_block(
     conn: &mut sqlx::PgConnection,
@@ -567,27 +576,17 @@ async fn check_block(
             ));
             continue;
         };
-        let mode = known
-            .modes
-            .choose(exercise.mode.map(Into::into), known.default_mode);
-        if mode.is_none() {
-            errors.push(FieldError::new(
-                format!("exercises[{i}].mode"),
-                "not a mode of the exercise",
-            ));
-        }
-        let equipment = known
-            .equipment
-            .choose(exercise.equipment.map(Into::into), known.default_equipment);
-        if equipment.is_none() {
-            errors.push(FieldError::new(
-                format!("exercises[{i}].equipment"),
-                "not an equipment of the exercise",
-            ));
-        }
-        let (Some(mode), Some(equipment)) = (mode, equipment) else {
+        let Some(chosen) = Chosen::check(
+            known,
+            exercise.mode,
+            exercise.equipment,
+            exercise.grip,
+            &format!("exercises[{i}]"),
+            &mut errors,
+        ) else {
             continue;
         };
+        let mode = chosen.mode;
         for (j, set) in sets.iter().enumerate() {
             errors.extend(mode.check(known.load, set).into_iter().map(|violation| {
                 let field = match violation {
@@ -599,11 +598,7 @@ async fn check_block(
                 )
             }));
         }
-        checked.push(CheckedExercise {
-            mode,
-            equipment,
-            sets,
-        });
+        checked.push(CheckedExercise { chosen, sets });
     }
 
     if errors.is_empty() {
@@ -644,8 +639,9 @@ fn new_block_exercises<'a>(
         .zip(checked)
         .map(|(exercise, checked)| NewBlockExercise {
             exercise_id: exercise.exercise_id,
-            mode: checked.mode,
-            equipment: checked.equipment,
+            mode: checked.chosen.mode,
+            equipment: checked.chosen.equipment,
+            grip: checked.chosen.grip,
             sets: &checked.sets,
         })
         .collect()

@@ -1,19 +1,18 @@
 import type {
-	Equipment,
 	ExerciseSummary,
-	Mode,
 	Template,
 	TemplateBlockInput,
 	TemplateInput,
 	Workout,
 } from "@/lib/api/schemas";
 import { roundCount } from "@/lib/blocks";
+import type { Choices } from "@/lib/choices";
 import { targetFromSets } from "@/lib/grid";
 
-export interface DraftExercise {
+export interface DraftExercise extends Choices {
+	/** Tells apart two entries of the same exercise; never sent to the API. */
+	key: string;
 	exercise: ExerciseSummary;
-	mode: Mode;
-	equipment: Equipment;
 	target: string;
 }
 
@@ -51,9 +50,11 @@ export function draftFromTemplate(template: Template): Draft {
 			rounds: block.rounds,
 			restSeconds: block.restSeconds,
 			exercises: block.exercises.map((e) => ({
+				key: e.id,
 				exercise: e.exercise,
 				mode: e.mode,
 				equipment: e.equipment,
+				grip: e.grip,
 				target: e.target ?? "",
 			})),
 		})),
@@ -71,9 +72,11 @@ export function draftFromWorkout(workout: Workout): Draft {
 				Math.max(0, ...block.exercises.map((e) => roundCount(e.sets))) || null,
 			restSeconds: block.restSeconds,
 			exercises: block.exercises.map((e) => ({
+				key: newKey(),
 				exercise: e.exercise,
 				mode: e.mode,
 				equipment: e.equipment,
+				grip: e.grip,
 				target: targetFromSets(e.mode, e.sets) ?? "",
 			})),
 		})),
@@ -93,6 +96,7 @@ export function draftToInput(draft: Draft): TemplateInput {
 							exerciseId: e.exercise.id,
 							mode: e.mode,
 							equipment: e.equipment,
+							grip: e.grip,
 						};
 						return target ? { ...exercise, target } : exercise;
 					}),

@@ -87,6 +87,7 @@ describe("problem mapping", () => {
 			"exercise-name-taken": fr.errors.exerciseNameTaken,
 			"mode-locked": fr.errors.modeLocked,
 			"equipment-locked": fr.errors.equipmentLocked,
+			"grip-locked": fr.errors.gripLocked,
 			"exercise-in-use": fr.errors.exerciseInUse,
 			"own-role": fr.errors.ownRole,
 			"own-account": fr.errors.ownAccount,

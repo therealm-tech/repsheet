@@ -100,6 +100,7 @@ export const fr = {
 		done: "fait",
 		lastTime: "Dernière fois ({{date}}) : {{summary}}",
 		equipmentOf: "Matériel de {{name}}",
+		gripOf: "Prise de {{name}}",
 		lastTimeIn: "Dernière fois {{how}} ({{date}}) : {{summary}}",
 		modeOf: "Mode de {{name}}",
 		newTitle: "Nouveau bloc",
@@ -114,8 +115,8 @@ export const fr = {
 		stepHint: "± {{step}} · ou tape la valeur",
 		switchConfirm:
 			"Compter {{name}} {{mode}} ? Les valeurs déjà saisies {{previous}} seront effacées.",
-		switchEquipmentConfirm:
-			"Faire {{name}} {{equipment}} ? Les charges déjà saisies {{previous}} seront effacées.",
+		switchLoadsConfirm:
+			"Faire {{name}} {{how}} ? Les charges déjà saisies {{previous}} seront effacées.",
 		switchMode: "Changer",
 		tapToLog: "Toucher pour logger →",
 		title: "Bloc {{position}}",
@@ -233,6 +234,26 @@ export const fr = {
 		machine: "à la machine",
 		other: "avec un autre matériel",
 	},
+	grips: {
+		mixed: "Mixte",
+		neutral: "Neutre",
+		pronation: "Pronation",
+		supination: "Supination",
+	},
+	gripTags: {
+		mixed: "Prise mixte",
+		neutral: "Prise neutre",
+		none: "Prise non précisée",
+		pronation: "Prise pronation",
+		supination: "Prise supination",
+	},
+	gripWith: {
+		mixed: "en prise mixte",
+		neutral: "en prise neutre",
+		none: "sans prise précisée",
+		pronation: "en pronation",
+		supination: "en supination",
+	},
 	picker: {
 		all: "Tous",
 		create: "＋ Créer un exercice",
@@ -255,6 +276,8 @@ export const fr = {
 			"L'exercice disparaît du catalogue pour tout le monde.",
 		deleteCustomMessage: "L'exercice disparaît de ta liste.",
 		equipmentShown: "Matériel affiché",
+		gripShown: "Prise affichée",
+		gripUnknown: "Non précisée",
 		modeShown: "Mode affiché",
 		noSets: "Pas encore de série enregistrée pour cet exercice.",
 		notFound: "Exercice introuvable.",
@@ -269,8 +292,10 @@ export const fr = {
 		create: "Créer l'exercice",
 		defaultMode: "Par défaut",
 		defaultEquipment: "Matériel par défaut",
+		defaultGrip: "Prise par défaut",
 		editTitle: "Modifier l'exercice",
 		equipment: "Matériel",
+		grips: "Prises",
 		load: "Charge",
 		modes: "Se compte en",
 		name: "Nom",
@@ -334,11 +359,15 @@ export const fr = {
 		dateRequired: "Choisis la date de la séance.",
 		defaultModeInvalid:
 			"Le mode par défaut doit faire partie des modes choisis.",
+		defaultGripInvalid:
+			"La prise par défaut doit faire partie des prises choisies.",
 		defaultEquipmentInvalid:
 			"Le matériel par défaut doit faire partie du matériel choisi.",
 		deleteFailed: "Suppression impossible.",
 		durationRange: "La durée va de 1 à 1440 minutes.",
 		emailTaken: "Un compte existe déjà avec cet email.",
+		gripLocked:
+			"Cette prise a déjà des séries enregistrées : elle ne peut pas être retirée.",
 		equipmentLocked:
 			"Ce matériel a déjà des séries enregistrées : il ne peut pas être retiré.",
 		equipmentRequired: "Choisis au moins un matériel.",
