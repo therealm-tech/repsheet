@@ -12,11 +12,16 @@ import { tokenStore } from "@/lib/auth";
 import { APP_SCROLLER } from "@/lib/scroll";
 import { AccountsPage } from "@/pages/AccountsPage";
 import { AppLayout } from "@/pages/AppLayout";
+import { AthletePage } from "@/pages/AthletePage";
+import { CoachingPage } from "@/pages/CoachingPage";
 import { ExerciseDetailPage } from "@/pages/ExerciseDetailPage";
 import { ExercisesPage } from "@/pages/ExercisesPage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
+import { PlannedSessionEditorPage } from "@/pages/PlannedSessionEditorPage";
+import { PlannedSessionPage } from "@/pages/PlannedSessionPage";
+import { SharedWorkoutPage } from "@/pages/SharedWorkoutPage";
 import { TemplateEditorPage } from "@/pages/TemplateEditorPage";
 import { TemplatesPage } from "@/pages/TemplatesPage";
 import { WorkoutPage } from "@/pages/WorkoutPage";
@@ -120,6 +125,75 @@ const templateRoute = createRoute({
 	},
 });
 
+const coachingRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching",
+	component: CoachingPage,
+});
+
+const athleteRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching/athletes/$athleteId",
+	component: function AthleteRouteView() {
+		const { athleteId } = athleteRoute.useParams();
+		return <AthletePage key={athleteId} athleteId={athleteId} />;
+	},
+});
+
+const newPlannedSessionRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching/athletes/$athleteId/sessions/new",
+	component: function NewPlannedSessionRouteView() {
+		const { athleteId } = newPlannedSessionRoute.useParams();
+		return <PlannedSessionEditorPage key={athleteId} athleteId={athleteId} />;
+	},
+});
+
+const plannedSessionRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching/athletes/$athleteId/sessions/$sessionId",
+	component: function PlannedSessionRouteView() {
+		const { athleteId, sessionId } = plannedSessionRoute.useParams();
+		return (
+			<PlannedSessionPage
+				key={sessionId}
+				athleteId={athleteId}
+				sessionId={sessionId}
+			/>
+		);
+	},
+});
+
+const editPlannedSessionRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching/athletes/$athleteId/sessions/$sessionId/edit",
+	component: function EditPlannedSessionRouteView() {
+		const { athleteId, sessionId } = editPlannedSessionRoute.useParams();
+		return (
+			<PlannedSessionEditorPage
+				key={sessionId}
+				athleteId={athleteId}
+				sessionId={sessionId}
+			/>
+		);
+	},
+});
+
+const sharedWorkoutRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching/athletes/$athleteId/workouts/$workoutId",
+	component: function SharedWorkoutRouteView() {
+		const { athleteId, workoutId } = sharedWorkoutRoute.useParams();
+		return (
+			<SharedWorkoutPage
+				key={workoutId}
+				athleteId={athleteId}
+				workoutId={workoutId}
+			/>
+		);
+	},
+});
+
 export const routeTree = rootRoute.addChildren([
 	loginRoute,
 	appRoute.addChildren([
@@ -132,6 +206,12 @@ export const routeTree = rootRoute.addChildren([
 		newTemplateRoute,
 		templateRoute,
 		accountsRoute,
+		coachingRoute,
+		athleteRoute,
+		newPlannedSessionRoute,
+		plannedSessionRoute,
+		editPlannedSessionRoute,
+		sharedWorkoutRoute,
 	]),
 ]);
 

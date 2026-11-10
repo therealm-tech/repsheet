@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BlockCard, PlannedBlockCard } from "@/components/BlockCard";
 import { BlockSheet, type BlockSheetMode } from "@/components/BlockSheet";
+import { ShareWithCoaches } from "@/components/ShareWithCoaches";
 import { ConfirmButton, ErrorText, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
 import { api, keys } from "@/lib/api/endpoints";
@@ -135,6 +136,7 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 
 				<div className="workout-aside">
 					{w.note ? <p className="workout-note">{w.note}</p> : null}
+					<ShareWithCoaches workoutId={w.id} />
 					<div className="stack-tight workout-actions">
 						<Link
 							to="/templates/new"

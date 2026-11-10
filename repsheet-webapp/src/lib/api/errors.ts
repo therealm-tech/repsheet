@@ -56,6 +56,14 @@ function byType(error: ApiError): ErrorKey | null {
 			return "ownRole";
 		case `${PROBLEM}own-account`:
 			return "ownAccount";
+		case `${PROBLEM}unknown-account`:
+			return "unknownAccount";
+		case `${PROBLEM}own-coach`:
+			return "ownCoach";
+		case `${PROBLEM}coach-already-added`:
+			return "coachAlreadyAdded";
+		case `${PROBLEM}not-coach`:
+			return "notCoach";
 		case `${PROBLEM}internal`:
 			return "internal";
 		default:
