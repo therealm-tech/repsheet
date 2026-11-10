@@ -36,8 +36,6 @@ import type {
 } from "@/lib/api/schemas";
 import {
 	choicesText,
-	equipmentWith,
-	gripWith,
 	kindOf,
 	letter,
 	modeInLower,
@@ -176,27 +174,16 @@ interface Active {
 
 interface PendingSwitch {
 	col: number;
-	change: ChoiceChange;
+	change: { mode: Mode };
 }
 
-/** What a switch that would clear values asks before going ahead. */
-function switchQuestion(
-	name: string,
-	change: ChoiceChange,
-	chosen: Choices,
-): string {
-	if ("mode" in change) {
-		return i18n.t("block.switchConfirm", {
-			name,
-			mode: modeInLower(change.mode),
-			previous: modeInLower(chosen.mode),
-		});
-	}
-	const [how, previous] =
-		"equipment" in change
-			? [equipmentWith(change.equipment), equipmentWith(chosen.equipment)]
-			: [gripWith(change.grip), gripWith(chosen.grip)];
-	return i18n.t("block.switchLoadsConfirm", { name, how, previous });
+/** What a mode switch that would clear values asks before going ahead. */
+function switchQuestion(name: string, mode: Mode, chosen: Choices): string {
+	return i18n.t("block.switchConfirm", {
+		name,
+		mode: modeInLower(mode),
+		previous: modeInLower(chosen.mode),
+	});
 }
 
 export function BlockSheet({
@@ -351,7 +338,13 @@ export function BlockSheet({
 		setFocusExercise(exercise.id);
 	}
 
-	async function applySwitch({ col, change }: PendingSwitch) {
+	async function applySwitch({
+		col,
+		change,
+	}: {
+		col: number;
+		change: ChoiceChange;
+	}) {
 		setPendingSwitch(null);
 		const exercise = grid?.exercises[col];
 		if (!exercise) {
@@ -366,11 +359,11 @@ export function BlockSheet({
 		);
 	}
 
-	function requestSwitch(pending: PendingSwitch) {
-		if (grid && switchDiscards(grid, pending.col, pending.change)) {
-			setPendingSwitch(pending);
+	function requestSwitch(col: number, change: ChoiceChange) {
+		if (grid && "mode" in change && switchDiscards(grid, col, change)) {
+			setPendingSwitch({ col, change });
 		} else {
-			void applySwitch(pending);
+			void applySwitch({ col, change });
 		}
 	}
 
@@ -545,7 +538,7 @@ export function BlockSheet({
 								<p>
 									{switchQuestion(
 										switching.name,
-										pendingSwitch.change,
+										pendingSwitch.change.mode,
 										switching.chosen,
 									)}
 								</p>
@@ -583,7 +576,7 @@ export function BlockSheet({
 										<ChoiceSwitches
 											exercise={exercise}
 											chosen={exercise.chosen}
-											onChange={(change) => requestSwitch({ col, change })}
+											onChange={(change) => requestSwitch(col, change)}
 										/>
 										<button
 											type="button"

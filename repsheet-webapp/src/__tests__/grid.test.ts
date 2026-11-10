@@ -521,14 +521,14 @@ describe("equipment", () => {
 		).toBe("barbell");
 	});
 
-	it("swaps the loads for those of the other equipment, keeping the reps", () => {
+	it("keeps the loads entered on other equipment, and the reps", () => {
 		let grid = initialGrid({
 			exercises: [press],
 			rounds: 2,
 			lastSets: [[set(1, { reps: 8, weightKg: 40 })]],
 			unit: "kg",
 		});
-		expect(switchDiscards(grid, 0, { equipment: "dumbbell" })).toBe(true);
+		expect(switchDiscards(grid, 0, { equipment: "dumbbell" })).toBe(false);
 		grid = setCell(grid, 1, 0, "reps", 6);
 
 		grid = switchChoice(
@@ -540,25 +540,90 @@ describe("equipment", () => {
 		);
 		expect(grid.exercises[0]?.chosen.equipment).toBe("dumbbell");
 		expect(grid.rows.map((r) => r.cells[0])).toEqual([
-			{ reps: 8, weight: 16, duration: null, distance: null },
-			{ reps: 6, weight: 14, duration: null, distance: null },
+			{ reps: 8, weight: 40, duration: null, distance: null },
+			{ reps: 6, weight: 40, duration: null, distance: null },
 		]);
 		const result = toBlockExercises(grid, "kg");
 		expect(result.ok && result.exercises[0]?.equipment).toBe("dumbbell");
 	});
 
-	it("clears the loads when the other equipment was never logged", () => {
+	it("fills the cells without a load from the other equipment's history", () => {
+		let grid = initialGrid({
+			exercises: [press],
+			rounds: 2,
+			lastSets: [[set(1, { reps: 8, weightKg: 40 })]],
+			unit: "kg",
+		});
+		grid = setCell(grid, 1, 0, "weight", null);
+		grid = switchChoice(
+			grid,
+			0,
+			{ equipment: "dumbbell" },
+			[set(1, { reps: 10, weightKg: 16 }), set(2, { reps: 10, weightKg: 14 })],
+			"kg",
+		);
+		expect(grid.rows.map((r) => r.cells[0]?.weight)).toEqual([40, 14]);
+	});
+
+	it("leaves a cell without a load empty when the other equipment was never logged", () => {
 		let grid = initialGrid({
 			exercises: [press],
 			lastSets: [[set(1, { reps: 8, weightKg: 40 })]],
 			unit: "kg",
 		});
+		grid = setCell(grid, 0, 0, "weight", null);
 		grid = switchChoice(grid, 0, { equipment: "dumbbell" }, undefined, "kg");
-		expect(grid.rows[0]?.cells[0]).toEqual({
-			reps: 8,
-			weight: null,
-			duration: null,
-			distance: null,
+		expect(grid.rows[0]?.cells[0]?.weight).toBeNull();
+	});
+});
+
+describe("grip", () => {
+	const pulldown: GridExercise = {
+		...bench,
+		id: "pulldown",
+		name: "Tirage vertical",
+		equipment: ["cable"],
+	};
+
+	it("keeps the loads entered on another grip, the history having none", () => {
+		let grid = initialGrid({
+			exercises: [pulldown],
+			rounds: 2,
+			lastSets: [
+				[
+					set(1, { reps: 10, weightKg: 30 }),
+					set(2, { reps: 10, weightKg: 34 }),
+				],
+			],
+			unit: "kg",
 		});
+		expect(switchDiscards(grid, 0, { grip: "pronation" })).toBe(false);
+		grid = switchChoice(grid, 0, { grip: "pronation" }, undefined, "kg");
+		expect(grid.exercises[0]?.chosen.grip).toBe("pronation");
+		expect(grid.rows.map((r) => r.cells[0]?.weight)).toEqual([30, 34]);
+	});
+
+	it("fills the cells without a load from the new grip's history", () => {
+		let grid = initialGrid({
+			exercises: [pulldown],
+			rounds: 2,
+			lastSets: [
+				[
+					set(1, { reps: 10, weightKg: 30 }),
+					set(2, { reps: 10, weightKg: 34 }),
+				],
+			],
+			unit: "kg",
+		});
+		grid = setCell(grid, 1, 0, "weight", null);
+		grid = switchChoice(
+			grid,
+			0,
+			{ grip: "supination" },
+			[set(1, { reps: 8, weightKg: 60 }), set(2, { reps: 8, weightKg: 55 })],
+			"kg",
+		);
+		expect(grid.rows.map((r) => r.cells[0]?.weight)).toEqual([30, 55]);
+		expect(grid.rows.map((r) => r.cells[0]?.reps)).toEqual([10, 10]);
 	});
 });
