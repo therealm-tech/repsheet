@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ErrorText } from "@/components/ui";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
-import type { Comment } from "@/lib/api/schemas";
+import type { Author, Comment } from "@/lib/api/schemas";
 import { formatShortInstant } from "@/lib/dates";
 import { useMe } from "@/lib/hooks";
 
@@ -299,19 +299,40 @@ function ThreadHead({ subject }: { subject: ThreadSubject }) {
 
 /**
  * The first comment on an exercise not saved yet: written now, posted once the
- * block it belongs to is.
+ * block it belongs to is. `coachNote` is the note the coach planned for it,
+ * which starts the thread once the block is saved.
  */
 export function FirstCommentDraft({
 	subject,
 	draft,
+	coachNote,
 }: {
 	subject: ThreadSubject;
 	draft: CommentDraft;
+	coachNote?: { author: Author; text: string };
 }) {
+	const { t } = useTranslation();
 	return (
 		<span className="thread">
 			<ThreadHead subject={subject} />
-			<CommentBox subject={subject} draft={draft} hasComments={false} />
+			{coachNote ? (
+				<span className="comment">
+					<span className="avatar avatar-coach" aria-hidden="true">
+						{coachNote.author.name.charAt(0).toUpperCase()}
+					</span>
+					<span className="comment-body">
+						<span className="comment-who">
+							<b>{coachNote.author.name}</b> · {t("comments.coach")}
+						</span>
+						<span className="comment-text">{coachNote.text}</span>
+					</span>
+				</span>
+			) : null}
+			<CommentBox
+				subject={subject}
+				draft={draft}
+				hasComments={coachNote !== undefined}
+			/>
 		</span>
 	);
 }

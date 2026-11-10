@@ -19,7 +19,6 @@ function BlockEditor({
 	block,
 	index,
 	count,
-	withRest,
 	onChange,
 	onMove,
 	onRemove,
@@ -28,7 +27,6 @@ function BlockEditor({
 	block: DraftBlock;
 	index: number;
 	count: number;
-	withRest: boolean;
 	onChange: (block: DraftBlock) => void;
 	onMove: (direction: -1 | 1) => void;
 	onRemove: () => void;
@@ -158,22 +156,18 @@ function BlockEditor({
 						onChange({ ...block, rounds: toInt(e.target.value) })
 					}
 				/>
-				{withRest ? (
-					<>
-						<label className="small muted" htmlFor={`${prefix}-rest`}>
-							{t("templateEditor.rest")}
-						</label>
-						<input
-							id={`${prefix}-rest`}
-							className="input input-small"
-							inputMode="numeric"
-							value={block.restSeconds ?? ""}
-							onChange={(e) =>
-								onChange({ ...block, restSeconds: toInt(e.target.value) })
-							}
-						/>
-					</>
-				) : null}
+				<label className="small muted" htmlFor={`${prefix}-rest`}>
+					{t("templateEditor.rest")}
+				</label>
+				<input
+					id={`${prefix}-rest`}
+					className="input input-small"
+					inputMode="numeric"
+					value={block.restSeconds ?? ""}
+					onChange={(e) =>
+						onChange({ ...block, restSeconds: toInt(e.target.value) })
+					}
+				/>
 			</div>
 			{block.exercises.length < 10 ? (
 				<button type="button" className="link-button" onClick={onAddExercise}>
@@ -185,21 +179,15 @@ function BlockEditor({
 }
 
 /**
- * The blocks of a plan, a template or a planned session: exercises with a
- * free-text target, rounds and, for templates, rest. Exercises are added
- * through the exercise picker sheet.
+ * The blocks of a template: exercises with a free-text target, rounds and
+ * rest. Exercises are added through the exercise picker sheet.
  */
 export function BlocksEditor({
 	blocks,
 	onChange,
-	withRest,
-	builtInOnly = false,
 }: {
 	blocks: DraftBlock[];
 	onChange: (blocks: DraftBlock[]) => void;
-	withRest: boolean;
-	/** Offers only catalog exercises, for a plan whose owner cannot see the editor's own. */
-	builtInOnly?: boolean;
 }) {
 	const { t } = useTranslation();
 	const [pickTarget, setPickTarget] = useState<PickTarget | null>(null);
@@ -257,7 +245,6 @@ export function BlocksEditor({
 					block={block}
 					index={i}
 					count={blocks.length}
-					withRest={withRest}
 					onChange={(next) =>
 						onChange(blocks.map((b) => (b.key === block.key ? next : b)))
 					}
@@ -282,11 +269,7 @@ export function BlocksEditor({
 						{t("templateEditor.pickExercise")}
 					</h2>
 					<div className="sheet-body">
-						<ExercisePicker
-							onSelect={pick}
-							excludeIds={pickExclude}
-							builtInOnly={builtInOnly}
-						/>
+						<ExercisePicker onSelect={pick} excludeIds={pickExclude} />
 					</div>
 				</Sheet>
 			) : null}

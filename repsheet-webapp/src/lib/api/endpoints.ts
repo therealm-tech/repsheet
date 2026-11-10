@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { request, requestVoid } from "@/lib/api/client";
 import {
 	type BlockInput,
@@ -13,10 +14,12 @@ import {
 	type Locale,
 	type Mode,
 	PerformanceSchema,
+	type PlannedBlockInput,
 	PlannedSessionSchema,
 	PlannedSessionSummarySchema,
 	pageOf,
 	type Role,
+	TemplateBlockSchema,
 	type TemplateInput,
 	TemplateSchema,
 	TemplateSummarySchema,
@@ -89,6 +92,19 @@ export const api = {
 		request("GET", `/exercises/${id}/performances`, PerformancePageSchema, {
 			query: { ...params },
 		}),
+	/** The times an athlete of the caller performed it, in the workouts the caller reads. */
+	athletePerformances: (
+		id: string,
+		params: PageParams & {
+			athleteId: string;
+			mode?: Mode;
+			equipment?: Equipment;
+			grip?: GripFilter;
+		},
+	) =>
+		request("GET", `/exercises/${id}/performances`, PerformancePageSchema, {
+			query: { ...params },
+		}),
 
 	workouts: (params: { athleteId?: string } & PageParams = {}) =>
 		request("GET", "/workouts", WorkoutPageSchema, { query: { ...params } }),
@@ -144,6 +160,30 @@ export const api = {
 		request("PUT", `/planned-sessions/${id}`, PlannedSessionSchema, { body }),
 	deletePlannedSession: (id: string) =>
 		requestVoid("DELETE", `/planned-sessions/${id}`),
+	sendPlannedSession: (id: string) =>
+		request("PUT", `/planned-sessions/${id}/status`, PlannedSessionSchema, {
+			body: { status: "sent" },
+		}),
+	createPlannedBlock: (sessionId: string, body: PlannedBlockInput) =>
+		request(
+			"POST",
+			`/planned-sessions/${sessionId}/blocks`,
+			TemplateBlockSchema,
+			{ body },
+		),
+	updatePlannedBlock: (
+		sessionId: string,
+		blockId: string,
+		body: PlannedBlockInput,
+	) =>
+		request(
+			"PUT",
+			`/planned-sessions/${sessionId}/blocks/${blockId}`,
+			TemplateBlockSchema,
+			{ body },
+		),
+	deletePlannedBlock: (sessionId: string, blockId: string) =>
+		requestVoid("DELETE", `/planned-sessions/${sessionId}/blocks/${blockId}`),
 	plannedSessionWorkouts: (id: string) =>
 		request(
 			"GET",
@@ -190,6 +230,14 @@ export const keys = {
 			equipment ?? null,
 			grip ?? null,
 		] as const,
+	athletePerformances: (
+		athleteId: string,
+		id: string,
+		mode: Mode,
+		equipment: Equipment,
+		grip: GripFilter,
+	) =>
+		["performances", "athlete", athleteId, id, mode, equipment, grip] as const,
 	workouts: ["workouts"] as const,
 	workout: (id: string) => ["workout", id] as const,
 	templates: ["templates"] as const,
@@ -231,6 +279,44 @@ export function previousPerformanceQuery(
 			api.performances(exerciseId, {
 				perPage: 1,
 				beforeWorkoutId,
+				mode,
+				equipment,
+				grip,
+			}),
+		staleTime: 60_000,
+	};
+}
+
+/** What a block sheet asks for "last time": a query for the latest performance done the way `chosen` says. */
+export interface LastTimeQuery {
+	queryKey: readonly unknown[];
+	queryFn: () => Promise<z.output<typeof PerformancePageSchema>>;
+	staleTime: number;
+}
+
+/**
+ * The latest performance of an exercise by one of the caller's athletes,
+ * among the workouts the caller reads as their coach.
+ */
+export function athletePerformanceQuery(
+	athleteId: string,
+	exerciseId: string,
+	chosen: Choices,
+): LastTimeQuery {
+	const { mode, equipment } = chosen;
+	const grip = gripFilter(chosen.grip);
+	return {
+		queryKey: keys.athletePerformances(
+			athleteId,
+			exerciseId,
+			mode,
+			equipment,
+			grip,
+		),
+		queryFn: () =>
+			api.athletePerformances(exerciseId, {
+				athleteId,
+				perPage: 1,
 				mode,
 				equipment,
 				grip,

@@ -67,6 +67,10 @@ function byType(error: ApiError): ErrorKey | null {
 			return "notCoach";
 		case `${PROBLEM}not-author`:
 			return "notAuthor";
+		case `${PROBLEM}planned-session-empty`:
+			return "plannedSessionEmpty";
+		case `${PROBLEM}planned-session-sent`:
+			return "plannedSessionSent";
 		case `${PROBLEM}internal`:
 			return "internal";
 		default:

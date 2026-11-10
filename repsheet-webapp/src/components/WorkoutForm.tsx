@@ -38,10 +38,12 @@ export interface WorkoutFormInitial {
 	note: string | null;
 }
 
+/** A workout's details; a planned session's, `withDuration` off, since it has not happened yet. */
 export function WorkoutForm({
 	title,
 	initial,
 	withNote,
+	withDuration = true,
 	submitLabel,
 	pending,
 	error,
@@ -51,6 +53,7 @@ export function WorkoutForm({
 	title: string;
 	initial: WorkoutFormInitial;
 	withNote: boolean;
+	withDuration?: boolean;
 	submitLabel: string;
 	pending: boolean;
 	error: string | null;
@@ -110,19 +113,21 @@ export function WorkoutForm({
 						onChange={(e) => setPerformedOn(e.target.value)}
 					/>
 				</div>
-				<div className="grow">
-					<label className="label" htmlFor={`${id}-duration`}>
-						{t("workoutForm.duration")}
-					</label>
-					<input
-						id={`${id}-duration`}
-						className="input"
-						inputMode="numeric"
-						placeholder="55"
-						value={duration}
-						onChange={(e) => setDuration(e.target.value)}
-					/>
-				</div>
+				{withDuration ? (
+					<div className="grow">
+						<label className="label" htmlFor={`${id}-duration`}>
+							{t("workoutForm.duration")}
+						</label>
+						<input
+							id={`${id}-duration`}
+							className="input"
+							inputMode="numeric"
+							placeholder="55"
+							value={duration}
+							onChange={(e) => setDuration(e.target.value)}
+						/>
+					</div>
+				) : null}
 			</div>
 			{withNote ? (
 				<div>

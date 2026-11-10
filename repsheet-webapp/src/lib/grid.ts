@@ -2,10 +2,13 @@ import i18n from "@/i18n";
 import type {
 	Block,
 	BlockInput,
+	Equipment,
 	ExerciseSummary,
+	Grip,
 	Load,
 	Mode,
 	SetInput,
+	TemplateBlock,
 	WeightUnit,
 	WorkoutSet,
 } from "@/lib/api/schemas";
@@ -22,6 +25,8 @@ export interface Cell {
 	weight: number | null;
 	duration: number | null;
 	distance: number | null;
+	/** Taken from the coach's plan, and not changed since. */
+	planned?: boolean;
 }
 
 /** One row is one round: every exercise of the block, done in order. */
@@ -61,7 +66,12 @@ export interface Grid {
 	rows: Row[];
 }
 
-export type Field = keyof Cell;
+export type Field = Exclude<keyof Cell, "planned">;
+
+/** The cell as the athlete's own, once they change it or copy it. */
+function unplanned({ planned: _planned, ...cell }: Cell): Cell {
+	return cell;
+}
 
 export function emptyCell(): Cell {
 	return { reps: null, weight: null, duration: null, distance: null };
@@ -221,28 +231,78 @@ export function initialGrid(source: PrefillSource): Grid {
 	return { exercises, rows };
 }
 
-export function gridFromBlock(block: Block, unit: WeightUnit): Grid {
+/** An exercise of a block with its sets, logged or planned. */
+interface ExerciseWithSets {
+	exercise: ExerciseSummary;
+	mode: Mode;
+	equipment: Equipment;
+	grip: Grip | null;
+	sets: WorkoutSet[];
+}
+
+function rowsFromSets(
+	exercises: ExerciseWithSets[],
+	unit: WeightUnit,
+	planned: boolean,
+): Row[] {
 	const rowCount = Math.max(
 		1,
-		...block.exercises.flatMap((e) => e.sets.map((s) => s.round)),
+		...exercises.flatMap((e) => e.sets.map((s) => s.round)),
 	);
 	const rows: Row[] = [];
 	for (let r = 1; r <= rowCount; r++) {
-		const sets = block.exercises.map((e) => e.sets.find((s) => s.round === r));
+		const sets = exercises.map((e) => e.sets.find((s) => s.round === r));
 		rows.push({
 			id: nextRowId(),
 			warmup: sets.some((s) => s?.warmup === true),
-			cells: sets.map((s) => cellFromSet(s, unit) ?? emptyCell()),
+			cells: sets.map((s) => {
+				const cell = cellFromSet(s, unit);
+				if (!cell) {
+					return emptyCell();
+				}
+				return planned ? { ...cell, planned: true } : cell;
+			}),
 		});
 	}
+	return rows;
+}
+
+function columnOf(e: ExerciseWithSets): GridExercise {
+	return {
+		...e.exercise,
+		chosen: { mode: e.mode, equipment: e.equipment, grip: e.grip },
+		columnId: nextColumnId(),
+	};
+}
+
+export function gridFromBlock(block: Block, unit: WeightUnit): Grid {
 	return {
 		exercises: block.exercises.map((e) => ({
-			...e.exercise,
-			chosen: { mode: e.mode, equipment: e.equipment, grip: e.grip },
-			columnId: nextColumnId(),
+			...columnOf(e),
 			blockExerciseId: e.id,
 		})),
-		rows,
+		rows: rowsFromSets(block.exercises, unit, false),
+	};
+}
+
+/** Whether a coach planned the block set by set, rather than with targets. */
+export function plannedSetBySet(block: TemplateBlock): boolean {
+	return block.exercises.some((e) => e.sets.length > 0);
+}
+
+/**
+ * The grid of a block planned set by set. For the athlete who logs it, each
+ * cell is marked as the coach's until they change it; the coach editing it
+ * gets plain cells.
+ */
+export function gridFromPlan(
+	block: TemplateBlock,
+	unit: WeightUnit,
+	asPlanned: boolean,
+): Grid {
+	return {
+		exercises: block.exercises.map(columnOf),
+		rows: rowsFromSets(block.exercises, unit, asPlanned),
 	};
 }
 
@@ -263,7 +323,7 @@ export function addRound(grid: Grid): Grid {
 		? {
 				id: nextRowId(),
 				warmup: false,
-				cells: last.cells.map((c) => ({ ...c })),
+				cells: last.cells.map(unplanned),
 			}
 		: {
 				id: nextRowId(),
@@ -300,7 +360,7 @@ export function setCell(
 				? {
 						...row,
 						cells: row.cells.map((cell, j) =>
-							j === col ? { ...cell, [field]: value } : cell,
+							j === col ? { ...unplanned(cell), [field]: value } : cell,
 						),
 					}
 				: row,

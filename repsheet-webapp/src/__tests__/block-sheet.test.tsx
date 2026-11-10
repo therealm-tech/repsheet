@@ -101,6 +101,7 @@ describe("BlockSheet", () => {
 					note: null,
 					grip: null,
 					target: "6–8",
+					sets: [],
 				},
 				{
 					id: "ex2",
@@ -110,6 +111,7 @@ describe("BlockSheet", () => {
 					note: null,
 					grip: null,
 					target: "45 s",
+					sets: [],
 				},
 			],
 		};
@@ -212,6 +214,107 @@ describe("BlockSheet", () => {
 					sets: [
 						{ round: 1, warmup: false, durationSeconds: 45 },
 						{ round: 2, warmup: false, durationSeconds: 40 },
+					],
+				},
+			],
+		});
+	});
+
+	it("starts a block planned set by set on the coach's cells, with their note", async () => {
+		const set = (round: number, weightKg: number) => ({
+			round,
+			reps: 12,
+			weightKg,
+			durationSeconds: null,
+			distanceMeters: null,
+			warmup: false,
+		});
+		const templateBlock: TemplateBlock = {
+			id: "tb1",
+			position: 1,
+			kind: "simple",
+			rounds: 2,
+			restSeconds: null,
+			exercises: [
+				{
+					id: "tbe1",
+					exercise: bench,
+					mode: "reps",
+					equipment: "barbell",
+					grip: null,
+					target: null,
+					note: "Talons surélevés",
+					sets: [set(1, 14), set(2, 16)],
+				},
+			],
+		};
+		const calls = mockApi({
+			"GET /v1/exercises/bench/performances": () => ({
+				status: 200,
+				body: page([performance([repsSet(1, 5), repsSet(2, 5)])]),
+			}),
+			"POST /v1/workouts/w1/blocks": () => ({
+				status: 201,
+				body: savedBlock({}),
+			}),
+		});
+		const onClose = vi.fn();
+		const { container } = renderWithClient(
+			<BlockSheet
+				workoutId="w1"
+				mode={{ kind: "new", templateBlock }}
+				coach={{ id: "c1", name: "Lou" }}
+				onClose={onClose}
+			/>,
+			client(),
+		);
+		const ui = userEvent.setup();
+
+		const first = await screen.findByRole("button", {
+			name: "Tour 1, A Développé couché : 12 reps 14 kg",
+		});
+		const second = screen.getByRole("button", {
+			name: "Tour 2, A Développé couché : 12 reps 16 kg",
+		});
+		expect(first).toHaveClass("planned");
+		expect(second).toHaveClass("planned");
+		expect(
+			screen.getByText("prévu par Lou · touche une case pour ajuster"),
+		).toBeVisible();
+		const comments = screen.getByRole("region", { name: "Commentaires" });
+		expect(within(comments).getByText("Talons surélevés")).toBeVisible();
+		expect(within(comments).getByText("Lou")).toBeVisible();
+		expect(
+			container.querySelector(".instructions"),
+			"a coach's note is a comment, not template instructions",
+		).toBeNull();
+
+		await ui.click(second);
+		await ui.click(
+			screen.getByRole("button", {
+				name: "A · Développé couché — Charge plus",
+			}),
+		);
+		expect(
+			screen.getByRole("button", {
+				name: "Tour 2, A Développé couché : 12 reps 17 kg",
+			}),
+		).not.toHaveClass("planned");
+		expect(first).toHaveClass("planned");
+
+		await ui.click(screen.getByRole("button", { name: "Enregistrer le bloc" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalled());
+		expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+			templateBlockId: "tb1",
+			exercises: [
+				{
+					exerciseId: "bench",
+					mode: "reps",
+					equipment: "barbell",
+					grip: null,
+					sets: [
+						{ round: 1, warmup: false, reps: 12, weightKg: 14 },
+						{ round: 2, warmup: false, reps: 12, weightKg: 17 },
 					],
 				},
 			],
@@ -460,6 +563,7 @@ describe("BlockSheet", () => {
 								note: null,
 								grip: null,
 								target: "1 min",
+								sets: [],
 							},
 						],
 					},

@@ -204,6 +204,8 @@ export const TemplateBlockSchema = z.object({
 			grip: GripSchema.nullable(),
 			target: z.string().nullable(),
 			note: z.string().nullable(),
+			/** The sets a coach planned round by round; empty with a `target` instead. */
+			sets: z.array(SetSchema),
 		}),
 	),
 });
@@ -221,6 +223,8 @@ export const TemplateSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	note: z.string().nullable(),
+	/** The coach who planned it, for a planned session. */
+	author: AuthorSchema.nullable(),
 	updatedAt: z.string(),
 	blocks: z.array(TemplateBlockSchema),
 });
@@ -235,12 +239,17 @@ export const LinkedAccountSchema = z.object({
 });
 export type LinkedAccount = z.infer<typeof LinkedAccountSchema>;
 
+/** A draft is seen by its author only, until they send it to the athlete. */
+export const PlannedSessionStatusSchema = z.enum(["draft", "sent"]);
+export type PlannedSessionStatus = z.infer<typeof PlannedSessionStatusSchema>;
+
 export const PlannedSessionSummarySchema = z.object({
 	id: z.string(),
 	athleteId: z.string(),
 	author: AuthorSchema.nullable(),
 	plannedOn: z.string(),
 	name: z.string(),
+	status: PlannedSessionStatusSchema,
 	blockCount: z.number(),
 	workoutCount: z.number(),
 	updatedAt: z.string(),
@@ -254,6 +263,7 @@ export const PlannedSessionSchema = z.object({
 	plannedOn: z.string(),
 	name: z.string(),
 	note: z.string().nullable(),
+	status: PlannedSessionStatusSchema,
 	updatedAt: z.string(),
 	blocks: z.array(TemplateBlockSchema),
 });
@@ -347,10 +357,21 @@ export interface TemplateInput {
 	blocks: TemplateBlockInput[];
 }
 
-export interface UpdatePlannedSessionInput extends TemplateInput {
+export interface UpdatePlannedSessionInput {
 	plannedOn: string;
+	name: string;
+	note: string | null;
 }
 
 export interface CreatePlannedSessionInput extends UpdatePlannedSessionInput {
 	athleteId: string;
+}
+
+export interface PlannedExerciseInput extends Omit<BlockExerciseInput, "id"> {
+	/** The coach's note for the athlete. */
+	note?: string;
+}
+
+export interface PlannedBlockInput {
+	exercises: PlannedExerciseInput[];
 }

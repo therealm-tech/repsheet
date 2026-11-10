@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { InstructionIcon } from "@/components/BlockCard";
 import {
+	COMMENT_MAX_LENGTH,
 	CommentThread,
 	FirstCommentDraft,
 	type ThreadSubject,
@@ -22,14 +23,23 @@ import {
 	Sheet,
 } from "@/components/ui";
 import i18n from "@/i18n";
-import { api, keys, previousPerformanceQuery } from "@/lib/api/endpoints";
+import {
+	api,
+	athletePerformanceQuery,
+	keys,
+	type LastTimeQuery,
+	previousPerformanceQuery,
+} from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import type {
+	Author,
 	Block,
 	BlockInput,
 	ExerciseSummary,
 	Load,
 	Mode,
+	Performance,
+	PlannedBlockInput,
 	TemplateBlock,
 	WeightUnit,
 	WorkoutSet,
@@ -53,8 +63,10 @@ import {
 	fieldsFor,
 	type Grid,
 	gridFromBlock,
+	gridFromPlan,
 	initialGrid,
 	linkToBlock,
+	plannedSetBySet,
 	primaryField,
 	removeExercise,
 	removeRound,
@@ -74,13 +86,63 @@ import {
 	formatDistance,
 	formatDuration,
 	formatNumber,
+	kgToUnit,
 	parseDuration,
 } from "@/lib/units";
 
-/** `templateBlock` is the planned block it is logged from, whose instructions it shows. */
+/**
+ * `templateBlock` is the planned block it is logged from: a coach's, whose
+ * cells and notes it starts from, or one of the user's templates, whose
+ * instructions it shows.
+ */
 export type BlockSheetMode =
 	| { kind: "new"; templateBlock?: TemplateBlock }
 	| { kind: "edit"; block: Block; templateBlock?: TemplateBlock };
+
+export type PlanSheetMode =
+	| { kind: "new" }
+	| { kind: "edit"; block: TemplateBlock };
+
+/** A session a coach plans for one of their athletes. */
+export interface PlanTarget {
+	sessionId: string;
+	athlete: { id: string; name: string };
+}
+
+/**
+ * Logs a block of the user's workout, or, with `plan`, plans one for an
+ * athlete: the same grid, filled from the athlete's last time, with a note for
+ * them in place of the comments.
+ */
+export type BlockSheetProps = { onClose: () => void } & (
+	| {
+			workoutId: string;
+			mode: BlockSheetMode;
+			/** The coach who planned the session the workout is logged from. */
+			coach?: Author | null;
+			plan?: undefined;
+	  }
+	| {
+			plan: PlanTarget;
+			mode: PlanSheetMode;
+			workoutId?: undefined;
+			coach?: undefined;
+	  }
+);
+
+/**
+ * The planned exercise a column logs: the one of the same exercise at the
+ * same rank among those of that exercise, as the API matches them.
+ */
+function plannedExerciseOf(
+	grid: Grid,
+	col: number,
+	block: TemplateBlock,
+): TemplateBlock["exercises"][number] | undefined {
+	const id = grid.exercises[col]?.id;
+	const rank = grid.exercises.slice(0, col).filter((e) => e.id === id).length;
+	return block.exercises.filter((e) => e.exercise.id === id)[rank];
+}
 
 /** What a grid cell shows: each value with its unit, a "?" for a missing one. */
 export function cellText(
@@ -133,6 +195,33 @@ export function cellText(
 		sub,
 		empty: cell[primaryField(mode)] === null && cell.weight === null,
 	};
+}
+
+/** One set as the coach reads it: "12 × 14 kg", "0:40 · 16 kg", "500 m". */
+function setText(
+	mode: Mode,
+	load: Load,
+	set: WorkoutSet,
+	unit: WeightUnit,
+): string {
+	const weight =
+		set.weightKg === null || load === "none"
+			? null
+			: `${formatNumber(kgToUnit(set.weightKg, unit))} ${unit}`;
+	switch (mode) {
+		case "reps":
+			return weight
+				? `${set.reps ?? "?"} × ${weight}`
+				: i18n.t("cell.reps", { count: set.reps ?? 0 });
+		case "time":
+			return [formatDuration(set.durationSeconds ?? 0), weight]
+				.filter(Boolean)
+				.join(" · ");
+		case "distance":
+			return [formatDistance(set.distanceMeters ?? 0), weight]
+				.filter(Boolean)
+				.join(" · ");
+	}
 }
 
 function fieldLabel(field: Field, load: Load): string {
@@ -199,49 +288,75 @@ function switchQuestion(
 	return i18n.t("block.switchLoadsConfirm", { name, how, previous });
 }
 
-export function BlockSheet({
-	workoutId,
-	mode,
-	onClose,
-}: {
-	workoutId: string;
-	mode: BlockSheetMode;
-	onClose: () => void;
-}) {
+export function BlockSheet(props: BlockSheetProps) {
+	const { onClose } = props;
 	const { t } = useTranslation();
 	const unit = useUnit();
 	const meId = useMe().data?.id ?? "";
 	const queryClient = useQueryClient();
-	const templateBlock = mode.kind === "new" ? mode.templateBlock : undefined;
+	const plan = props.plan ?? null;
+	const logMode = props.plan ? null : props.mode;
+	const planMode = props.plan ? props.mode : null;
+	const workoutId = props.workoutId ?? "";
+	const coach = props.plan ? null : (props.coach ?? null);
+	const templateBlock =
+		logMode?.kind === "new" ? logMode.templateBlock : undefined;
+	const fromPlannedSets =
+		templateBlock !== undefined && plannedSetBySet(templateBlock);
+	const lastTime = (exerciseId: string, chosen: Choices): LastTimeQuery =>
+		plan
+			? athletePerformanceQuery(plan.athlete.id, exerciseId, chosen)
+			: previousPerformanceQuery(exerciseId, workoutId, chosen);
+
 	const [saved, setSaved] = useState<Block | null>(
-		mode.kind === "edit" ? mode.block : null,
+		logMode?.kind === "edit" ? logMode.block : null,
 	);
 	const [drafts, setDrafts] = useState<Record<number, string>>({});
 	const workout = useQuery({
 		queryKey: keys.workout(workoutId),
 		queryFn: () => api.workout(workoutId),
-		enabled: saved !== null,
+		enabled: saved !== null && !plan,
 	});
 	const [grid, setGrid] = useState<Grid | null>(() => {
-		if (mode.kind === "edit") {
-			return gridFromBlock(mode.block, unit);
+		if (logMode?.kind === "edit") {
+			return gridFromBlock(logMode.block, unit);
+		}
+		if (planMode?.kind === "edit") {
+			return gridFromPlan(planMode.block, unit, false);
+		}
+		if (templateBlock && fromPlannedSets) {
+			return gridFromPlan(templateBlock, unit, true);
 		}
 		return templateBlock ? null : { exercises: [], rows: [] };
 	});
-	const [picking, setPicking] = useState(mode.kind === "new" && !templateBlock);
-	const [active, setActive] = useState<Active | null>(null);
+	const [notes, setNotes] = useState<Record<number, string>>(() =>
+		planMode?.kind === "edit" && grid
+			? Object.fromEntries(
+					grid.exercises.map((e, i) => [
+						e.columnId,
+						planMode.block.exercises[i]?.note ?? "",
+					]),
+				)
+			: {},
+	);
+	const [picking, setPicking] = useState(
+		(logMode?.kind === "new" && !templateBlock) || planMode?.kind === "new",
+	);
+	const [active, setActive] = useState<Active | null>(() =>
+		templateBlock && fromPlannedSets ? { row: 0, col: 0 } : null,
+	);
 	const [error, setError] = useState<string | null>(null);
 	const [focusExercise, setFocusExercise] = useState<string | null>(null);
 	const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch | null>(
 		null,
 	);
 
-	const planned =
-		templateBlock?.exercises.map((e) => withChoices(e.exercise, e)) ?? [];
+	const targeted =
+		templateBlock && !fromPlannedSets
+			? templateBlock.exercises.map((e) => withChoices(e.exercise, e))
+			: [];
 	const prefill = useQueries({
-		queries: planned.map((e) =>
-			previousPerformanceQuery(e.id, workoutId, e.chosen),
-		),
+		queries: targeted.map((e) => lastTime(e.id, e.chosen)),
 	});
 	const prefillDone = prefill.every((q) => !q.isPending);
 
@@ -264,9 +379,7 @@ export function BlockSheet({
 
 	const exerciseIds = grid?.exercises.map((e) => e.id) ?? [];
 	const lastPerformances = useQueries({
-		queries: (grid?.exercises ?? []).map((e) =>
-			previousPerformanceQuery(e.id, workoutId, e.chosen),
-		),
+		queries: (grid?.exercises ?? []).map((e) => lastTime(e.id, e.chosen)),
 	});
 
 	const save = useMutation({
@@ -309,14 +422,45 @@ export function BlockSheet({
 		onError: (err) => setError(errorMessage(err, { fallback: "saveFailed" })),
 	});
 
-	const remove = useMutation({
-		mutationFn: () =>
-			mode.kind === "edit"
-				? api.deleteBlock(workoutId, mode.block.id)
-				: Promise.resolve(),
+	const savePlan = useMutation({
+		mutationFn: (body: PlannedBlockInput) => {
+			const sessionId = plan?.sessionId ?? "";
+			return planMode?.kind === "edit"
+				? api.updatePlannedBlock(sessionId, planMode.block.id, body)
+				: api.createPlannedBlock(sessionId, body);
+		},
 		onSuccess: () => {
-			void queryClient.invalidateQueries({ queryKey: keys.workout(workoutId) });
-			void queryClient.invalidateQueries({ queryKey: ["performances"] });
+			void queryClient.invalidateQueries({
+				queryKey: keys.plannedSession(plan?.sessionId ?? ""),
+			});
+			void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
+			onClose();
+		},
+		onError: (err) => setError(errorMessage(err, { fallback: "saveFailed" })),
+	});
+
+	const remove = useMutation({
+		mutationFn: () => {
+			if (logMode?.kind === "edit") {
+				return api.deleteBlock(workoutId, logMode.block.id);
+			}
+			if (plan && planMode?.kind === "edit") {
+				return api.deletePlannedBlock(plan.sessionId, planMode.block.id);
+			}
+			return Promise.resolve();
+		},
+		onSuccess: () => {
+			if (plan) {
+				void queryClient.invalidateQueries({
+					queryKey: keys.plannedSession(plan.sessionId),
+				});
+				void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
+			} else {
+				void queryClient.invalidateQueries({
+					queryKey: keys.workout(workoutId),
+				});
+				void queryClient.invalidateQueries({ queryKey: ["performances"] });
+			}
 			onClose();
 		},
 		onError: (err) => setError(errorMessage(err, { fallback: "deleteFailed" })),
@@ -327,9 +471,7 @@ export function BlockSheet({
 		chosen: Choices,
 	): Promise<WorkoutSet[] | undefined> {
 		try {
-			const page = await queryClient.fetchQuery(
-				previousPerformanceQuery(exerciseId, workoutId, chosen),
-			);
+			const page = await queryClient.fetchQuery(lastTime(exerciseId, chosen));
 			return page.items[0]?.sets;
 		} catch {
 			return undefined;
@@ -395,12 +537,24 @@ export function BlockSheet({
 			return;
 		}
 		setError(null);
+		if (plan) {
+			savePlan.mutate({
+				exercises: built.exercises.map(({ id: _logged, ...exercise }, i) => {
+					const column = grid.exercises[i]?.columnId;
+					const note = column === undefined ? undefined : notes[column]?.trim();
+					return note ? { ...exercise, note } : exercise;
+				}),
+			});
+			return;
+		}
 		const body: BlockInput = { exercises: built.exercises };
 		const templateBlockId =
-			mode.kind === "edit" ? mode.block.templateBlockId : templateBlock?.id;
+			logMode?.kind === "edit"
+				? logMode.block.templateBlockId
+				: templateBlock?.id;
 		const restSeconds =
-			mode.kind === "edit"
-				? mode.block.restSeconds
+			logMode?.kind === "edit"
+				? logMode.block.restSeconds
 				: templateBlock?.restSeconds;
 		if (templateBlockId) {
 			body.templateBlockId = templateBlockId;
@@ -423,23 +577,28 @@ export function BlockSheet({
 		return [];
 	}
 
-	const plan = mode.templateBlock;
-	const instructions = (plan?.exercises ?? []).flatMap((e, i) =>
+	const libraryBlock = coach ? undefined : logMode?.templateBlock;
+	const instructions = (libraryBlock?.exercises ?? []).flatMap((e, i) =>
 		e.note
 			? [
 					{
 						key: e.id,
 						note: e.note,
-						letter: (plan?.exercises.length ?? 0) > 1 ? letter(i) : null,
+						letter:
+							(libraryBlock?.exercises.length ?? 0) > 1 ? letter(i) : null,
 					},
 				]
 			: [],
 	);
+	const hasPlannedCells =
+		grid?.rows.some((row) => row.cells.some((c) => c.planned)) ?? false;
 
 	const title =
-		mode.kind === "edit"
-			? t("block.title", { position: mode.block.position })
-			: t("block.newTitle");
+		logMode?.kind === "edit"
+			? t("block.title", { position: logMode.block.position })
+			: planMode?.kind === "edit"
+				? t("block.title", { position: planMode.block.position })
+				: t("block.newTitle");
 	const activeExercise =
 		active && grid ? grid.exercises[active.col] : undefined;
 	const activeCell =
@@ -447,6 +606,8 @@ export function BlockSheet({
 	const switching = pendingSwitch
 		? grid?.exercises[pendingSwitch.col]
 		: undefined;
+	const pending = save.isPending || savePlan.isPending;
+	const editing = logMode?.kind === "edit" || planMode?.kind === "edit";
 
 	return (
 		<Sheet title={title} onClose={onClose}>
@@ -481,6 +642,7 @@ export function BlockSheet({
 						<ExercisePicker
 							onSelect={(e) => void pick(e)}
 							excludeIds={exerciseIds}
+							builtInOnly={plan !== null}
 						/>
 						{grid && grid.exercises.length > 0 ? (
 							<button
@@ -513,32 +675,50 @@ export function BlockSheet({
 							</div>
 						) : null}
 
-						<ul className="last-time">
-							{grid.exercises.map((exercise, i) => {
-								const last = lastPerformances[i]?.data?.items[0];
-								if (!last) {
-									return null;
-								}
-								const details = {
-									date: formatShortDay(last.performedOn),
-									summary: summarizeSets(
-										exercise.chosen.mode,
-										exercise.load,
-										last.sets,
-										unit,
-									),
-								};
-								const how = choicesText(exercise, exercise.chosen);
-								return (
-									<li key={exercise.columnId} className="muted small">
-										<b className="accent">{letter(i)}</b>{" "}
-										{how
-											? t("block.lastTimeIn", { ...details, how })
-											: t("block.lastTime", details)}
-									</li>
-								);
-							})}
-						</ul>
+						{plan ? (
+							<AthleteLastTime
+								athlete={plan.athlete.name}
+								exercises={grid.exercises}
+								performances={lastPerformances.map((q) => q.data?.items[0])}
+								unit={unit}
+							/>
+						) : (
+							<ul className="last-time">
+								{grid.exercises.map((exercise, i) => {
+									const last = lastPerformances[i]?.data?.items[0];
+									if (!last) {
+										return null;
+									}
+									const details = {
+										date: formatShortDay(last.performedOn),
+										summary: summarizeSets(
+											exercise.chosen.mode,
+											exercise.load,
+											last.sets,
+											unit,
+										),
+									};
+									const how = choicesText(exercise, exercise.chosen);
+									return (
+										<li key={exercise.columnId} className="muted small">
+											<b className="accent">{letter(i)}</b>{" "}
+											{how
+												? t("block.lastTimeIn", { ...details, how })
+												: t("block.lastTime", details)}
+										</li>
+									);
+								})}
+							</ul>
+						)}
+
+						{hasPlannedCells ? (
+							<p className="planned-legend">
+								<i aria-hidden="true" />
+								{coach
+									? t("block.plannedBy", { name: coach.name })
+									: t("block.plannedByCoach")}
+							</p>
+						) : null}
 
 						{pendingSwitch && switching ? (
 							<div className="switch-confirm">
@@ -691,7 +871,45 @@ export function BlockSheet({
 							</div>
 						) : null}
 
-						{grid.exercises.length > 0 ? (
+						{grid.exercises.length > 0 && plan ? (
+							<section
+								className="stack-tight"
+								aria-labelledby="block-notes-title"
+							>
+								<h3 id="block-notes-title" className="comments-title">
+									{t("block.noteFor", { name: plan.athlete.name })}
+								</h3>
+								{grid.exercises.map((exercise, col) => (
+									<span key={exercise.columnId} className="thread">
+										<span className="thread-head">
+											{grid.exercises.length > 1 ? (
+												<span className="ex-letter">{letter(col)}</span>
+											) : null}
+											{t("block.noteVisible", { name: exercise.name })}
+										</span>
+										<textarea
+											className="input compose-input"
+											rows={1}
+											maxLength={COMMENT_MAX_LENGTH}
+											aria-label={t("block.noteOn", {
+												name: exercise.name,
+												athlete: plan.athlete.name,
+											})}
+											placeholder={t("block.notePlaceholder")}
+											value={notes[exercise.columnId] ?? ""}
+											onChange={(e) =>
+												setNotes((current) => ({
+													...current,
+													[exercise.columnId]: e.target.value,
+												}))
+											}
+										/>
+									</span>
+								))}
+							</section>
+						) : null}
+
+						{grid.exercises.length > 0 && !plan ? (
 							<section
 								className="stack-tight"
 								aria-labelledby="block-comments-title"
@@ -714,6 +932,10 @@ export function BlockSheet({
 												[exercise.columnId]: value,
 											})),
 									};
+									const coachNote =
+										coach && templateBlock
+											? plannedExerciseOf(grid, col, templateBlock)?.note
+											: null;
 									return exercise.blockExerciseId ? (
 										<CommentThread
 											key={exercise.columnId}
@@ -732,6 +954,9 @@ export function BlockSheet({
 											key={exercise.columnId}
 											subject={subject}
 											draft={draft}
+											{...(coach && coachNote
+												? { coachNote: { author: coach, text: coachNote } }
+												: {})}
 										/>
 									);
 								})}
@@ -748,11 +973,11 @@ export function BlockSheet({
 						type="button"
 						className="btn btn-primary"
 						onClick={submit}
-						disabled={save.isPending}
+						disabled={pending}
 					>
 						{t("block.save")}
 					</button>
-					{mode.kind === "edit" ? (
+					{editing ? (
 						<ConfirmButton
 							label={t("block.delete")}
 							confirmLabel={t("common.confirmDelete")}
@@ -764,6 +989,57 @@ export function BlockSheet({
 			) : null}
 		</Sheet>
 	);
+}
+
+/** The athlete's last time at each exercise of the block, set by set, as their coach sees it. */
+function AthleteLastTime({
+	athlete,
+	exercises,
+	performances,
+	unit,
+}: {
+	athlete: string;
+	exercises: Grid["exercises"];
+	performances: (Performance | undefined)[];
+	unit: WeightUnit;
+}) {
+	const { t } = useTranslation();
+	return exercises.map((exercise, i) => {
+		const last = performances[i];
+		if (!last) {
+			return null;
+		}
+		const how = choicesText(exercise, exercise.chosen);
+		return (
+			<div key={exercise.columnId} className="last-sets">
+				<div className="last-sets-head">
+					<span>
+						{exercises.length > 1 ? (
+							<b className="ex-letter">{letter(i)}</b>
+						) : null}
+						<b>{t("block.athleteLastTime", { name: athlete })}</b>
+						{how ? ` ${how}` : ""}
+					</span>
+					<span>{formatShortDay(last.performedOn)}</span>
+				</div>
+				<div className="last-sets-list">
+					{last.sets.map((set) => (
+						<span
+							key={`${set.round}-${set.warmup}`}
+							className={set.warmup ? "warmup" : undefined}
+						>
+							{[
+								setText(exercise.chosen.mode, exercise.load, set, unit),
+								set.warmup ? t("block.warmupShort") : null,
+							]
+								.filter(Boolean)
+								.join(" · ")}
+						</span>
+					))}
+				</div>
+			</div>
+		);
+	});
 }
 
 function RowView({
@@ -821,6 +1097,7 @@ function RowView({
 							isActive ? "active" : "",
 							warmup ? "warmup" : "",
 							text.empty ? "empty" : "",
+							cell.planned ? "planned" : "",
 						].join(" ")}
 						aria-label={t("block.cellLabel", {
 							round: rowIndex + 1,
@@ -840,7 +1117,11 @@ function RowView({
 								<b className={text.main.endsWith("?") ? "missing" : ""}>
 									{text.main}
 								</b>
-								<span className={text.sub.endsWith("?") ? "missing" : ""}>
+								<span
+									className={
+										text.sub.endsWith("?") ? "cell-sub missing" : "cell-sub"
+									}
+								>
 									{text.sub || " "}
 								</span>
 							</>
