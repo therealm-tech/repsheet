@@ -136,7 +136,6 @@ fn progress_routes() -> ApiRouter<AppState> {
                          the shape of logged ones, with exercises the athlete can use. By \
                          whoever may replace the session.",
                     )
-                    .response::<201, Json<TemplateBlockResponse>>()
             }),
         )
         .api_route(
