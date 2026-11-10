@@ -5,8 +5,8 @@ use sqlx::{FromRow, PgConnection, PgExecutor};
 use uuid::Uuid;
 
 use crate::{
-    db::exercises::ExerciseSummaryRow,
-    domain::{Equipment, EquipmentSet, Locale, Mode, Modes},
+    db::exercises::{ExerciseRow, ExerciseSummaryRow},
+    domain::{Equipment, Grip, Locale, Mode},
 };
 
 #[derive(FromRow)]
@@ -40,6 +40,8 @@ struct TemplateBlockExerciseRow {
     mode: Mode,
     #[sqlx(rename = "chosen_equipment", try_from = "String")]
     equipment: Equipment,
+    #[sqlx(rename = "chosen_grip")]
+    grip: Option<Grip>,
     target: Option<String>,
     #[sqlx(flatten)]
     exercise: ExerciseSummaryRow,
@@ -54,6 +56,7 @@ pub struct LoadedTemplateExercise {
     pub exercise: ExerciseSummaryRow,
     pub mode: Mode,
     pub equipment: Equipment,
+    pub grip: Option<Grip>,
     pub target: Option<String>,
 }
 
@@ -61,6 +64,7 @@ pub struct TemplateExerciseInput<'a> {
     pub exercise_id: Uuid,
     pub mode: Mode,
     pub equipment: Equipment,
+    pub grip: Option<Grip>,
     pub target: Option<&'a str>,
 }
 
@@ -184,35 +188,17 @@ pub async fn owns_block(
         .await
 }
 
-/// Points the template exercises counted in a mode the exercise no longer has
-/// at its default mode.
-pub async fn reset_modes(
-    exec: impl PgExecutor<'_>,
-    exercise_id: Uuid,
-    modes: &Modes,
-    default_mode: Mode,
-) -> sqlx::Result<()> {
-    sqlx::query(include_str!("../../queries/templates/reset_modes.sql"))
-        .bind(exercise_id)
-        .bind(default_mode.as_str())
-        .bind(modes.as_strs())
-        .execute(exec)
-        .await?;
-    Ok(())
-}
-
-/// Points the template exercises done with equipment the exercise no longer
-/// offers at its default equipment.
-pub async fn reset_equipment(
-    exec: impl PgExecutor<'_>,
-    exercise_id: Uuid,
-    equipment: &EquipmentSet,
-    default_equipment: Equipment,
-) -> sqlx::Result<()> {
-    sqlx::query(include_str!("../../queries/templates/reset_equipment.sql"))
-        .bind(exercise_id)
-        .bind(default_equipment.as_str())
-        .bind(equipment.as_strs())
+/// Points the template exercises counted in a mode, done with equipment or
+/// held with a grip the exercise no longer offers at its default one.
+pub async fn reset_choices(exec: impl PgExecutor<'_>, exercise: &ExerciseRow) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/templates/reset_choices.sql"))
+        .bind(exercise.id)
+        .bind(exercise.modes.as_strs())
+        .bind(exercise.default_mode.as_str())
+        .bind(exercise.equipment.as_strs())
+        .bind(exercise.default_equipment.as_str())
+        .bind(exercise.grips.as_strs())
+        .bind(exercise.default_grip.map(Grip::as_str))
         .execute(exec)
         .await?;
     Ok(())
@@ -244,6 +230,7 @@ pub async fn load_blocks(
             .push(LoadedTemplateExercise {
                 mode: row.mode,
                 equipment: row.equipment,
+                grip: row.grip,
                 target: row.target,
                 exercise: row.exercise,
             });
@@ -313,6 +300,13 @@ async fn write_blocks(
                 .exercises
                 .iter()
                 .map(|e| e.equipment.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            block
+                .exercises
+                .iter()
+                .map(|e| e.grip.map(Grip::as_str))
                 .collect::<Vec<_>>(),
         )
         .bind(block.exercises.iter().map(|e| e.target).collect::<Vec<_>>())

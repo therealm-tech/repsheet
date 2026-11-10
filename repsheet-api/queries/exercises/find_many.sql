@@ -5,6 +5,8 @@ SELECT
     load,
     equipment,
     default_equipment,
+    grips,
+    default_grip,
     unilateral,
     exercise_name(name_fr, name_en, $3) AS name
 FROM exercises

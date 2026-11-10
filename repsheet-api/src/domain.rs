@@ -7,6 +7,11 @@ pub struct UnknownVariant {
     value: String,
 }
 
+/// An enum stored as text in the database.
+pub trait TextEnum: Copy + Ord + TryFrom<String, Error = UnknownVariant> {
+    fn as_str(self) -> &'static str;
+}
+
 /// Declares an enum stored as text in the database, with its string mapping.
 macro_rules! text_enum {
     ($name:ident, $kind:literal, { $($variant:ident => $text:literal),+ $(,)? }) => {
@@ -31,6 +36,12 @@ macro_rules! text_enum {
                     $($text => Ok(Self::$variant),)+
                     _ => Err(UnknownVariant { kind: $kind, value }),
                 }
+            }
+        }
+
+        impl TextEnum for $name {
+            fn as_str(self) -> &'static str {
+                Self::as_str(self)
             }
         }
 
@@ -79,6 +90,13 @@ text_enum!(Equipment, "equipment", {
     Other => "other",
 });
 
+text_enum!(Grip, "grip", {
+    Pronation => "pronation",
+    Supination => "supination",
+    Neutral => "neutral",
+    Mixed => "mixed",
+});
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockKind {
     Simple,
@@ -120,108 +138,66 @@ pub enum SetViolation {
     Unexpected(SetField),
 }
 
-/// The modes an exercise can be counted in: never empty, without duplicates,
-/// in the declaration order of [`Mode`].
+/// The values an exercise offers for one of the choices its blocks make: its
+/// modes, its equipment or its grips. Without duplicates, in the declaration
+/// order of `T`. An exercise always offers at least one mode and one
+/// equipment, but may offer no grip.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Modes(Vec<Mode>);
+pub struct Choices<T>(Vec<T>);
 
-impl Modes {
-    /// `None` when `modes` is empty or holds a mode twice.
-    pub fn new(modes: impl IntoIterator<Item = Mode>) -> Option<Self> {
-        let mut modes: Vec<Mode> = modes.into_iter().collect();
-        let given = modes.len();
-        modes.sort_unstable();
-        modes.dedup();
-        (given > 0 && modes.len() == given).then_some(Self(modes))
+pub type Modes = Choices<Mode>;
+pub type EquipmentSet = Choices<Equipment>;
+pub type Grips = Choices<Grip>;
+
+impl<T: TextEnum> Choices<T> {
+    /// `None` when `values` holds a value twice.
+    pub fn new(values: impl IntoIterator<Item = T>) -> Option<Self> {
+        let mut values: Vec<T> = values.into_iter().collect();
+        let given = values.len();
+        values.sort_unstable();
+        values.dedup();
+        (values.len() == given).then_some(Self(values))
     }
 
-    pub fn contains(&self, mode: Mode) -> bool {
-        self.0.contains(&mode)
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Mode> + '_ {
+    pub fn contains(&self, value: T) -> bool {
+        self.0.contains(&value)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = T> + '_ {
         self.0.iter().copied()
     }
 
     pub fn as_strs(&self) -> Vec<&'static str> {
-        self.iter().map(Mode::as_str).collect()
+        self.iter().map(T::as_str).collect()
     }
 
-    /// The mode a block or a template counts the exercise in: the requested
-    /// one when the exercise has it, its default one when none is requested.
-    pub fn choose(&self, requested: Option<Mode>, default_mode: Mode) -> Option<Mode> {
-        let mode = requested.unwrap_or(default_mode);
-        self.contains(mode).then_some(mode)
+    /// Whether `default` can be the one a new block starts with: one of the
+    /// values, or none exactly when there are no values.
+    pub fn admits_default(&self, default: Option<T>) -> bool {
+        default.map_or(self.is_empty(), |value| self.contains(value))
+    }
+
+    /// The values offered here that `next` no longer offers.
+    pub fn removed<'a>(&'a self, next: &'a Self) -> impl Iterator<Item = T> + 'a {
+        self.iter().filter(|value| !next.contains(*value))
     }
 }
 
-impl TryFrom<Vec<String>> for Modes {
+impl<T: TextEnum> TryFrom<Vec<String>> for Choices<T> {
     type Error = UnknownVariant;
 
     fn try_from(values: Vec<String>) -> Result<Self, Self::Error> {
         let joined = values.join(",");
-        let modes = values
+        let parsed = values
             .into_iter()
-            .map(Mode::try_from)
+            .map(T::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        Self::new(modes).ok_or(UnknownVariant {
-            kind: "mode set",
-            value: joined,
-        })
-    }
-}
-
-/// The equipment an exercise can be done with: never empty, without
-/// duplicates, in the declaration order of [`Equipment`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EquipmentSet(Vec<Equipment>);
-
-impl EquipmentSet {
-    /// `None` when `equipment` is empty or holds a kind twice.
-    pub fn new(equipment: impl IntoIterator<Item = Equipment>) -> Option<Self> {
-        let mut equipment: Vec<Equipment> = equipment.into_iter().collect();
-        let given = equipment.len();
-        equipment.sort_unstable();
-        equipment.dedup();
-        (given > 0 && equipment.len() == given).then_some(Self(equipment))
-    }
-
-    pub fn contains(&self, equipment: Equipment) -> bool {
-        self.0.contains(&equipment)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = Equipment> + '_ {
-        self.0.iter().copied()
-    }
-
-    pub fn as_strs(&self) -> Vec<&'static str> {
-        self.iter().map(Equipment::as_str).collect()
-    }
-
-    /// The equipment a block or a template does the exercise with: the
-    /// requested one when the exercise offers it, its default one when none is
-    /// requested.
-    pub fn choose(
-        &self,
-        requested: Option<Equipment>,
-        default_equipment: Equipment,
-    ) -> Option<Equipment> {
-        let equipment = requested.unwrap_or(default_equipment);
-        self.contains(equipment).then_some(equipment)
-    }
-}
-
-impl TryFrom<Vec<String>> for EquipmentSet {
-    type Error = UnknownVariant;
-
-    fn try_from(values: Vec<String>) -> Result<Self, Self::Error> {
-        let joined = values.join(",");
-        let equipment = values
-            .into_iter()
-            .map(Equipment::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        Self::new(equipment).ok_or(UnknownVariant {
-            kind: "equipment set",
+        Self::new(parsed).ok_or(UnknownVariant {
+            kind: "set of distinct values",
             value: joined,
         })
     }
@@ -334,52 +310,43 @@ mod tests {
     }
 
     #[test]
-    fn modes_are_a_non_empty_set() {
+    fn choices_are_a_set_in_a_fixed_order() {
         assert_eq!(
             Modes::new([Mode::Time, Mode::Reps]).unwrap().as_strs(),
             vec!["reps", "time"]
         );
-        assert!(Modes::new([]).is_none());
-        assert!(Modes::new([Mode::Reps, Mode::Reps]).is_none());
-        assert!(Modes::try_from(vec!["reps".to_owned(), "swim".to_owned()]).is_err());
-    }
-
-    #[test]
-    fn the_chosen_mode_must_be_one_of_the_modes() {
-        let modes = Modes::new([Mode::Reps, Mode::Time]).unwrap();
-        assert_eq!(modes.choose(None, Mode::Reps), Some(Mode::Reps));
-        assert_eq!(modes.choose(Some(Mode::Time), Mode::Reps), Some(Mode::Time));
-        assert_eq!(modes.choose(Some(Mode::Distance), Mode::Reps), None);
-    }
-
-    #[test]
-    fn equipment_is_a_non_empty_set() {
         assert_eq!(
             EquipmentSet::new([Equipment::Dumbbell, Equipment::Barbell])
                 .unwrap()
                 .as_strs(),
             vec!["barbell", "dumbbell"]
         );
-        assert!(EquipmentSet::new([]).is_none());
-        assert!(EquipmentSet::new([Equipment::Cable, Equipment::Cable]).is_none());
-        assert!(EquipmentSet::try_from(vec!["barbell".to_owned(), "rope".to_owned()]).is_err());
+        assert!(Grips::new([]).unwrap().is_empty());
+        assert!(Modes::new([Mode::Reps, Mode::Reps]).is_none());
+        assert!(Modes::try_from(vec!["reps".to_owned(), "swim".to_owned()]).is_err());
+        assert!(Grips::try_from(vec!["neutral".to_owned(), "neutral".to_owned()]).is_err());
     }
 
     #[test]
-    fn the_chosen_equipment_must_be_offered() {
+    fn the_default_is_one_of_the_choices_or_none_without_any() {
         let equipment = EquipmentSet::new([Equipment::Barbell, Equipment::Dumbbell]).unwrap();
+        assert!(equipment.admits_default(Some(Equipment::Dumbbell)));
+        assert!(!equipment.admits_default(Some(Equipment::Machine)));
+        assert!(!equipment.admits_default(None));
+        let none = Grips::new([]).unwrap();
+        assert!(none.admits_default(None));
+        assert!(!none.admits_default(Some(Grip::Neutral)));
+    }
+
+    #[test]
+    fn removed_choices_are_those_no_longer_offered() {
+        let before = Grips::new([Grip::Pronation, Grip::Supination, Grip::Neutral]).unwrap();
+        let after = Grips::new([Grip::Neutral, Grip::Mixed]).unwrap();
         assert_eq!(
-            equipment.choose(None, Equipment::Barbell),
-            Some(Equipment::Barbell)
+            before.removed(&after).collect::<Vec<_>>(),
+            vec![Grip::Pronation, Grip::Supination]
         );
-        assert_eq!(
-            equipment.choose(Some(Equipment::Dumbbell), Equipment::Barbell),
-            Some(Equipment::Dumbbell)
-        );
-        assert_eq!(
-            equipment.choose(Some(Equipment::Machine), Equipment::Barbell),
-            None
-        );
+        assert_eq!(after.removed(&after).count(), 0);
     }
 
     #[test]
@@ -396,5 +363,6 @@ mod tests {
             assert_eq!(Load::try_from(load.as_str().to_owned()).unwrap(), load);
         }
         assert!(Equipment::try_from("trampoline".to_owned()).is_err());
+        assert_eq!(Grip::try_from("mixed".to_owned()).unwrap(), Grip::Mixed);
     }
 }
