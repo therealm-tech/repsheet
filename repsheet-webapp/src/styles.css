@@ -376,6 +376,18 @@ ol {
 	border-color: var(--orange);
 }
 
+/* iOS Safari's native date control ignores min-height, centres its value and
+   keeps an intrinsic width that overflows its flex item onto its neighbour. */
+.input[type="date"] {
+	-webkit-appearance: none;
+	appearance: none;
+	min-width: 0;
+}
+
+.input[type="date"]::-webkit-date-and-time-value {
+	text-align: left;
+}
+
 .input-small {
 	width: 76px;
 	min-height: 36px;
