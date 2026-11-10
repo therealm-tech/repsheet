@@ -18,6 +18,7 @@ const FIELD_MESSAGES: Record<string, ErrorKey> = {
 	modes: "modesRequired",
 	defaultMode: "defaultModeInvalid",
 	equipment: "equipmentRequired",
+	text: "commentTooLong",
 	defaultEquipment: "defaultEquipmentInvalid",
 	defaultGrip: "defaultGripInvalid",
 	performedOn: "dateRequired",
@@ -64,6 +65,8 @@ function byType(error: ApiError): ErrorKey | null {
 			return "coachAlreadyAdded";
 		case `${PROBLEM}not-coach`:
 			return "notCoach";
+		case `${PROBLEM}not-author`:
+			return "notAuthor";
 		case `${PROBLEM}internal`:
 			return "internal";
 		default:

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ExerciseSummary, Workout } from "@/lib/api/schemas";
-import { draftFromWorkout, draftToInput } from "@/lib/templates";
+import type { ExerciseSummary, Template, Workout } from "@/lib/api/schemas";
+import {
+	draftFromTemplate,
+	draftFromWorkout,
+	draftToInput,
+} from "@/lib/templates";
 
 const squat: ExerciseSummary = {
 	id: "squat",
@@ -47,6 +51,7 @@ const workout: Workout = {
 					exercise: squat,
 					mode: "reps",
 					equipment: "barbell",
+					comments: [],
 					grip: null,
 					sets: [1, 2, 3].map((round) => ({
 						round,
@@ -62,6 +67,7 @@ const workout: Workout = {
 					exercise: crunch,
 					mode: "time",
 					equipment: "bodyweight",
+					comments: [],
 					grip: null,
 					sets: [1, 2, 3].map((round) => ({
 						round,
@@ -123,6 +129,7 @@ describe("template drafts", () => {
 							exercise: squat,
 							mode: "reps",
 							equipment: "barbell",
+							note: "",
 							grip: null,
 							target: "  ",
 						},
@@ -148,5 +155,75 @@ describe("template drafts", () => {
 				},
 			],
 		});
+	});
+
+	it("keeps the instructions of each exercise, trimmed, and none when blank", () => {
+		const template: Template = {
+			id: "t1",
+			name: "Jambes",
+			note: null,
+			updatedAt: "2026-11-10T10:00:00Z",
+			blocks: [
+				{
+					id: "tb1",
+					position: 1,
+					kind: "superset",
+					rounds: 3,
+					restSeconds: null,
+					exercises: [
+						{
+							id: "tbe1",
+							exercise: squat,
+							mode: "reps",
+							equipment: "barbell",
+							grip: null,
+							target: "5",
+							note: "Tempo 3-1-1",
+						},
+						{
+							id: "tbe2",
+							exercise: crunch,
+							mode: "reps",
+							equipment: "bodyweight",
+							grip: null,
+							target: null,
+							note: null,
+						},
+					],
+				},
+			],
+		};
+		const draft = draftFromTemplate(template);
+		const first = draft.blocks[0]?.exercises[0];
+		if (first) {
+			first.note = " Tempo 3-1-1, descente lente ";
+		}
+		expect(draftToInput(draft).blocks[0]?.exercises.map((e) => e.note)).toEqual(
+			["Tempo 3-1-1, descente lente", undefined],
+		);
+	});
+
+	it("leaves a workout's comments out of the template made from it", () => {
+		const commented: Workout = {
+			...workout,
+			blocks: workout.blocks.map((block) => ({
+				...block,
+				exercises: block.exercises.map((e) => ({
+					...e,
+					comments: [
+						{
+							id: "k1",
+							blockExerciseId: e.id,
+							author: null,
+							text: "Genou sensible",
+							createdAt: "2026-10-22T18:00:00Z",
+							updatedAt: "2026-10-22T18:00:00Z",
+						},
+					],
+				})),
+			})),
+		};
+		const exercises = draftFromWorkout(commented).blocks[0]?.exercises ?? [];
+		expect(exercises.map((e) => e.note)).toEqual(["", ""]);
 	});
 });

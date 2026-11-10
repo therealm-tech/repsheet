@@ -72,6 +72,7 @@ const session: PlannedSession = {
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",
+					note: null,
 					grip: null,
 					target: "5×5",
 				},
@@ -89,6 +90,7 @@ const session: PlannedSession = {
 					exercise: exercise({ id: "e2", name: "Dips" }),
 					mode: "reps",
 					equipment: "barbell",
+					note: null,
 					grip: null,
 					target: "max",
 				},
@@ -117,6 +119,7 @@ const logged: Workout = {
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",
+					comments: [],
 					grip: null,
 					sets: [
 						{
@@ -521,7 +524,11 @@ describe("coaching an athlete", () => {
 		expect(
 			within(outcome).getByRole("region", { name: "Bloc prévu 2" }),
 		).toHaveTextContent("pas noté");
-		expect(within(outcome).queryByRole("button")).not.toBeInTheDocument();
+		expect(
+			within(outcome)
+				.getAllByRole("button")
+				.map((b) => b.getAttribute("aria-label")),
+		).toEqual(["Ajouter un commentaire sur Développé couché"]);
 		expect(screen.getByText(/Notée le/)).toBeInTheDocument();
 	});
 

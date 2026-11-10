@@ -47,10 +47,13 @@ function nextColumnId(): number {
 /**
  * An exercise of the block, with how it is done for every round. `columnId`
  * tells apart two columns of the same exercise; it is never sent to the API.
+ * `blockExerciseId` is the logged exercise the column edits, which keeps its
+ * identity and its comments when the block is saved.
  */
 export type GridExercise = ExerciseSummary & {
 	chosen: Choices;
 	columnId: number;
+	blockExerciseId?: string;
 };
 
 export interface Grid {
@@ -237,8 +240,20 @@ export function gridFromBlock(block: Block, unit: WeightUnit): Grid {
 			...e.exercise,
 			chosen: { mode: e.mode, equipment: e.equipment, grip: e.grip },
 			columnId: nextColumnId(),
+			blockExerciseId: e.id,
 		})),
 		rows,
+	};
+}
+
+/** Points each column at the logged exercise `block` saved it as, in order. */
+export function linkToBlock(grid: Grid, block: Block): Grid {
+	return {
+		...grid,
+		exercises: grid.exercises.map((exercise, i) => {
+			const saved = block.exercises[i];
+			return saved ? { ...exercise, blockExerciseId: saved.id } : exercise;
+		}),
 	};
 }
 
@@ -481,7 +496,12 @@ export function toBlockExercises(grid: Grid, unit: WeightUnit): BuildResult {
 				error: i18n.t("grid.noSet", { name: exercise.name }),
 			};
 		}
-		exercises.push({ exerciseId: exercise.id, ...exercise.chosen, sets });
+		exercises.push({
+			...(exercise.blockExerciseId ? { id: exercise.blockExerciseId } : {}),
+			exerciseId: exercise.id,
+			...exercise.chosen,
+			sets,
+		});
 	}
 	return { ok: true, exercises };
 }

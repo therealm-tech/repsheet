@@ -73,52 +73,76 @@ function BlockEditor({
 				</button>
 			</div>
 			{block.exercises.map((entry, i) => (
-				<div key={entry.key} className="ex">
-					<span className="ex-letter">{letter(i)}</span>
-					<span className="ex-name">{entry.exercise.name}</span>
-					<ChoiceSwitches
-						exercise={entry.exercise}
-						chosen={entry}
-						onChange={(change) =>
-							onChange({
-								...block,
-								exercises: block.exercises.map((x, j) =>
-									j === i ? { ...x, ...change } : x,
-								),
-							})
-						}
-					/>
-					<input
-						className="input input-small"
-						aria-label={t("templateEditor.targetFor", {
-							name: entry.exercise.name,
-						})}
-						placeholder={t("templateEditor.target")}
-						value={entry.target}
-						onChange={(e) =>
-							onChange({
-								...block,
-								exercises: block.exercises.map((x, j) =>
-									j === i ? { ...x, target: e.target.value } : x,
-								),
-							})
-						}
-					/>
-					<button
-						type="button"
-						className="mini-button"
-						aria-label={t("block.removeExercise", {
-							name: entry.exercise.name,
-						})}
-						onClick={() =>
-							onChange({
-								...block,
-								exercises: block.exercises.filter((_, j) => j !== i),
-							})
-						}
-					>
-						✕
-					</button>
+				<div key={entry.key} className="block-exercise">
+					<div className="ex">
+						<span className="ex-letter">{letter(i)}</span>
+						<span className="ex-name">{entry.exercise.name}</span>
+						<ChoiceSwitches
+							exercise={entry.exercise}
+							chosen={entry}
+							onChange={(change) =>
+								onChange({
+									...block,
+									exercises: block.exercises.map((x, j) =>
+										j === i ? { ...x, ...change } : x,
+									),
+								})
+							}
+						/>
+						<input
+							className="input input-small"
+							aria-label={t("templateEditor.targetFor", {
+								name: entry.exercise.name,
+							})}
+							placeholder={t("templateEditor.target")}
+							value={entry.target}
+							onChange={(e) =>
+								onChange({
+									...block,
+									exercises: block.exercises.map((x, j) =>
+										j === i ? { ...x, target: e.target.value } : x,
+									),
+								})
+							}
+						/>
+						<button
+							type="button"
+							className="mini-button"
+							aria-label={t("block.removeExercise", {
+								name: entry.exercise.name,
+							})}
+							onClick={() =>
+								onChange({
+									...block,
+									exercises: block.exercises.filter((_, j) => j !== i),
+								})
+							}
+						>
+							✕
+						</button>
+					</div>
+					<label className="instruction-field">
+						<span className="small muted">
+							{t("templateEditor.instruction")}
+						</span>
+						<input
+							className="input"
+							aria-label={t("templateEditor.instructionFor", {
+								name: entry.exercise.name,
+							})}
+							placeholder={t("templateEditor.instructionPlaceholder")}
+							maxLength={2000}
+							value={entry.note}
+							onChange={(e) =>
+								onChange({
+									...block,
+									exercises: block.exercises.map((x, j) =>
+										j === i ? { ...x, note: e.target.value } : x,
+									),
+								})
+							}
+						/>
+					</label>
 				</div>
 			))}
 			<div className="row">
@@ -197,6 +221,7 @@ export function BlocksEditor({
 			exercise,
 			...startingChoices(exercise),
 			target: "",
+			note: "",
 		};
 		const target = pickTarget;
 		setPickTarget(null);

@@ -2,6 +2,7 @@ import type {
 	ExerciseSummary,
 	Template,
 	TemplateBlockInput,
+	TemplateExerciseInput,
 	TemplateInput,
 	Workout,
 } from "@/lib/api/schemas";
@@ -14,6 +15,8 @@ export interface DraftExercise extends Choices {
 	key: string;
 	exercise: ExerciseSummary;
 	target: string;
+	/** Instructions for the exercise, shown while a block is logged from it. */
+	note: string;
 }
 
 export interface DraftBlock {
@@ -56,6 +59,7 @@ export function draftFromTemplate(template: Template): Draft {
 				equipment: e.equipment,
 				grip: e.grip,
 				target: e.target ?? "",
+				note: e.note ?? "",
 			})),
 		})),
 	};
@@ -78,6 +82,7 @@ export function draftFromWorkout(workout: Workout): Draft {
 				equipment: e.equipment,
 				grip: e.grip,
 				target: targetFromSets(e.mode, e.sets) ?? "",
+				note: "",
 			})),
 		})),
 	};
@@ -91,14 +96,21 @@ export function draftToInput(draft: Draft): TemplateInput {
 			.map((block) => {
 				const out: TemplateBlockInput = {
 					exercises: block.exercises.map((e) => {
-						const target = e.target.trim();
-						const exercise = {
+						const exercise: TemplateExerciseInput = {
 							exerciseId: e.exercise.id,
 							mode: e.mode,
 							equipment: e.equipment,
 							grip: e.grip,
 						};
-						return target ? { ...exercise, target } : exercise;
+						const target = e.target.trim();
+						if (target) {
+							exercise.target = target;
+						}
+						const note = e.note.trim();
+						if (note) {
+							exercise.note = note;
+						}
+						return exercise;
 					}),
 				};
 				if (block.id) {

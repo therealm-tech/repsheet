@@ -2,6 +2,7 @@ import { request, requestVoid } from "@/lib/api/client";
 import {
 	type BlockInput,
 	BlockSchema,
+	CommentSchema,
 	type CreateExerciseInput,
 	type CreatePlannedSessionInput,
 	type CreateWorkoutInput,
@@ -159,6 +160,12 @@ export const api = {
 		requestVoid("PUT", `/workouts/${workoutId}/shares/${coachId}`),
 	unshareWorkout: (workoutId: string, coachId: string) =>
 		requestVoid("DELETE", `/workouts/${workoutId}/shares/${coachId}`),
+
+	createComment: (body: { blockExerciseId: string; text: string }) =>
+		request("POST", "/comments", CommentSchema, { body }),
+	updateComment: (id: string, text: string) =>
+		request("PUT", `/comments/${id}`, CommentSchema, { body: { text } }),
+	deleteComment: (id: string) => requestVoid("DELETE", `/comments/${id}`),
 };
 
 export const keys = {

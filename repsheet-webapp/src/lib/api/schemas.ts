@@ -117,6 +117,23 @@ export const SetSchema = z.object({
 });
 export type WorkoutSet = z.infer<typeof SetSchema>;
 
+/** Who wrote something; null once their account is deleted. */
+export const AuthorSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+});
+export type Author = z.infer<typeof AuthorSchema>;
+
+export const CommentSchema = z.object({
+	id: z.string(),
+	blockExerciseId: z.string(),
+	author: AuthorSchema.nullable(),
+	text: z.string(),
+	createdAt: z.string(),
+	updatedAt: z.string(),
+});
+export type Comment = z.infer<typeof CommentSchema>;
+
 export const PerformanceSchema = z.object({
 	blockExerciseId: z.string(),
 	workoutId: z.string(),
@@ -126,6 +143,7 @@ export const PerformanceSchema = z.object({
 	mode: ModeSchema,
 	equipment: EquipmentSchema,
 	grip: GripSchema.nullable(),
+	comments: z.array(CommentSchema),
 	sets: z.array(SetSchema),
 });
 export type Performance = z.infer<typeof PerformanceSchema>;
@@ -143,6 +161,7 @@ export const BlockSchema = z.object({
 			mode: ModeSchema,
 			equipment: EquipmentSchema,
 			grip: GripSchema.nullable(),
+			comments: z.array(CommentSchema),
 			sets: z.array(SetSchema),
 		}),
 	),
@@ -184,6 +203,7 @@ export const TemplateBlockSchema = z.object({
 			equipment: EquipmentSchema,
 			grip: GripSchema.nullable(),
 			target: z.string().nullable(),
+			note: z.string().nullable(),
 		}),
 	),
 });
@@ -215,15 +235,10 @@ export const LinkedAccountSchema = z.object({
 });
 export type LinkedAccount = z.infer<typeof LinkedAccountSchema>;
 
-export const PlannedSessionAuthorSchema = z.object({
-	id: z.string(),
-	name: z.string(),
-});
-
 export const PlannedSessionSummarySchema = z.object({
 	id: z.string(),
 	athleteId: z.string(),
-	author: PlannedSessionAuthorSchema.nullable(),
+	author: AuthorSchema.nullable(),
 	plannedOn: z.string(),
 	name: z.string(),
 	blockCount: z.number(),
@@ -235,7 +250,7 @@ export type PlannedSessionSummary = z.infer<typeof PlannedSessionSummarySchema>;
 export const PlannedSessionSchema = z.object({
 	id: z.string(),
 	athleteId: z.string(),
-	author: PlannedSessionAuthorSchema.nullable(),
+	author: AuthorSchema.nullable(),
 	plannedOn: z.string(),
 	name: z.string(),
 	note: z.string().nullable(),
@@ -258,16 +273,20 @@ export interface SetInput {
 	warmup: boolean;
 }
 
+export interface BlockExerciseInput {
+	/** One of the block's exercises, to keep its identity and its comments. */
+	id?: string;
+	exerciseId: string;
+	mode: Mode;
+	equipment: Equipment;
+	grip: Grip | null;
+	sets: SetInput[];
+}
+
 export interface BlockInput {
 	templateBlockId?: string;
 	restSeconds?: number;
-	exercises: {
-		exerciseId: string;
-		mode: Mode;
-		equipment: Equipment;
-		grip: Grip | null;
-		sets: SetInput[];
-	}[];
+	exercises: BlockExerciseInput[];
 }
 
 export interface ExerciseNamesInput {
@@ -310,13 +329,16 @@ export interface TemplateBlockInput {
 	id?: string;
 	rounds?: number;
 	restSeconds?: number;
-	exercises: {
-		exerciseId: string;
-		mode: Mode;
-		equipment: Equipment;
-		grip: Grip | null;
-		target?: string;
-	}[];
+	exercises: TemplateExerciseInput[];
+}
+
+export interface TemplateExerciseInput {
+	exerciseId: string;
+	mode: Mode;
+	equipment: Equipment;
+	grip: Grip | null;
+	target?: string;
+	note?: string;
 }
 
 export interface TemplateInput {
