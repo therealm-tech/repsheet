@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use sqlx::{FromRow, PgExecutor};
 use uuid::Uuid;
 
-use crate::domain::{Equipment, Load, Locale, Mode, Modes};
+use crate::domain::{Equipment, EquipmentSet, Load, Locale, Mode, Modes};
 
 #[derive(FromRow)]
 pub struct ExerciseRow {
@@ -18,8 +18,10 @@ pub struct ExerciseRow {
     pub default_mode: Mode,
     #[sqlx(try_from = "String")]
     pub load: Load,
+    #[sqlx(try_from = "Vec<String>")]
+    pub equipment: EquipmentSet,
     #[sqlx(try_from = "String")]
-    pub equipment: Equipment,
+    pub default_equipment: Equipment,
     pub unilateral: bool,
     pub last_used_on: Option<NaiveDate>,
 }
@@ -34,8 +36,10 @@ pub struct ExerciseSummaryRow {
     pub default_mode: Mode,
     #[sqlx(try_from = "String")]
     pub load: Load,
+    #[sqlx(try_from = "Vec<String>")]
+    pub equipment: EquipmentSet,
     #[sqlx(try_from = "String")]
-    pub equipment: Equipment,
+    pub default_equipment: Equipment,
     pub unilateral: bool,
 }
 
@@ -47,6 +51,8 @@ pub struct PerformanceRow {
     pub performed_on: NaiveDate,
     #[sqlx(try_from = "String")]
     pub mode: Mode,
+    #[sqlx(try_from = "String")]
+    pub equipment: Equipment,
     pub block_exercise_count: i64,
 }
 
@@ -57,7 +63,8 @@ pub struct NewExercise<'a> {
     pub modes: Modes,
     pub default_mode: Mode,
     pub load: Load,
-    pub equipment: Equipment,
+    pub equipment: EquipmentSet,
+    pub default_equipment: Equipment,
     pub unilateral: bool,
 }
 
@@ -166,7 +173,8 @@ pub async fn insert(
         .bind(exercise.modes.as_strs())
         .bind(exercise.default_mode.as_str())
         .bind(exercise.load.as_str())
-        .bind(exercise.equipment.as_str())
+        .bind(exercise.equipment.as_strs())
+        .bind(exercise.default_equipment.as_str())
         .bind(exercise.unilateral)
         .bind(locale.as_str())
         .fetch_one(exec)
@@ -184,7 +192,8 @@ pub async fn insert_builtin(
         .bind(exercise.modes.as_strs())
         .bind(exercise.default_mode.as_str())
         .bind(exercise.load.as_str())
-        .bind(exercise.equipment.as_str())
+        .bind(exercise.equipment.as_strs())
+        .bind(exercise.default_equipment.as_str())
         .bind(exercise.unilateral)
         .bind(locale.as_str())
         .fetch_one(exec)
@@ -207,7 +216,8 @@ pub async fn update(
         .bind(exercise.modes.as_strs())
         .bind(exercise.default_mode.as_str())
         .bind(exercise.load.as_str())
-        .bind(exercise.equipment.as_str())
+        .bind(exercise.equipment.as_strs())
+        .bind(exercise.default_equipment.as_str())
         .bind(exercise.unilateral)
         .bind(viewer_id)
         .bind(locale.as_str())
@@ -228,6 +238,19 @@ pub async fn has_sets(exec: impl PgExecutor<'_>, id: Uuid, modes: &[Mode]) -> sq
     sqlx::query_scalar(include_str!("../../queries/exercises/has_sets.sql"))
         .bind(id)
         .bind(modes.iter().map(|m| m.as_str()).collect::<Vec<_>>())
+        .fetch_one(exec)
+        .await
+}
+
+/// Whether any user logged the exercise with one of `equipment`.
+pub async fn equipment_used(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    equipment: &[Equipment],
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(include_str!("../../queries/exercises/equipment_used.sql"))
+        .bind(id)
+        .bind(equipment.iter().map(|e| e.as_str()).collect::<Vec<_>>())
         .fetch_one(exec)
         .await
 }
@@ -256,6 +279,8 @@ pub struct PerformanceFilter {
     pub before_workout_id: Option<Uuid>,
     /// Keeps only the blocks that counted the exercise in this mode.
     pub mode: Option<Mode>,
+    /// Keeps only the blocks that did the exercise with this equipment.
+    pub equipment: Option<Equipment>,
 }
 
 pub async fn list_performances(
@@ -273,6 +298,7 @@ pub async fn list_performances(
     .bind(offset)
     .bind(filter.before_workout_id)
     .bind(filter.mode.map(Mode::as_str))
+    .bind(filter.equipment.map(Equipment::as_str))
     .fetch_all(exec)
     .await
 }
@@ -288,6 +314,7 @@ pub async fn count_performances(
     .bind(filter.user_id)
     .bind(filter.before_workout_id)
     .bind(filter.mode.map(Mode::as_str))
+    .bind(filter.equipment.map(Equipment::as_str))
     .fetch_one(exec)
     .await
 }

@@ -11,7 +11,7 @@ use validator::Validate;
 use crate::{
     api::{
         AppState, authenticated,
-        exercises::{ExerciseSummaryResponse, ModeDto},
+        exercises::{EquipmentDto, ExerciseSummaryResponse, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{PageQuery, PageResponse},
         workouts::BlockKindDto,
@@ -125,6 +125,7 @@ impl TemplateResponse {
                         .map(|e| TemplateExerciseResponse {
                             exercise: e.exercise.into(),
                             mode: e.mode.into(),
+                            equipment: e.equipment.into(),
                             target: e.target,
                         })
                         .collect(),
@@ -151,6 +152,8 @@ pub struct TemplateExerciseResponse {
     pub exercise: ExerciseSummaryResponse,
     /// The mode a block logged from this one counts the exercise in.
     pub mode: ModeDto,
+    /// The equipment a block logged from this one does the exercise with.
+    pub equipment: EquipmentDto,
     /// Free-form goal written by the coach, e.g. `6–8`, `max`, `45 s`.
     pub target: Option<String>,
 }
@@ -161,6 +164,8 @@ pub struct TemplateExerciseRequest {
     pub exercise_id: Uuid,
     /// One of the exercise's modes; its default mode when omitted.
     pub mode: Option<ModeDto>,
+    /// One of the exercise's equipment; its default equipment when omitted.
+    pub equipment: Option<EquipmentDto>,
     #[validate(length(max = 50))]
     pub target: Option<String>,
 }
@@ -230,7 +235,8 @@ fn clean_note(note: Option<&str>) -> Option<&str> {
 }
 
 /// Checks that every exercise is one the user can use, counted in one of its
-/// modes, and turns the blocks into what is stored.
+/// modes and done with one of its equipment, and turns the blocks into what is
+/// stored.
 async fn resolve_blocks<'a>(
     conn: &mut sqlx::PgConnection,
     user: &AuthUser,
@@ -257,19 +263,32 @@ async fn resolve_blocks<'a>(
                 ));
                 continue;
             };
-            let Some(mode) = exercise
+            let mode = exercise
                 .modes
-                .choose(request.mode.map(Into::into), exercise.default_mode)
-            else {
+                .choose(request.mode.map(Into::into), exercise.default_mode);
+            if mode.is_none() {
                 errors.push(FieldError::new(
                     format!("blocks[{i}].exercises[{j}].mode"),
                     "not a mode of the exercise",
                 ));
+            }
+            let equipment = exercise.equipment.choose(
+                request.equipment.map(Into::into),
+                exercise.default_equipment,
+            );
+            if equipment.is_none() {
+                errors.push(FieldError::new(
+                    format!("blocks[{i}].exercises[{j}].equipment"),
+                    "not an equipment of the exercise",
+                ));
+            }
+            let (Some(mode), Some(equipment)) = (mode, equipment) else {
                 continue;
             };
             exercises.push(TemplateExerciseInput {
                 exercise_id: request.exercise_id,
                 mode,
+                equipment,
                 target: request
                     .target
                     .as_deref()

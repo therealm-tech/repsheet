@@ -9,6 +9,7 @@ SELECT
     e.default_mode,
     e.load,
     e.equipment,
+    e.default_equipment,
     e.unilateral,
     usage.last_used_on,
     exercise_name(e.name_fr, e.name_en, $6) AS name

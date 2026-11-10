@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     db::exercises::ExerciseSummaryRow,
-    domain::{Locale, Mode, SetValues},
+    domain::{Equipment, Locale, Mode, SetValues},
 };
 
 #[derive(FromRow)]
@@ -43,6 +43,8 @@ struct BlockExerciseRow {
     block_id: Uuid,
     #[sqlx(try_from = "String")]
     mode: Mode,
+    #[sqlx(rename = "chosen_equipment", try_from = "String")]
+    equipment: Equipment,
     #[sqlx(flatten)]
     exercise: ExerciseSummaryRow,
 }
@@ -66,6 +68,7 @@ pub struct LoadedBlock {
 pub struct LoadedBlockExercise {
     pub exercise: ExerciseSummaryRow,
     pub mode: Mode,
+    pub equipment: Equipment,
     pub sets: Vec<SetValues>,
 }
 
@@ -79,6 +82,7 @@ pub struct WorkoutChanges<'a> {
 pub struct NewBlockExercise<'a> {
     pub exercise_id: Uuid,
     pub mode: Mode,
+    pub equipment: Equipment,
     pub sets: &'a [SetValues],
 }
 
@@ -197,6 +201,7 @@ pub async fn load_blocks(
             .push(LoadedBlockExercise {
                 sets: sets.remove(&row.block_exercise_id).unwrap_or_default(),
                 mode: row.mode,
+                equipment: row.equipment,
                 exercise: row.exercise,
             });
     }
@@ -304,6 +309,7 @@ async fn insert_block_exercises(
                 .bind::<i32>(position)
                 .bind(exercise.exercise_id)
                 .bind(exercise.mode.as_str())
+                .bind(exercise.equipment.as_str())
                 .fetch_one(&mut *conn)
                 .await?;
         let sets = exercise.sets;

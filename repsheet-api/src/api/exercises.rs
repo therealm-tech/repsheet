@@ -19,7 +19,7 @@ use crate::{
         self,
         exercises::{ExerciseRow, ExerciseSummaryRow, NewExercise, PerformanceFilter},
     },
-    domain::{BlockKind, Equipment, Load, Mode, Modes},
+    domain::{BlockKind, Equipment, EquipmentSet, Load, Mode, Modes},
     error::{AppError, AppResult, Conflict, FieldError, conflict_on_reference, conflict_on_unique},
 };
 
@@ -59,8 +59,9 @@ pub fn routes() -> ApiRouter<AppState> {
                     .summary("Replace an exercise")
                     .description(
                         "Custom exercises by their owner, built-in ones by super admins. A mode \
-                         the exercise was logged in cannot be removed; template exercises \
-                         counted in another removed mode move to the default mode.",
+                         or equipment the exercise was logged with cannot be removed; template \
+                         exercises counted in another removed mode, or done with other removed \
+                         equipment, move to the default one.",
                     )
             })
             .delete_with(delete, |op| {
@@ -152,7 +153,7 @@ fn mode_dtos(modes: &Modes) -> Vec<ModeDto> {
     modes.iter().map(Into::into).collect()
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "Equipment")]
 pub enum EquipmentDto {
@@ -193,6 +194,10 @@ impl From<Equipment> for EquipmentDto {
     }
 }
 
+fn equipment_dtos(equipment: &EquipmentSet) -> Vec<EquipmentDto> {
+    equipment.iter().map(Into::into).collect()
+}
+
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExerciseResponse {
@@ -206,7 +211,10 @@ pub struct ExerciseResponse {
     /// The mode a new block counts the exercise in.
     pub default_mode: ModeDto,
     pub load: LoadDto,
-    pub equipment: EquipmentDto,
+    /// The equipment the exercise can be done with, in a fixed order.
+    pub equipment: Vec<EquipmentDto>,
+    /// The equipment a new block does the exercise with.
+    pub default_equipment: EquipmentDto,
     /// Reps and loads are counted per side.
     pub unilateral: bool,
     /// Created by the user rather than part of the built-in catalog.
@@ -227,7 +235,8 @@ impl From<ExerciseRow> for ExerciseResponse {
             modes: mode_dtos(&row.modes),
             default_mode: row.default_mode.into(),
             load: row.load.into(),
-            equipment: row.equipment.into(),
+            equipment: equipment_dtos(&row.equipment),
+            default_equipment: row.default_equipment.into(),
             unilateral: row.unilateral,
             custom: row.owner_id.is_some(),
             last_used_on: row.last_used_on,
@@ -244,7 +253,8 @@ pub struct ExerciseSummaryResponse {
     pub modes: Vec<ModeDto>,
     pub default_mode: ModeDto,
     pub load: LoadDto,
-    pub equipment: EquipmentDto,
+    pub equipment: Vec<EquipmentDto>,
+    pub default_equipment: EquipmentDto,
     pub unilateral: bool,
 }
 
@@ -256,7 +266,8 @@ impl From<ExerciseSummaryRow> for ExerciseSummaryResponse {
             modes: mode_dtos(&row.modes),
             default_mode: row.default_mode.into(),
             load: row.load.into(),
-            equipment: row.equipment.into(),
+            equipment: equipment_dtos(&row.equipment),
+            default_equipment: row.default_equipment.into(),
             unilateral: row.unilateral,
         }
     }
@@ -373,6 +384,42 @@ fn counting(modes: &[ModeDto], default_mode: ModeDto) -> AppResult<(Modes, Mode)
     Ok((modes, default_mode))
 }
 
+fn distinct_equipment(equipment: &[EquipmentDto]) -> Result<(), ValidationError> {
+    if equipment
+        .iter()
+        .enumerate()
+        .any(|(i, kind)| equipment[..i].contains(kind))
+    {
+        let mut error = ValidationError::new("duplicate_equipment");
+        error.message = Some("an equipment appears twice".into());
+        return Err(error);
+    }
+    Ok(())
+}
+
+/// The equipment and the default equipment of a create or update request; the
+/// default must be one of the equipment.
+fn equipping(
+    equipment: &[EquipmentDto],
+    default_equipment: EquipmentDto,
+) -> AppResult<(EquipmentSet, Equipment)> {
+    let equipment =
+        EquipmentSet::new(equipment.iter().copied().map(Equipment::from)).ok_or_else(|| {
+            AppError::Validation(vec![FieldError::new(
+                "equipment",
+                "give at least one equipment, each once",
+            )])
+        })?;
+    let default_equipment = Equipment::from(default_equipment);
+    if !equipment.contains(default_equipment) {
+        return Err(AppError::Validation(vec![FieldError::new(
+            "defaultEquipment",
+            "must be one of the equipment",
+        )]));
+    }
+    Ok((equipment, default_equipment))
+}
+
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateExerciseRequest {
@@ -384,7 +431,11 @@ pub struct CreateExerciseRequest {
     /// One of `modes`.
     pub default_mode: ModeDto,
     pub load: LoadDto,
-    pub equipment: EquipmentDto,
+    /// Distinct equipment, at least one.
+    #[validate(length(min = 1, max = 7), custom(function = distinct_equipment))]
+    pub equipment: Vec<EquipmentDto>,
+    /// One of `equipment`.
+    pub default_equipment: EquipmentDto,
     #[serde(default)]
     pub unilateral: bool,
     /// Add the exercise to the built-in catalog (super admins only).
@@ -405,7 +456,12 @@ pub struct UpdateExerciseRequest {
     pub default_mode: ModeDto,
     /// Applies to the sets logged from now on.
     pub load: LoadDto,
-    pub equipment: EquipmentDto,
+    /// Distinct equipment, at least one. Equipment the exercise was logged
+    /// with cannot be removed.
+    #[validate(length(min = 1, max = 7), custom(function = distinct_equipment))]
+    pub equipment: Vec<EquipmentDto>,
+    /// One of `equipment`.
+    pub default_equipment: EquipmentDto,
     pub unilateral: bool,
 }
 
@@ -423,6 +479,8 @@ pub struct ListPerformancesQuery {
     pub before_workout_id: Option<Uuid>,
     /// Only the blocks that counted the exercise in this mode.
     pub mode: Option<ModeDto>,
+    /// Only the blocks that did the exercise with this equipment.
+    pub equipment: Option<EquipmentDto>,
     /// 1-based page number (default 1)
     #[validate(range(min = 1))]
     pub page: Option<u32>,
@@ -440,6 +498,8 @@ pub struct PerformanceResponse {
     pub block_kind: BlockKindDto,
     /// The mode the exercise was counted in for this block.
     pub mode: ModeDto,
+    /// The equipment the exercise was done with for this block.
+    pub equipment: EquipmentDto,
     pub sets: Vec<SetResponse>,
 }
 
@@ -477,13 +537,15 @@ async fn create(
     ValidJson(request): ValidJson<CreateExerciseRequest>,
 ) -> AppResult<Created<ExerciseResponse>> {
     let (modes, default_mode) = counting(&request.modes, request.default_mode)?;
+    let (equipment, default_equipment) = equipping(&request.equipment, request.default_equipment)?;
     let exercise = NewExercise {
         name_fr: request.names.fr(),
         name_en: request.names.en(),
         modes,
         default_mode,
         load: request.load.into(),
-        equipment: request.equipment.into(),
+        equipment,
+        default_equipment,
         unilateral: request.unilateral,
     };
     let row = if request.built_in {
@@ -530,13 +592,15 @@ async fn update(
         request.names.require_both()?;
     }
     let (modes, default_mode) = counting(&request.modes, request.default_mode)?;
+    let (equipment, default_equipment) = equipping(&request.equipment, request.default_equipment)?;
     let exercise = NewExercise {
         name_fr: request.names.fr(),
         name_en: request.names.en(),
         modes,
         default_mode,
         load: request.load.into(),
-        equipment: request.equipment.into(),
+        equipment,
+        default_equipment,
         unilateral: request.unilateral,
     };
     let removed: Vec<Mode> = current
@@ -544,9 +608,19 @@ async fn update(
         .iter()
         .filter(|mode| !exercise.modes.contains(*mode))
         .collect();
+    let removed_equipment: Vec<Equipment> = current
+        .equipment
+        .iter()
+        .filter(|kind| !exercise.equipment.contains(*kind))
+        .collect();
     let mut tx = state.pool.begin().await?;
     if !removed.is_empty() && db::exercises::has_sets(&mut *tx, current.id, &removed).await? {
         return Err(AppError::Conflict(Conflict::ModeLocked));
+    }
+    if !removed_equipment.is_empty()
+        && db::exercises::equipment_used(&mut *tx, current.id, &removed_equipment).await?
+    {
+        return Err(AppError::Conflict(Conflict::EquipmentLocked));
     }
     if db::exercises::name_taken_except(&mut *tx, current.id, &exercise, current.owner_id).await? {
         return Err(AppError::Conflict(Conflict::ExerciseNameTaken));
@@ -557,8 +631,17 @@ async fn update(
     if !removed.is_empty() {
         db::templates::reset_modes(&mut *tx, row.id, &row.modes, row.default_mode).await?;
     }
+    if !removed_equipment.is_empty() {
+        db::templates::reset_equipment(&mut *tx, row.id, &row.equipment, row.default_equipment)
+            .await?;
+    }
     tx.commit().await?;
-    tracing::debug!(exercise_id = %row.id, removed_modes = removed.len(), "exercise updated");
+    tracing::debug!(
+        exercise_id = %row.id,
+        removed_modes = removed.len(),
+        removed_equipment = removed_equipment.len(),
+        "exercise updated"
+    );
     Ok(Json(row.into()))
 }
 
@@ -607,6 +690,7 @@ async fn list_performances(
         user_id: user.id,
         before_workout_id: query.before_workout_id,
         mode: query.mode.map(Into::into),
+        equipment: query.equipment.map(Into::into),
     };
     let rows =
         db::exercises::list_performances(&state.pool, &filter, paging.limit(), paging.offset())
@@ -622,6 +706,7 @@ async fn list_performances(
             )
             .into(),
             mode: row.mode.into(),
+            equipment: row.equipment.into(),
             sets: sets
                 .remove(&row.block_exercise_id)
                 .unwrap_or_default()
