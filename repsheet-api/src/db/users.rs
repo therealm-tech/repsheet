@@ -49,6 +49,16 @@ pub async fn find(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Option<Us
         .await
 }
 
+pub async fn find_id_by_email(
+    exec: impl PgExecutor<'_>,
+    email: &str,
+) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar(include_str!("../../queries/users/find_id_by_email.sql"))
+        .bind(email)
+        .fetch_optional(exec)
+        .await
+}
+
 pub async fn find_credentials(
     exec: impl PgExecutor<'_>,
     email: &str,

@@ -38,6 +38,13 @@ pub struct BlockRow {
 }
 
 #[derive(FromRow)]
+struct WorkoutBlockRow {
+    workout_id: Uuid,
+    #[sqlx(flatten)]
+    block: BlockRow,
+}
+
+#[derive(FromRow)]
 struct BlockExerciseRow {
     block_exercise_id: Uuid,
     block_id: Uuid,
@@ -146,6 +153,50 @@ pub async fn find(
         .await
 }
 
+/// The workout as `user_id` may read it: as its owner, or as a coach the
+/// owner still has, who planned the session it was logged from or was shared
+/// it.
+pub async fn find_readable(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    user_id: Uuid,
+) -> sqlx::Result<Option<WorkoutRow>> {
+    sqlx::query_as(include_str!("../../queries/workouts/find_readable.sql"))
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(exec)
+        .await
+}
+
+/// The workouts `athlete_id` shared with `coach_id`, newest first.
+pub async fn list_shared(
+    exec: impl PgExecutor<'_>,
+    athlete_id: Uuid,
+    coach_id: Uuid,
+    limit: i64,
+    offset: i64,
+) -> sqlx::Result<Vec<WorkoutSummaryRow>> {
+    sqlx::query_as(include_str!("../../queries/workouts/list_shared.sql"))
+        .bind(athlete_id)
+        .bind(coach_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(exec)
+        .await
+}
+
+pub async fn count_shared(
+    exec: impl PgExecutor<'_>,
+    athlete_id: Uuid,
+    coach_id: Uuid,
+) -> sqlx::Result<i64> {
+    sqlx::query_scalar(include_str!("../../queries/workouts/count_shared.sql"))
+        .bind(athlete_id)
+        .bind(coach_id)
+        .fetch_one(exec)
+        .await
+}
+
 pub async fn update(
     exec: impl PgExecutor<'_>,
     id: Uuid,
@@ -170,6 +221,48 @@ pub async fn delete(exec: impl PgExecutor<'_>, id: Uuid, user_id: Uuid) -> sqlx:
         .execute(exec)
         .await?;
     Ok(())
+}
+
+/// The workouts logged from a template, newest first.
+pub async fn list_by_template(
+    exec: impl PgExecutor<'_>,
+    template_id: Uuid,
+    limit: i64,
+    offset: i64,
+) -> sqlx::Result<Vec<WorkoutRow>> {
+    sqlx::query_as(include_str!("../../queries/workouts/list_by_template.sql"))
+        .bind(template_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(exec)
+        .await
+}
+
+pub async fn count_by_template(exec: impl PgExecutor<'_>, template_id: Uuid) -> sqlx::Result<i64> {
+    sqlx::query_scalar(include_str!("../../queries/workouts/count_by_template.sql"))
+        .bind(template_id)
+        .fetch_one(exec)
+        .await
+}
+
+/// The loaded blocks of several workouts, by workout.
+pub async fn load_workouts_blocks(
+    conn: &mut PgConnection,
+    workout_ids: &[Uuid],
+    locale: Locale,
+) -> sqlx::Result<HashMap<Uuid, Vec<LoadedBlock>>> {
+    let rows: Vec<WorkoutBlockRow> =
+        sqlx::query_as(include_str!("../../queries/blocks/list_many.sql"))
+            .bind(workout_ids)
+            .fetch_all(&mut *conn)
+            .await?;
+    let owners: Vec<Uuid> = rows.iter().map(|r| r.workout_id).collect();
+    let loaded = load_blocks(conn, rows.into_iter().map(|r| r.block).collect(), locale).await?;
+    let mut by_workout: HashMap<Uuid, Vec<LoadedBlock>> = HashMap::new();
+    for (workout_id, block) in owners.into_iter().zip(loaded) {
+        by_workout.entry(workout_id).or_default().push(block);
+    }
+    Ok(by_workout)
 }
 
 pub async fn list_blocks(

@@ -14,9 +14,10 @@ use validator::{Validate, ValidationErrors};
 use crate::{
     api::{
         AppState, authenticated,
+        coaching::require_coach,
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
-        pagination::{PageQuery, PageResponse},
+        pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
     },
     auth::AuthUser,
     db::{
@@ -39,6 +40,11 @@ pub fn routes() -> ApiRouter<AppState> {
                     .tag("Workouts")
                     .id("listWorkouts")
                     .summary("List workouts, newest first")
+                    .description(
+                        "Without `athleteId`, the caller's workouts. With it, the workouts \
+                         that athlete shared with the caller, who must be their coach (403 \
+                         otherwise).",
+                    )
             })
             .post_with(create, |op| {
                 authenticated(op)
@@ -46,8 +52,9 @@ pub fn routes() -> ApiRouter<AppState> {
                     .id("createWorkout")
                     .summary("Create a workout")
                     .description(
-                        "Usually logged after the session, possibly following a template. \
-                         Blocks are added afterwards, all at once or one by one.",
+                        "Usually logged after the session, possibly following a template \
+                         or a planned session. Blocks are added afterwards, all at once or \
+                         one by one.",
                     )
             }),
         )
@@ -58,6 +65,10 @@ pub fn routes() -> ApiRouter<AppState> {
                     .tag("Workouts")
                     .id("getWorkout")
                     .summary("Get a workout with its blocks")
+                    .description(
+                        "Readable by its owner, and by a coach the owner has while the workout \
+                         is shared with them or was logged from a session they planned.",
+                    )
             })
             .put_with(update, |op| {
                 authenticated(op)
@@ -185,7 +196,7 @@ pub struct WorkoutResponse {
 }
 
 impl WorkoutResponse {
-    fn new(row: WorkoutRow, blocks: Vec<LoadedBlock>) -> Self {
+    pub(super) fn new(row: WorkoutRow, blocks: Vec<LoadedBlock>) -> Self {
         Self {
             id: row.id,
             name: row.name,
@@ -359,6 +370,19 @@ impl Validate for UpdateBlockRequest {
     }
 }
 
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWorkoutsQuery {
+    /// An athlete who has the caller as a coach, to list what they shared.
+    pub athlete_id: Option<Uuid>,
+    /// 1-based page number (default 1)
+    #[validate(range(min = 1))]
+    pub page: Option<u32>,
+    /// Items per page (default 50, at most 100)
+    #[validate(range(min = 1, max = MAX_PER_PAGE))]
+    pub per_page: Option<u32>,
+}
+
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkoutPath {
@@ -375,10 +399,31 @@ pub struct BlockPath {
 async fn list(
     State(state): State<AppState>,
     user: AuthUser,
-    ValidQuery(paging): ValidQuery<PageQuery>,
+    ValidQuery(query): ValidQuery<ListWorkoutsQuery>,
 ) -> AppResult<Json<PageResponse<WorkoutSummaryResponse>>> {
-    let rows = db::workouts::list(&state.pool, user.id, paging.limit(), paging.offset()).await?;
-    let total = db::workouts::count(&state.pool, user.id).await?;
+    let paging = PageQuery {
+        page: query.page,
+        per_page: query.per_page,
+    };
+    let mut conn = state.pool.acquire().await?;
+    let (rows, total) = if let Some(athlete_id) = query.athlete_id {
+        require_coach(&mut conn, &user, athlete_id).await?;
+        let rows = db::workouts::list_shared(
+            &mut *conn,
+            athlete_id,
+            user.id,
+            paging.limit(),
+            paging.offset(),
+        )
+        .await?;
+        (
+            rows,
+            db::workouts::count_shared(&mut *conn, athlete_id, user.id).await?,
+        )
+    } else {
+        let rows = db::workouts::list(&mut *conn, user.id, paging.limit(), paging.offset()).await?;
+        (rows, db::workouts::count(&mut *conn, user.id).await?)
+    };
     Ok(Json(paging.respond(
         rows.into_iter().map(Into::into).collect(),
         total,
@@ -420,7 +465,7 @@ async fn get(
     PathParams(path): PathParams<WorkoutPath>,
 ) -> AppResult<Json<WorkoutResponse>> {
     let mut conn = state.pool.acquire().await?;
-    let row = db::workouts::find(&mut *conn, path.workout_id, user.id)
+    let row = db::workouts::find_readable(&mut *conn, path.workout_id, user.id)
         .await?
         .ok_or(AppError::NotFound)?;
     let blocks = db::workouts::list_blocks(&mut *conn, row.id).await?;
