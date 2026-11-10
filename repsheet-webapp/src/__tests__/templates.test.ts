@@ -43,6 +43,7 @@ const workout: Workout = {
 			restSeconds: 90,
 			exercises: [
 				{
+					id: "ex1",
 					exercise: squat,
 					mode: "reps",
 					equipment: "barbell",
@@ -57,6 +58,7 @@ const workout: Workout = {
 					})),
 				},
 				{
+					id: "ex2",
 					exercise: crunch,
 					mode: "time",
 					equipment: "bodyweight",
@@ -117,6 +119,7 @@ describe("template drafts", () => {
 					restSeconds: null,
 					exercises: [
 						{
+							key: "d1",
 							exercise: squat,
 							mode: "reps",
 							equipment: "barbell",

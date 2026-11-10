@@ -222,6 +222,7 @@ impl From<LoadedBlock> for BlockResponse {
                 .exercises
                 .into_iter()
                 .map(|e| BlockExerciseResponse {
+                    id: e.id,
                     exercise: e.exercise.into(),
                     mode: e.mode.into(),
                     equipment: e.equipment.into(),
@@ -236,6 +237,9 @@ impl From<LoadedBlock> for BlockResponse {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockExerciseResponse {
+    /// Tells apart the exercises of the block, which may hold the same
+    /// exercise twice. Replacing the block gives its exercises new ids.
+    pub id: Uuid,
     pub exercise: ExerciseSummaryResponse,
     /// The mode the exercise is counted in for every round of the block.
     pub mode: ModeDto,

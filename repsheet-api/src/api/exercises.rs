@@ -547,6 +547,8 @@ pub struct ListPerformancesQuery {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PerformanceResponse {
+    /// The block exercise this performance is, unique in the list.
+    pub block_exercise_id: Uuid,
     pub workout_id: Uuid,
     pub workout_name: String,
     pub performed_on: NaiveDate,
@@ -797,6 +799,7 @@ async fn list_performances(
     let items = rows
         .into_iter()
         .map(|row| PerformanceResponse {
+            block_exercise_id: row.block_exercise_id,
             block_kind: BlockKind::from_exercise_count(
                 usize::try_from(row.block_exercise_count).unwrap_or(1),
             )

@@ -118,6 +118,7 @@ export const SetSchema = z.object({
 export type WorkoutSet = z.infer<typeof SetSchema>;
 
 export const PerformanceSchema = z.object({
+	blockExerciseId: z.string(),
 	workoutId: z.string(),
 	workoutName: z.string(),
 	performedOn: z.string(),
@@ -137,6 +138,7 @@ export const BlockSchema = z.object({
 	restSeconds: z.number().nullable(),
 	exercises: z.array(
 		z.object({
+			id: z.string(),
 			exercise: ExerciseSummarySchema,
 			mode: ModeSchema,
 			equipment: EquipmentSchema,
@@ -176,6 +178,7 @@ export const TemplateBlockSchema = z.object({
 	restSeconds: z.number().nullable(),
 	exercises: z.array(
 		z.object({
+			id: z.string(),
 			exercise: ExerciseSummarySchema,
 			mode: ModeSchema,
 			equipment: EquipmentSchema,

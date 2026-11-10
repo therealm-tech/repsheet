@@ -1,4 +1,5 @@
 SELECT
+    tbe.id AS template_block_exercise_id,
     tbe.template_block_id,
     tbe.mode,
     tbe.equipment AS chosen_equipment,

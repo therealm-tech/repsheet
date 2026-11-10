@@ -161,6 +161,7 @@ describe("WorkoutPage", () => {
 				restSeconds: null,
 				exercises: [
 					{
+						id: "be1",
 						exercise: {
 							id: "bench",
 							name: "Développé couché",

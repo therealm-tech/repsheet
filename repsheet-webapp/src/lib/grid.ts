@@ -38,8 +38,20 @@ function nextRowId(): number {
 	return lastRowId;
 }
 
-/** An exercise of the block, with how it is done for every round. */
-export type GridExercise = ExerciseSummary & { chosen: Choices };
+let lastColumnId = 0;
+function nextColumnId(): number {
+	lastColumnId += 1;
+	return lastColumnId;
+}
+
+/**
+ * An exercise of the block, with how it is done for every round. `columnId`
+ * tells apart two columns of the same exercise; it is never sent to the API.
+ */
+export type GridExercise = ExerciseSummary & {
+	chosen: Choices;
+	columnId: number;
+};
 
 export interface Grid {
 	exercises: GridExercise[];
@@ -79,7 +91,11 @@ export function withChoices(
 	exercise: ExerciseSummary,
 	planned?: Choices,
 ): GridExercise {
-	return { ...exercise, chosen: startingChoices(exercise, planned) };
+	return {
+		...exercise,
+		chosen: startingChoices(exercise, planned),
+		columnId: nextColumnId(),
+	};
 }
 
 /** Reads a coach's target ("8", "6–8", "45 s", "1 min 30", "500 m", "max") as a number to prefill. */
@@ -220,6 +236,7 @@ export function gridFromBlock(block: Block, unit: WeightUnit): Grid {
 		exercises: block.exercises.map((e) => ({
 			...e.exercise,
 			chosen: { mode: e.mode, equipment: e.equipment, grip: e.grip },
+			columnId: nextColumnId(),
 		})),
 		rows,
 	};

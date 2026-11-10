@@ -94,6 +94,7 @@ describe("BlockSheet", () => {
 			restSeconds: 90,
 			exercises: [
 				{
+					id: "ex1",
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",
@@ -101,6 +102,7 @@ describe("BlockSheet", () => {
 					target: "6–8",
 				},
 				{
+					id: "ex2",
 					exercise: plank,
 					mode: "time",
 					equipment: "bodyweight",
@@ -449,6 +451,7 @@ describe("BlockSheet", () => {
 						restSeconds: null,
 						exercises: [
 							{
+								id: "ex3",
 								exercise: crunch,
 								mode: "time",
 								equipment: "bodyweight",
@@ -484,6 +487,7 @@ describe("BlockSheet", () => {
 			restSeconds: null,
 			exercises: [
 				{
+					id: "ex4",
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",

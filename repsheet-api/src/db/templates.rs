@@ -35,6 +35,7 @@ pub struct TemplateBlockRow {
 
 #[derive(FromRow)]
 struct TemplateBlockExerciseRow {
+    template_block_exercise_id: Uuid,
     template_block_id: Uuid,
     #[sqlx(try_from = "String")]
     mode: Mode,
@@ -53,6 +54,7 @@ pub struct LoadedTemplateBlock {
 }
 
 pub struct LoadedTemplateExercise {
+    pub id: Uuid,
     pub exercise: ExerciseSummaryRow,
     pub mode: Mode,
     pub equipment: Equipment,
@@ -228,6 +230,7 @@ pub async fn load_blocks(
             .entry(row.template_block_id)
             .or_default()
             .push(LoadedTemplateExercise {
+                id: row.template_block_exercise_id,
                 mode: row.mode,
                 equipment: row.equipment,
                 grip: row.grip,

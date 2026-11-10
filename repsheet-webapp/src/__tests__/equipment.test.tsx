@@ -268,6 +268,7 @@ describe("template editor", () => {
 					restSeconds: null,
 					exercises: [
 						{
+							id: "ex1",
 							exercise: press,
 							mode: "reps",
 							equipment: "barbell",

@@ -10,6 +10,8 @@ import type { Choices } from "@/lib/choices";
 import { targetFromSets } from "@/lib/grid";
 
 export interface DraftExercise extends Choices {
+	/** Tells apart two entries of the same exercise; never sent to the API. */
+	key: string;
 	exercise: ExerciseSummary;
 	target: string;
 }
@@ -48,6 +50,7 @@ export function draftFromTemplate(template: Template): Draft {
 			rounds: block.rounds,
 			restSeconds: block.restSeconds,
 			exercises: block.exercises.map((e) => ({
+				key: e.id,
 				exercise: e.exercise,
 				mode: e.mode,
 				equipment: e.equipment,
@@ -69,6 +72,7 @@ export function draftFromWorkout(workout: Workout): Draft {
 				Math.max(0, ...block.exercises.map((e) => roundCount(e.sets))) || null,
 			restSeconds: block.restSeconds,
 			exercises: block.exercises.map((e) => ({
+				key: newKey(),
 				exercise: e.exercise,
 				mode: e.mode,
 				equipment: e.equipment,

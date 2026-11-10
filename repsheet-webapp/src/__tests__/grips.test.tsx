@@ -267,6 +267,7 @@ describe("BlockSheet", () => {
 			restSeconds: null,
 			exercises: [
 				{
+					id: "ex1",
 					exercise: pulldown,
 					mode: "reps",
 					equipment: "cable",
@@ -274,6 +275,7 @@ describe("BlockSheet", () => {
 					target: "10",
 				},
 				{
+					id: "ex2",
 					exercise: pulldown,
 					mode: "reps",
 					equipment: "cable",
@@ -322,6 +324,7 @@ describe("BlockSheet", () => {
 			kind: "superset",
 			exercises: [
 				{
+					id: "ex3",
 					exercise: pulldown,
 					mode: "reps",
 					equipment: "cable",
@@ -329,6 +332,7 @@ describe("BlockSheet", () => {
 					sets: lifted(50),
 				},
 				{
+					id: "ex4",
 					exercise: pulldown,
 					mode: "reps",
 					equipment: "cable",
@@ -448,6 +452,7 @@ describe("template editor", () => {
 					restSeconds: null,
 					exercises: [
 						{
+							id: "ex5",
 							exercise: pulldown,
 							mode: "reps",
 							equipment: "cable",

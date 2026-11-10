@@ -226,6 +226,7 @@ describe("template editor", () => {
 					restSeconds: null,
 					exercises: [
 						{
+							id: "ex1",
 							exercise: crunch,
 							mode: "reps",
 							equipment: "bodyweight",

@@ -107,6 +107,7 @@ export function performance(
 	grip: Performance["grip"] = null,
 ): Performance {
 	return {
+		blockExerciseId: `be-${performedOn}-${mode}-${equipment}-${grip}`,
 		workoutId: `w-${performedOn}`,
 		workoutName: "Push A",
 		performedOn,

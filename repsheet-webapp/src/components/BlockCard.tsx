@@ -116,7 +116,7 @@ export function BlockCard({
 				</span>
 			</span>
 			{block.exercises.map((entry, i) => (
-				<span key={`${i}-${entry.exercise.id}`} className="block-exercise">
+				<span key={entry.id} className="block-exercise">
 					<span className="ex">
 						<span className="ex-letter">{letter(i)}</span>
 						<ExerciseName exercise={entry.exercise} chosen={entry} />
@@ -163,7 +163,7 @@ export function PlannedBlockCard({
 				<span className="muted small">{t("block.planned")}</span>
 			</span>
 			{block.exercises.map((entry, i) => (
-				<span key={`${i}-${entry.exercise.id}`} className="ex muted">
+				<span key={entry.id} className="ex muted">
 					<span className="ex-letter">{letter(i)}</span>
 					<ExerciseName exercise={entry.exercise} chosen={entry} />
 					<span className="ex-value">

@@ -329,13 +329,13 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 							{t("nav.history")}
 						</h2>
 						<ul className="card list">
-							{items.map((p, index) => {
+							{items.map((p) => {
 								const otherMode = p.mode !== mode;
 								const otherEquipment = p.equipment !== equipment;
 								const otherGrip = gripFilter(p.grip) !== grip;
 								const other = otherMode || otherEquipment || otherGrip;
 								return (
-									<li key={`${index}-${p.workoutId}`}>
+									<li key={p.blockExerciseId}>
 										<Link
 											to="/workouts/$workoutId"
 											params={{ workoutId: p.workoutId }}

@@ -123,6 +123,7 @@ impl TemplateResponse {
                         .exercises
                         .into_iter()
                         .map(|e| TemplateExerciseResponse {
+                            id: e.id,
                             exercise: e.exercise.into(),
                             mode: e.mode.into(),
                             equipment: e.equipment.into(),
@@ -150,6 +151,9 @@ pub struct TemplateBlockResponse {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateExerciseResponse {
+    /// Tells apart the exercises of the block, which may plan the same
+    /// exercise twice. Replacing the template gives its exercises new ids.
+    pub id: Uuid,
     pub exercise: ExerciseSummaryResponse,
     /// The mode a block logged from this one counts the exercise in.
     pub mode: ModeDto,

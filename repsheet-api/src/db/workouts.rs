@@ -68,6 +68,7 @@ pub struct LoadedBlock {
 }
 
 pub struct LoadedBlockExercise {
+    pub id: Uuid,
     pub exercise: ExerciseSummaryRow,
     pub mode: Mode,
     pub equipment: Equipment,
@@ -203,6 +204,7 @@ pub async fn load_blocks(
             .entry(row.block_id)
             .or_default()
             .push(LoadedBlockExercise {
+                id: row.block_exercise_id,
                 sets: sets.remove(&row.block_exercise_id).unwrap_or_default(),
                 mode: row.mode,
                 equipment: row.equipment,

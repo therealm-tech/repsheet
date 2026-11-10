@@ -2182,6 +2182,10 @@ async fn merges_the_hammer_curl_into_the_biceps_curl(pool: PgPool) {
         ],
         "the same exercise twice in one block"
     );
+    assert_ne!(
+        block["exercises"][0]["id"], block["exercises"][1]["id"],
+        "each block exercise has an id of its own"
+    );
     let curl_id = block["exercises"][0]["exercise"]["id"].as_str().unwrap();
     assert_eq!(
         block["exercises"][1]["exercise"]["grips"],
@@ -2192,6 +2196,10 @@ async fn merges_the_hammer_curl_into_the_biceps_curl(pool: PgPool) {
     let (_, hammer) = app.get(&format!("{uri}?grip=neutral"), &token).await;
     assert_eq!(hammer["total"], 1);
     assert_eq!(hammer["items"][0]["sets"][0]["weightKg"], 12.0);
+    assert_eq!(
+        hammer["items"][0]["blockExerciseId"],
+        block["exercises"][1]["id"]
+    );
     let (_, unknown) = app.get(&format!("{uri}?grip=none"), &token).await;
     assert_eq!(unknown["total"], 1);
 
@@ -2220,6 +2228,7 @@ async fn merges_the_hammer_curl_into_the_biceps_curl(pool: PgPool) {
         .get(&format!("/v1/templates/{template_id}"), &token)
         .await;
     let planned = &template["blocks"][0]["exercises"][0];
+    assert!(planned["id"].is_string());
     assert_eq!(planned["exercise"]["id"], curl_id);
     assert_eq!(planned["equipment"], "dumbbell");
     assert_eq!(planned["grip"], "neutral");

@@ -32,6 +32,7 @@ const bench: GridExercise = {
 	defaultGrip: null,
 	unilateral: false,
 	chosen: { mode: "reps", equipment: "barbell", grip: null },
+	columnId: 1,
 };
 const dips: GridExercise = {
 	id: "dips",
@@ -45,6 +46,7 @@ const dips: GridExercise = {
 	defaultGrip: null,
 	unilateral: false,
 	chosen: { mode: "reps", equipment: "bodyweight", grip: null },
+	columnId: 2,
 };
 const plank: GridExercise = {
 	id: "plank",
@@ -58,6 +60,7 @@ const plank: GridExercise = {
 	defaultGrip: null,
 	unilateral: false,
 	chosen: { mode: "time", equipment: "bodyweight", grip: null },
+	columnId: 3,
 };
 const crunch: GridExercise = {
 	id: "crunch",
@@ -71,6 +74,7 @@ const crunch: GridExercise = {
 	defaultGrip: null,
 	unilateral: false,
 	chosen: { mode: "reps", equipment: "bodyweight", grip: null },
+	columnId: 4,
 };
 
 function set(round: number, fields: Partial<WorkoutSet>): WorkoutSet {
@@ -322,6 +326,7 @@ describe("gridFromBlock", () => {
 				restSeconds: null,
 				exercises: [
 					{
+						id: "ex1",
 						exercise: bench,
 						mode: "reps",
 						equipment: "barbell",
@@ -332,6 +337,7 @@ describe("gridFromBlock", () => {
 						],
 					},
 					{
+						id: "ex2",
 						exercise: crunch,
 						mode: "time",
 						equipment: "bodyweight",

@@ -440,7 +440,7 @@ export function BlockSheet({
 								};
 								const how = choicesText(exercise, exercise.chosen);
 								return (
-									<li key={`${i}-${exercise.id}`} className="muted small">
+									<li key={exercise.columnId} className="muted small">
 										<b className="accent">{letter(i)}</b>{" "}
 										{how
 											? t("block.lastTimeIn", { ...details, how })
@@ -487,7 +487,7 @@ export function BlockSheet({
 							>
 								<div />
 								{grid.exercises.map((exercise, col) => (
-									<div key={`${col}-${exercise.id}`} className="grid-head">
+									<div key={exercise.columnId} className="grid-head">
 										<b className="accent">{letter(col)}</b>
 										<span className="truncate">{exercise.name}</span>
 										<ChoiceSwitches
@@ -669,7 +669,7 @@ function RowView({
 			</div>
 			{grid.exercises.map((exercise, col) => {
 				const cell = row.cells[col];
-				const key = `${col}-${exercise.id}`;
+				const key = exercise.columnId;
 				if (!cell) {
 					return <div key={key} />;
 				}

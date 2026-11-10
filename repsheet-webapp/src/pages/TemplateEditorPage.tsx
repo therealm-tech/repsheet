@@ -89,7 +89,7 @@ function BlockEditor({
 				</button>
 			</div>
 			{block.exercises.map((entry, i) => (
-				<div key={`${i}-${entry.exercise.id}`} className="ex">
+				<div key={entry.key} className="ex">
 					<span className="ex-letter">{letter(i)}</span>
 					<span className="ex-name">{entry.exercise.name}</span>
 					<ChoiceSwitches
@@ -268,7 +268,12 @@ export function TemplateEditorPage({
 	}
 
 	function pick(exercise: ExerciseSummary) {
-		const entry = { exercise, ...startingChoices(exercise), target: "" };
+		const entry = {
+			key: newKey(),
+			exercise,
+			...startingChoices(exercise),
+			target: "",
+		};
 		const target = pickTarget;
 		setPickTarget(null);
 		setDraft((d) => {
