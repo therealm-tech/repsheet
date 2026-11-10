@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { CommentThread } from "@/components/CommentThread";
 import { ExerciseActions } from "@/components/ExerciseActions";
 import { LineChart } from "@/components/LineChart";
 import { Empty, ErrorText, KindTag, Segmented } from "@/components/ui";
@@ -25,7 +26,7 @@ import {
 } from "@/lib/blocks";
 import { gripFilter } from "@/lib/choices";
 import { formatDay } from "@/lib/dates";
-import { useUnit } from "@/lib/hooks";
+import { useMe, useUnit } from "@/lib/hooks";
 import {
 	bestSet,
 	bestVolume,
@@ -132,6 +133,7 @@ function shownFirst<T>(
 export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 	const { t } = useTranslation();
 	const unit = useUnit();
+	const meId = useMe().data?.id ?? "";
 	const exercise = useQuery({
 		queryKey: keys.exercise(exerciseId),
 		queryFn: () => api.exercise(exerciseId),
@@ -374,6 +376,11 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 														? ` ${t("units.reps")}`
 														: ""}
 												</span>
+												<CommentThread
+													comments={p.comments}
+													ownerId={meId}
+													subject={{ name: ex?.name ?? "" }}
+												/>
 											</span>
 										</Link>
 									</li>

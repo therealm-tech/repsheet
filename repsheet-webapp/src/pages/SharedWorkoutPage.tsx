@@ -54,7 +54,7 @@ export function SharedWorkoutPage({
 				</h1>
 				<span className="icon-spacer" />
 			</header>
-			<WorkoutReadOnly workout={w} />
+			<WorkoutReadOnly workout={w} athleteId={athleteId} />
 		</main>
 	);
 }

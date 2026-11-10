@@ -5,7 +5,10 @@ use sqlx::{FromRow, PgConnection, PgExecutor};
 use uuid::Uuid;
 
 use crate::{
-    db::exercises::ExerciseSummaryRow,
+    db::{
+        comments::{self, CommentRow},
+        exercises::ExerciseSummaryRow,
+    },
     domain::{Equipment, Grip, Locale, Mode, SetValues},
 };
 
@@ -80,6 +83,7 @@ pub struct LoadedBlockExercise {
     pub mode: Mode,
     pub equipment: Equipment,
     pub grip: Option<Grip>,
+    pub comments: Vec<CommentRow>,
     pub sets: Vec<SetValues>,
 }
 
@@ -91,6 +95,8 @@ pub struct WorkoutChanges<'a> {
 }
 
 pub struct NewBlockExercise<'a> {
+    /// Set to keep the identity of one of the block's exercises on update.
+    pub id: Option<Uuid>,
     pub exercise_id: Uuid,
     pub mode: Mode,
     pub equipment: Equipment,
@@ -289,7 +295,8 @@ pub async fn load_blocks(
             .fetch_all(&mut *conn)
             .await?;
     let block_exercise_ids: Vec<Uuid> = exercise_rows.iter().map(|r| r.block_exercise_id).collect();
-    let mut sets = load_sets(conn, &block_exercise_ids).await?;
+    let mut sets = load_sets(&mut *conn, &block_exercise_ids).await?;
+    let mut comments = comments::list(conn, &block_exercise_ids).await?;
 
     let mut exercises_by_block: HashMap<Uuid, Vec<LoadedBlockExercise>> = HashMap::new();
     for row in exercise_rows {
@@ -299,6 +306,7 @@ pub async fn load_blocks(
             .push(LoadedBlockExercise {
                 id: row.block_exercise_id,
                 sets: sets.remove(&row.block_exercise_id).unwrap_or_default(),
+                comments: comments.remove(&row.block_exercise_id).unwrap_or_default(),
                 mode: row.mode,
                 equipment: row.equipment,
                 grip: row.grip,
@@ -352,11 +360,36 @@ pub async fn insert_block(
         .bind(rest_seconds)
         .fetch_one(&mut *conn)
         .await?;
-    insert_block_exercises(conn, block.id, exercises).await?;
+    write_block_exercises(conn, block.id, exercises).await?;
     Ok(block)
 }
 
-/// Replaces the block's exercises and sets wholesale.
+/// The exercises of block `id` of workout `workout_id`, by block exercise id,
+/// with the exercise each one is; `None` when the workout has no such block.
+pub async fn block_exercise_ids(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    workout_id: Uuid,
+) -> sqlx::Result<Option<HashMap<Uuid, Uuid>>> {
+    let rows: Vec<(Option<Uuid>, Option<Uuid>)> =
+        sqlx::query_as(include_str!("../../queries/blocks/exercise_ids.sql"))
+            .bind(id)
+            .bind(workout_id)
+            .fetch_all(exec)
+            .await?;
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(
+        rows.into_iter()
+            .filter_map(|(id, exercise_id)| Some((id?, exercise_id?)))
+            .collect(),
+    ))
+}
+
+/// Replaces the block's exercises and sets. An exercise carrying the `id` of
+/// one of the block's keeps its identity, and what hangs off it; the others
+/// are created, and the block's exercises left out are deleted.
 pub async fn update_block(
     conn: &mut PgConnection,
     id: Uuid,
@@ -376,11 +409,15 @@ pub async fn update_block(
     else {
         return Ok(None);
     };
-    sqlx::query(include_str!("../../queries/blocks/delete_exercises.sql"))
-        .bind(block.id)
-        .execute(&mut *conn)
-        .await?;
-    insert_block_exercises(conn, block.id, exercises).await?;
+    let kept: Vec<Uuid> = exercises.iter().filter_map(|e| e.id).collect();
+    sqlx::query(include_str!(
+        "../../queries/blocks/delete_exercises_except.sql"
+    ))
+    .bind(block.id)
+    .bind(&kept)
+    .execute(&mut *conn)
+    .await?;
+    write_block_exercises(conn, block.id, exercises).await?;
     Ok(Some(block))
 }
 
@@ -397,13 +434,28 @@ pub async fn delete_block(
     Ok(())
 }
 
-async fn insert_block_exercises(
+async fn write_block_exercises(
     conn: &mut PgConnection,
     block_id: Uuid,
     exercises: &[NewBlockExercise<'_>],
 ) -> sqlx::Result<()> {
     for (position, exercise) in (1..).zip(exercises) {
-        let block_exercise_id: Uuid =
+        let block_exercise_id = if let Some(id) = exercise.id {
+            sqlx::query(include_str!("../../queries/blocks/update_exercise.sql"))
+                .bind(id)
+                .bind(block_id)
+                .bind::<i32>(position)
+                .bind(exercise.mode.as_str())
+                .bind(exercise.equipment.as_str())
+                .bind(exercise.grip.map(Grip::as_str))
+                .execute(&mut *conn)
+                .await?;
+            sqlx::query(include_str!("../../queries/blocks/delete_sets.sql"))
+                .bind(id)
+                .execute(&mut *conn)
+                .await?;
+            id
+        } else {
             sqlx::query_scalar(include_str!("../../queries/blocks/insert_exercise.sql"))
                 .bind(block_id)
                 .bind::<i32>(position)
@@ -412,7 +464,8 @@ async fn insert_block_exercises(
                 .bind(exercise.equipment.as_str())
                 .bind(exercise.grip.map(Grip::as_str))
                 .fetch_one(&mut *conn)
-                .await?;
+                .await?
+        };
         let sets = exercise.sets;
         sqlx::query(include_str!("../../queries/blocks/insert_sets.sql"))
             .bind(block_exercise_id)
@@ -426,4 +479,15 @@ async fn insert_block_exercises(
             .await?;
     }
     Ok(())
+}
+
+/// The workout block exercise `id` belongs to.
+pub async fn block_exercise_workout(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar(include_str!("../../queries/blocks/exercise_workout.sql"))
+        .bind(id)
+        .fetch_optional(exec)
+        .await
 }

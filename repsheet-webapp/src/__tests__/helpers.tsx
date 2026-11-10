@@ -114,6 +114,7 @@ export function performance(
 		blockKind: "simple",
 		mode,
 		equipment,
+		comments: [],
 		grip,
 		sets,
 	};

@@ -2,6 +2,7 @@
 //! `queries/`. Rows stay here; the HTTP layer maps them to its own DTOs.
 
 pub mod coaching;
+pub mod comments;
 pub mod exercises;
 pub mod planned_sessions;
 pub mod templates;

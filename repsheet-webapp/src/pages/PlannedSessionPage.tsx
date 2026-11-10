@@ -108,6 +108,7 @@ export function PlannedSessionPage({
 						<WorkoutReadOnly
 							key={workout.id}
 							workout={workout}
+							athleteId={athleteId}
 							plannedBlocks={s.blocks}
 						/>
 					))}

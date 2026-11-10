@@ -53,11 +53,11 @@ nginx ([repsheet-webapp/nginx/](repsheet-webapp/nginx/)). Every API response is 
 before use, so a contract mismatch fails loudly at the boundary. It keeps the bearer token in
 `localStorage` and derives everything else from the API: the logging sheet's pre-filled values, the
 planned blocks of a workout, the progression charts. A coach reads an athlete's planned sessions and
-shared workouts on pages of their own, read-only and without the "last time" comparisons, which
-would come from the coach's history, not the athlete's. It is an installable Progressive Web App:
-a web app manifest and a Workbox service worker are generated at build time
-([repsheet-webapp/pwa.config.ts](repsheet-webapp/pwa.config.ts)), and its PNG icons are rendered
-from `public/logo.svg` during the same build.
+shared workouts on pages of their own, read-only apart from the comments on their exercises, and
+without the "last time" comparisons, which would come from the coach's history, not the athlete's.
+It is an installable Progressive Web App: a web app manifest and a Workbox service worker are
+generated at build time ([repsheet-webapp/pwa.config.ts](repsheet-webapp/pwa.config.ts)), and its
+PNG icons are rendered from `public/logo.svg` during the same build.
 
 ### PostgreSQL
 
@@ -85,8 +85,12 @@ sequenceDiagram
 ```
 
 Creating or replacing a block, and creating or replacing a template, each run in one transaction:
-a failed check leaves nothing behind. `PUT` replaces a block's exercises and sets wholesale, so a
-retried request is harmless; `DELETE` answers `204` whether or not the resource still exists.
+a failed check leaves nothing behind. `PUT` replaces a block's sets wholesale and its exercises by
+`id`: one sent with its `id` is updated in place, one without is created, and one left out is
+deleted with its sets and comments. A retried request is therefore harmless; `DELETE` answers `204`
+whether or not the resource still exists. A comment written while logging a new block is posted
+through `/v1/comments` once the block exists, as two requests: a failed comment leaves the block
+saved, and the client sends it again against the block it now holds.
 
 ## State and persistence
 
@@ -107,6 +111,8 @@ erDiagram
     blocks }o--o| template_blocks : "logged from"
     blocks ||--o{ block_exercises : contains
     block_exercises ||--o{ workout_sets : records
+    block_exercises ||--o{ block_exercise_comments : "discussed in"
+    users ||--o{ block_exercise_comments : writes
     exercises ||--o{ block_exercises : "performed as"
     exercises ||--o{ template_block_exercises : "planned as"
 ```
@@ -123,7 +129,7 @@ erDiagram
   and `mixed`) with a `default_grip` among them, null exactly when there are none. Table checks keep
   each list a set and its default one of it. A block exercise records the `mode`, the `equipment`
   and the `grip` chosen for it, the grip null when it is not known; a template exercise records all
-  three too, next to its target.
+  three too, next to its target and an optional `note`, the instructions of the template's author.
 - **Exercises** with no owner form the built-in catalog, seeded by the migrations and visible to
   everyone; the others belong to the user who created them. Names are unique per user, built-ins
   included, compared through the SQL function `fold()` (lowercase, accents stripped), which also
@@ -143,6 +149,10 @@ erDiagram
 - A **planned session** is a template with a `planned_on` day and an `author_id`, the coach who wrote
   it; it belongs to the athlete (`user_id`). Templates without a day form the template library.
   Deleting the author's account sets `author_id` to null and keeps the session.
+- A **comment** (`block_exercise_comments`) belongs to one block exercise and has an `author_id`
+  and creation and update times; a block exercise's comments, ordered by creation, form its thread.
+  Deleting the block exercise deletes its thread; deleting the author's account sets `author_id` to
+  null and keeps the comment.
 - Deleting a template, planned session included, keeps the workouts started from it: their
   `template_id` and their blocks' `template_block_id` become null.
 
@@ -201,7 +211,22 @@ logged from it opens that way; a template exercise that plans no grip opens a bl
 weight comes from the user's history, which is what moves from one week
 to the next. A workout block keeps a link to the template block it was logged from, which is how the
 client knows which planned blocks remain; updating a template keeps a block's identity when the
-request carries its `id`, so that link survives edits.
+request carries its `id`, so that link survives edits. A logged block keeps its exercises' identity
+the same way, which is what keeps their comments when the athlete corrects a set.
+
+**A plan gives instructions; a workout holds a conversation.** A template exercise carries one
+`note`, the instructions of whoever wrote the plan (`tempo 3-1-1`, `close grip`), as part of the
+plan like its target: there is one author, so one field. The client shows it while the block is
+logged and never copies it into the workout: the same instruction would repeat in the history every
+week and bury what actually happened. A logged exercise carries a thread instead, because two
+people write about it: the athlete says how it went (`shoulder twinge`), a coach answers (`drop to
+75 next week`). Each comment keeps its author, so the client tells the athlete from their coaches
+and shows a comment whose author's account is gone without a name. A comment hangs off the block
+exercise rather than the workout's own `note`, so it shows in that exercise's history next to the
+sets it is about. Comments have their own endpoints (`/v1/comments`), not a field of the block:
+whoever reads the workout comments, which for a coach is not the right to change the workout.
+An author edits their comments; they or the workout's owner delete them, so the athlete keeps the
+last word on their own record. A template made from a workout leaves its comments behind.
 
 **A coach is a link between two accounts, not a role.** Any account can coach any other, and an
 athlete can have several coaches, so a coach is not a kind of account: `Role` stays about
@@ -226,7 +251,8 @@ could not log an exercise private to the coach.
 lists, reads, edits and deletes the planned sessions they wrote for the athlete, and reads the
 workouts logged from them, sets included: planning a session is what grants that read. Any other
 workout is private until the athlete shares it with that coach, one workout and one coach at a time,
-and the coach then reads it as they read an outcome, without editing it. The athlete's templates and
+and the coach then reads it as they read an outcome, without editing it, though they comment on its
+exercises. The athlete's templates and
 exercises, the sessions another coach planned and the workouts logged from them stay private. Every
 read checks both the grant and the link, so removing a coach cuts both at once, and their shares are
 deleted with the link rather than kept dormant: adding the same coach back later shares nothing the
@@ -298,6 +324,10 @@ carries its own version, and its `appVersion` names the release of the images it
   `404`, never `403`, so its existence does not leak. `403` answers a super-admin-only action
   attempted by a user, and a coach action naming an athlete who does not have the caller as a coach
   (`not-coach`), with the same answer whether that account exists or not.
+- A comment is read and written by whoever reads its workout, under the rule above, and goes with
+  that access: a removed coach no longer sees their comments, which stay on the athlete's record.
+  Only its author edits it, and only its author or the workout's owner deletes it; anyone else who
+  reads it gets `403` (`not-author`).
 - Every error response is an RFC 9457 problem document (`application/problem+json`) with a stable
   `type` URN; validation failures list the offending fields by their JSON path
   (`exercises[0].sets[2].reps`).
@@ -319,6 +349,7 @@ carries its own version, and its `appVersion` names the release of the images it
 - There is no password reset and no email verification; an account is an email and a password.
 - One weight unit per user, applied to every exercise.
 - A coach's custom exercises cannot be used in a planned session: the athlete could not see them.
-- Nothing notifies an athlete of a new planned session or a coach of a logged one; each sees it the
-  next time they open the app.
+- Nothing notifies an athlete of a new planned session or comment, or a coach of a logged session or
+  a reply; each sees it the next time they open the app.
+- A thread comes whole with its workout and with each performance of the history, unpaginated.
 - The exercise picker lists the first 50 matches of a search.

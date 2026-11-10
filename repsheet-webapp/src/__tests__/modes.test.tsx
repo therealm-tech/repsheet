@@ -230,6 +230,7 @@ describe("template editor", () => {
 							exercise: crunch,
 							mode: "reps",
 							equipment: "bodyweight",
+							note: null,
 							grip: null,
 							target: "20",
 						},

@@ -1,6 +1,17 @@
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import {
+	useMutation,
+	useQueries,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { InstructionIcon } from "@/components/BlockCard";
+import {
+	CommentThread,
+	FirstCommentDraft,
+	type ThreadSubject,
+} from "@/components/CommentThread";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import { Stepper } from "@/components/Stepper";
 import {
@@ -43,6 +54,7 @@ import {
 	type Grid,
 	gridFromBlock,
 	initialGrid,
+	linkToBlock,
 	primaryField,
 	removeExercise,
 	removeRound,
@@ -56,7 +68,7 @@ import {
 	weightRequired,
 	withChoices,
 } from "@/lib/grid";
-import { useUnit } from "@/lib/hooks";
+import { useMe, useUnit } from "@/lib/hooks";
 import {
 	formatClock,
 	formatDistance,
@@ -65,9 +77,10 @@ import {
 	parseDuration,
 } from "@/lib/units";
 
+/** `templateBlock` is the planned block it is logged from, whose instructions it shows. */
 export type BlockSheetMode =
 	| { kind: "new"; templateBlock?: TemplateBlock }
-	| { kind: "edit"; block: Block };
+	| { kind: "edit"; block: Block; templateBlock?: TemplateBlock };
 
 /** What a grid cell shows: each value with its unit, a "?" for a missing one. */
 export function cellText(
@@ -197,8 +210,18 @@ export function BlockSheet({
 }) {
 	const { t } = useTranslation();
 	const unit = useUnit();
+	const meId = useMe().data?.id ?? "";
 	const queryClient = useQueryClient();
 	const templateBlock = mode.kind === "new" ? mode.templateBlock : undefined;
+	const [saved, setSaved] = useState<Block | null>(
+		mode.kind === "edit" ? mode.block : null,
+	);
+	const [drafts, setDrafts] = useState<Record<number, string>>({});
+	const workout = useQuery({
+		queryKey: keys.workout(workoutId),
+		queryFn: () => api.workout(workoutId),
+		enabled: saved !== null,
+	});
 	const [grid, setGrid] = useState<Grid | null>(() => {
 		if (mode.kind === "edit") {
 			return gridFromBlock(mode.block, unit);
@@ -247,16 +270,41 @@ export function BlockSheet({
 	});
 
 	const save = useMutation({
-		mutationFn: (body: BlockInput) =>
-			mode.kind === "edit"
-				? api.updateBlock(workoutId, mode.block.id, body)
+		mutationFn: async ({ body }: { body: BlockInput; columns: number[] }) =>
+			saved
+				? api.updateBlock(workoutId, saved.id, body)
 				: api.createBlock(workoutId, body),
-		onSuccess: () => {
+		onSuccess: async (block, { columns }) => {
+			setSaved(block);
+			setGrid((current) => current && linkToBlock(current, block));
+			const pending = columns.flatMap((column, i) => {
+				const text = drafts[column]?.trim();
+				const target = block.exercises[i];
+				return text && target ? [{ column, text, id: target.id }] : [];
+			});
+			const posted = await Promise.allSettled(
+				pending.map((p) =>
+					api.createComment({ blockExerciseId: p.id, text: p.text }),
+				),
+			);
+			setDrafts((current) => {
+				const next = { ...current };
+				pending.forEach((p, i) => {
+					if (posted[i]?.status === "fulfilled") {
+						delete next[p.column];
+					}
+				});
+				return next;
+			});
 			void queryClient.invalidateQueries({ queryKey: keys.workout(workoutId) });
 			void queryClient.invalidateQueries({ queryKey: keys.workouts });
 			void queryClient.invalidateQueries({ queryKey: ["performances"] });
 			void queryClient.invalidateQueries({ queryKey: ["exercises"] });
-			onClose();
+			if (posted.every((p) => p.status === "fulfilled")) {
+				onClose();
+			} else {
+				setError(t("errors.commentFailed"));
+			}
 		},
 		onError: (err) => setError(errorMessage(err, { fallback: "saveFailed" })),
 	});
@@ -360,8 +408,33 @@ export function BlockSheet({
 		if (restSeconds !== null && restSeconds !== undefined) {
 			body.restSeconds = restSeconds;
 		}
-		save.mutate(body);
+		save.mutate({ body, columns: grid.exercises.map((e) => e.columnId) });
 	}
+
+	/** The thread of a logged exercise, as fresh as the workout last fetched. */
+	function commentsOf(blockExerciseId: string) {
+		const blocks = [...(workout.data?.blocks ?? []), ...(saved ? [saved] : [])];
+		for (const block of blocks) {
+			const found = block.exercises.find((e) => e.id === blockExerciseId);
+			if (found) {
+				return found.comments;
+			}
+		}
+		return [];
+	}
+
+	const plan = mode.templateBlock;
+	const instructions = (plan?.exercises ?? []).flatMap((e, i) =>
+		e.note
+			? [
+					{
+						key: e.id,
+						note: e.note,
+						letter: (plan?.exercises.length ?? 0) > 1 ? letter(i) : null,
+					},
+				]
+			: [],
+	);
 
 	const title =
 		mode.kind === "edit"
@@ -423,6 +496,23 @@ export function BlockSheet({
 					<p className="muted">{t("block.preparing")}</p>
 				) : (
 					<>
+						{instructions.length > 0 ? (
+							<div className="instructions">
+								<span className="instructions-title">
+									<InstructionIcon />
+									{t("comments.instructions")}
+								</span>
+								{instructions.map((instruction) => (
+									<span key={instruction.key} className="instruction">
+										{instruction.letter ? (
+											<span className="ex-letter">{instruction.letter}</span>
+										) : null}
+										<span>{instruction.note}</span>
+									</span>
+								))}
+							</div>
+						) : null}
+
 						<ul className="last-time">
 							{grid.exercises.map((exercise, i) => {
 								const last = lastPerformances[i]?.data?.items[0];
@@ -599,6 +689,53 @@ export function BlockSheet({
 									/>
 								))}
 							</div>
+						) : null}
+
+						{grid.exercises.length > 0 ? (
+							<section
+								className="stack-tight"
+								aria-labelledby="block-comments-title"
+							>
+								<h3 id="block-comments-title" className="comments-title">
+									{t("comments.title")}
+								</h3>
+								{grid.exercises.map((exercise, col) => {
+									const subject: ThreadSubject = {
+										name: exercise.name,
+										...(grid.exercises.length > 1
+											? { letter: letter(col) }
+											: {}),
+									};
+									const draft = {
+										value: drafts[exercise.columnId] ?? "",
+										onChange: (value: string) =>
+											setDrafts((current) => ({
+												...current,
+												[exercise.columnId]: value,
+											})),
+									};
+									return exercise.blockExerciseId ? (
+										<CommentThread
+											key={exercise.columnId}
+											comments={commentsOf(exercise.blockExerciseId)}
+											ownerId={meId}
+											subject={subject}
+											target={{
+												workoutId,
+												blockExerciseId: exercise.blockExerciseId,
+												composer: "open",
+												draft,
+											}}
+										/>
+									) : (
+										<FirstCommentDraft
+											key={exercise.columnId}
+											subject={subject}
+											draft={draft}
+										/>
+									);
+								})}
+							</section>
 						) : null}
 					</>
 				)}

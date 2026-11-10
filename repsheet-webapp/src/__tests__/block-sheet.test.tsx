@@ -98,6 +98,7 @@ describe("BlockSheet", () => {
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",
+					note: null,
 					grip: null,
 					target: "6–8",
 				},
@@ -106,6 +107,7 @@ describe("BlockSheet", () => {
 					exercise: plank,
 					mode: "time",
 					equipment: "bodyweight",
+					note: null,
 					grip: null,
 					target: "45 s",
 				},
@@ -455,6 +457,7 @@ describe("BlockSheet", () => {
 								exercise: crunch,
 								mode: "time",
 								equipment: "bodyweight",
+								note: null,
 								grip: null,
 								target: "1 min",
 							},
@@ -491,6 +494,7 @@ describe("BlockSheet", () => {
 					exercise: bench,
 					mode: "reps",
 					equipment: "barbell",
+					comments: [],
 					grip: null,
 					sets: [
 						{
@@ -538,6 +542,7 @@ describe("BlockSheet", () => {
 		expect(calls.find((c) => c.method === "PUT")?.body).toEqual({
 			exercises: [
 				{
+					id: "ex4",
 					exerciseId: "bench",
 					mode: "reps",
 					equipment: "barbell",

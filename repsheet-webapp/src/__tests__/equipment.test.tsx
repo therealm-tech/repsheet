@@ -272,6 +272,7 @@ describe("template editor", () => {
 							exercise: press,
 							mode: "reps",
 							equipment: "barbell",
+							note: null,
 							grip: null,
 							target: "8",
 						},

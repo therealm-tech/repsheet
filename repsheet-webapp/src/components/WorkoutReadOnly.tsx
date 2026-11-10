@@ -4,14 +4,17 @@ import type { TemplateBlock, Workout } from "@/lib/api/schemas";
 import { useUnit } from "@/lib/hooks";
 
 /**
- * A workout as a coach reads it: logged blocks with their sets, then the
- * planned blocks that were not logged, then the athlete's note.
+ * A workout as a coach reads it: logged blocks with their sets and the
+ * comments on their exercises, which the coach joins, then the planned blocks
+ * that were not logged, then the athlete's note.
  */
 export function WorkoutReadOnly({
 	workout,
+	athleteId,
 	plannedBlocks = [],
 }: {
 	workout: Workout;
+	athleteId: string;
 	plannedBlocks?: TemplateBlock[];
 }) {
 	const { t } = useTranslation();
@@ -25,6 +28,7 @@ export function WorkoutReadOnly({
 					key={block.id}
 					block={block}
 					workoutId={workout.id}
+					ownerId={athleteId}
 					unit={unit}
 				/>
 			))}

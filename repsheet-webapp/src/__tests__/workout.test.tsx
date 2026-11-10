@@ -176,6 +176,7 @@ describe("WorkoutPage", () => {
 						},
 						mode: "reps",
 						equipment: "barbell",
+						comments: [],
 						grip: null,
 						sets: [1, 2].map((round) => ({
 							round,

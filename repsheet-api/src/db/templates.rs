@@ -44,6 +44,7 @@ struct TemplateBlockExerciseRow {
     #[sqlx(rename = "chosen_grip")]
     grip: Option<Grip>,
     target: Option<String>,
+    note: Option<String>,
     #[sqlx(flatten)]
     exercise: ExerciseSummaryRow,
 }
@@ -60,6 +61,7 @@ pub struct LoadedTemplateExercise {
     pub equipment: Equipment,
     pub grip: Option<Grip>,
     pub target: Option<String>,
+    pub note: Option<String>,
 }
 
 pub struct TemplateExerciseInput<'a> {
@@ -68,6 +70,7 @@ pub struct TemplateExerciseInput<'a> {
     pub equipment: Equipment,
     pub grip: Option<Grip>,
     pub target: Option<&'a str>,
+    pub note: Option<&'a str>,
 }
 
 /// What makes a template a planned session: its day and the coach who wrote it.
@@ -253,6 +256,7 @@ pub async fn load_blocks(
                 equipment: row.equipment,
                 grip: row.grip,
                 target: row.target,
+                note: row.note,
                 exercise: row.exercise,
             });
     }
@@ -331,6 +335,7 @@ async fn write_blocks(
                 .collect::<Vec<_>>(),
         )
         .bind(block.exercises.iter().map(|e| e.target).collect::<Vec<_>>())
+        .bind(block.exercises.iter().map(|e| e.note).collect::<Vec<_>>())
         .execute(&mut *conn)
         .await?;
     }

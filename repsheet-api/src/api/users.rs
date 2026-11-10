@@ -222,6 +222,23 @@ pub struct UserPath {
     pub user_id: Uuid,
 }
 
+/// The account that wrote something, as anyone who reads it sees them.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorResponse {
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// The author of a row whose `author_id` is set to null when their account
+/// is deleted.
+pub fn author(id: Option<Uuid>, name: Option<String>) -> Option<AuthorResponse> {
+    Some(AuthorResponse {
+        id: id?,
+        name: name?,
+    })
+}
+
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResponse {

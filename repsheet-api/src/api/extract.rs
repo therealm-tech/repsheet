@@ -147,3 +147,8 @@ pub fn not_blank(value: &str) -> Result<(), ValidationError> {
     }
     Ok(())
 }
+
+/// Trims an optional free text, dropping it when nothing is left.
+pub fn trimmed(text: Option<&str>) -> Option<&str> {
+    text.map(str::trim).filter(|t| !t.is_empty())
+}

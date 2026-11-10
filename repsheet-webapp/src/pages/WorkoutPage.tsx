@@ -11,13 +11,14 @@ import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import type { UpdateWorkoutInput } from "@/lib/api/schemas";
 import { formatDay, formatMinutes } from "@/lib/dates";
-import { useUnit } from "@/lib/hooks";
+import { useMe, useUnit } from "@/lib/hooks";
 
 export function WorkoutPage({ workoutId }: { workoutId: string }) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const unit = useUnit();
+	const meId = useMe().data?.id ?? "";
 	const [sheet, setSheet] = useState<BlockSheetMode | null>(null);
 	const [editing, setEditing] = useState(false);
 	const workout = useQuery({
@@ -120,8 +121,18 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 							key={block.id}
 							block={block}
 							workoutId={w.id}
+							ownerId={meId}
 							unit={unit}
-							onOpen={() => setSheet({ kind: "edit", block })}
+							onOpen={() => {
+								const templateBlock = template.data?.blocks.find(
+									(b) => b.id === block.templateBlockId,
+								);
+								setSheet({
+									kind: "edit",
+									block,
+									...(templateBlock ? { templateBlock } : {}),
+								});
+							}}
 						/>
 					))}
 					{planned.map((block, i) => (

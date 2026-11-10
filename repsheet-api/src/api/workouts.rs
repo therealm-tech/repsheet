@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use aide::axum::{
     ApiRouter,
@@ -15,8 +15,9 @@ use crate::{
     api::{
         AppState, authenticated,
         coaching::require_coach,
+        comments::CommentResponse,
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
-        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
     },
     auth::AuthUser,
@@ -238,6 +239,7 @@ impl From<LoadedBlock> for BlockResponse {
                     mode: e.mode.into(),
                     equipment: e.equipment.into(),
                     grip: e.grip.map(Into::into),
+                    comments: e.comments.into_iter().map(Into::into).collect(),
                     sets: e.sets.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
@@ -249,7 +251,8 @@ impl From<LoadedBlock> for BlockResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BlockExerciseResponse {
     /// Tells apart the exercises of the block, which may hold the same
-    /// exercise twice. Replacing the block gives its exercises new ids.
+    /// exercise twice. Stays the same when the block is updated with this id,
+    /// and so does the exercise's thread of comments.
     pub id: Uuid,
     pub exercise: ExerciseSummaryResponse,
     /// The mode the exercise is counted in for every round of the block.
@@ -258,6 +261,8 @@ pub struct BlockExerciseResponse {
     pub equipment: EquipmentDto,
     /// The grip held for every round of the block; null when not recorded.
     pub grip: Option<GripDto>,
+    /// Oldest first.
+    pub comments: Vec<CommentResponse>,
     pub sets: Vec<SetResponse>,
 }
 
@@ -319,6 +324,9 @@ impl From<&SetRequest> for SetValues {
 #[derive(Serialize, Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockExerciseRequest {
+    /// On update, the id of one of the block's exercises, for the same
+    /// exercise, to keep its identity and its comments; a new one otherwise.
+    pub id: Option<Uuid>,
     pub exercise_id: Uuid,
     /// One of the exercise's modes; its default mode when omitted. Each set
     /// carries the field of this mode, and a weight as the exercise's load
@@ -482,11 +490,7 @@ async fn update(
     let mut conn = state.pool.acquire().await?;
     let changes = WorkoutChanges {
         name: request.name.trim(),
-        note: request
-            .note
-            .as_deref()
-            .map(str::trim)
-            .filter(|n| !n.is_empty()),
+        note: trimmed(request.note.as_deref()),
         performed_on: request.performed_on,
         duration_minutes: request.duration_minutes,
     };
@@ -518,7 +522,7 @@ async fn create_block(
     let workout = db::workouts::find(&mut *tx, path.workout_id, user.id)
         .await?
         .ok_or(AppError::NotFound)?;
-    let sets = check_block(&mut tx, &user, &body).await?;
+    let sets = check_block(&mut tx, &user, &body, &HashMap::new()).await?;
     let exercises = new_block_exercises(&body, &sets);
     let block = db::workouts::insert_block(
         &mut tx,
@@ -549,7 +553,10 @@ async fn update_block(
     db::workouts::find(&mut *tx, path.workout_id, user.id)
         .await?
         .ok_or(AppError::NotFound)?;
-    let sets = check_block(&mut tx, &user, &body).await?;
+    let existing = db::workouts::block_exercise_ids(&mut *tx, path.block_id, path.workout_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let sets = check_block(&mut tx, &user, &body, &existing).await?;
     let exercises = new_block_exercises(&body, &sets);
     let block = db::workouts::update_block(
         &mut tx,
@@ -588,16 +595,30 @@ struct CheckedExercise {
 }
 
 /// Checks what field-level validation cannot: that the exercises and the
-/// template block are the user's, that each exercise is counted in one of its
-/// modes and done with one of its equipment and grips, and that each set fits
-/// that mode and the exercise's load rule.
+/// template block are the user's, that each `id` names one of the block's
+/// `existing` exercises (by block exercise id) for the same exercise, at most
+/// once, that each exercise is counted in one of its modes and done with one
+/// of its equipment and grips, and that each set fits that mode and the
+/// exercise's load rule.
 /// Returns the checked exercises, in request order.
 async fn check_block(
     conn: &mut sqlx::PgConnection,
     user: &AuthUser,
     body: &BlockBody,
+    existing: &HashMap<Uuid, Uuid>,
 ) -> AppResult<Vec<CheckedExercise>> {
     let mut errors = Vec::new();
+    let mut kept = HashSet::new();
+    for (i, exercise) in body.exercises.iter().enumerate() {
+        if let Some(id) = exercise.id
+            && (existing.get(&id) != Some(&exercise.exercise_id) || !kept.insert(id))
+        {
+            errors.push(FieldError::new(
+                format!("exercises[{i}].id"),
+                "not an exercise of this block",
+            ));
+        }
+    }
     if let Some(template_block_id) = body.template_block_id
         && !db::templates::owns_block(&mut *conn, template_block_id, user.id).await?
     {
@@ -683,6 +704,7 @@ fn new_block_exercises<'a>(
         .iter()
         .zip(checked)
         .map(|(exercise, checked)| NewBlockExercise {
+            id: exercise.id,
             exercise_id: exercise.exercise_id,
             mode: checked.chosen.mode,
             equipment: checked.chosen.equipment,

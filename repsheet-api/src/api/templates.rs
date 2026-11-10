@@ -12,7 +12,7 @@ use crate::{
     api::{
         AppState, authenticated,
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
-        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{PageQuery, PageResponse},
         workouts::BlockKindDto,
     },
@@ -139,6 +139,7 @@ impl From<LoadedTemplateBlock> for TemplateBlockResponse {
                     equipment: e.equipment.into(),
                     grip: e.grip.map(Into::into),
                     target: e.target,
+                    note: e.note,
                 })
                 .collect(),
         }
@@ -171,6 +172,8 @@ pub struct TemplateExerciseResponse {
     pub grip: Option<GripDto>,
     /// Free-form goal written by the coach, e.g. `6–8`, `max`, `45 s`.
     pub target: Option<String>,
+    /// The coach's instructions for the exercise, e.g. `tempo 3-1-1`.
+    pub note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Validate)]
@@ -185,6 +188,9 @@ pub struct TemplateExerciseRequest {
     pub grip: Option<GripDto>,
     #[validate(length(max = 50))]
     pub target: Option<String>,
+    /// The coach's instructions; a blank note is stored as none.
+    #[validate(length(max = 2000))]
+    pub note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Validate)]
@@ -269,10 +275,6 @@ impl<'a> From<&'a UpdateTemplateBlockRequest> for BlockRequest<'a> {
     }
 }
 
-pub(super) fn clean_note(note: Option<&str>) -> Option<&str> {
-    note.map(str::trim).filter(|n| !n.is_empty())
-}
-
 /// Checks that every exercise is one `owner_id`, who owns the template, can
 /// use, counted in one of its modes and done with one of its equipment and
 /// grips, and turns the blocks into what is stored.
@@ -318,11 +320,8 @@ pub(super) async fn resolve_blocks<'a>(
                 mode: chosen.mode,
                 equipment: chosen.equipment,
                 grip: chosen.grip,
-                target: request
-                    .target
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|t| !t.is_empty()),
+                target: trimmed(request.target.as_deref()),
+                note: trimmed(request.note.as_deref()),
             });
         }
         resolved.push(TemplateBlockInput {
@@ -389,7 +388,7 @@ async fn create(
         &mut tx,
         user.id,
         request.name.trim(),
-        clean_note(request.note.as_deref()),
+        trimmed(request.note.as_deref()),
         None,
         &blocks,
     )
@@ -434,7 +433,7 @@ async fn update(
         path.template_id,
         user.id,
         request.name.trim(),
-        clean_note(request.note.as_deref()),
+        trimmed(request.note.as_deref()),
         &blocks,
     )
     .await?

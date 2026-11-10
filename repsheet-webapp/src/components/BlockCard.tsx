@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { CommentThread } from "@/components/CommentThread";
 import { KindTag } from "@/components/ui";
 import { previousPerformanceQuery } from "@/lib/api/endpoints";
 import type {
@@ -88,17 +89,21 @@ function Progress({
 }
 
 /**
- * A logged block. Without `onOpen` it is read-only, as a coach sees it: no
- * comparison with "last time", which would be the reader's history.
+ * A logged block, with the comments on its exercises. Without `onOpen` it is
+ * read-only, as a coach sees it: no comparison with "last time", which would
+ * be the reader's history, and a way to comment instead.
  */
 export function BlockCard({
 	block,
 	workoutId,
+	ownerId,
 	unit,
 	onOpen,
 }: {
 	block: Block;
 	workoutId: string;
+	/** The athlete who logged the workout, told apart from their coaches. */
+	ownerId: string;
 	unit: WeightUnit;
 	onOpen?: () => void;
 }) {
@@ -134,6 +139,26 @@ export function BlockCard({
 						/>
 					) : null}
 				</span>
+			))}
+			{block.exercises.map((entry, i) => (
+				<CommentThread
+					key={entry.id}
+					comments={entry.comments}
+					ownerId={ownerId}
+					subject={{
+						name: entry.exercise.name,
+						...(block.exercises.length > 1 ? { letter: letter(i) } : {}),
+					}}
+					{...(onOpen
+						? {}
+						: {
+								target: {
+									workoutId,
+									blockExerciseId: entry.id,
+									composer: "collapsed",
+								},
+							})}
+				/>
 			))}
 		</>
 	);
@@ -172,19 +197,28 @@ export function PlannedBlockCard({
 				<span className="muted small">{status ?? t("block.planned")}</span>
 			</span>
 			{block.exercises.map((entry, i) => (
-				<span key={entry.id} className="ex muted">
-					<span className="ex-letter">{letter(i)}</span>
-					<ExerciseName exercise={entry.exercise} chosen={entry} />
-					<span className="ex-value">
-						{[
-							block.rounds && i === 0
-								? t("block.rounds", { count: block.rounds })
-								: null,
-							entry.target,
-						]
-							.filter(Boolean)
-							.join(" · ")}
+				<span key={entry.id} className="block-exercise">
+					<span className="ex muted">
+						<span className="ex-letter">{letter(i)}</span>
+						<ExerciseName exercise={entry.exercise} chosen={entry} />
+						<span className="ex-value">
+							{[
+								block.rounds && i === 0
+									? t("block.rounds", { count: block.rounds })
+									: null,
+								entry.target,
+							]
+								.filter(Boolean)
+								.join(" · ")}
+						</span>
 					</span>
+					{entry.note ? (
+						<span className="instruction-planned">
+							<InstructionIcon />
+							<span className="sr-only">{t("comments.instructions")}</span>
+							{entry.note}
+						</span>
+					) : null}
 				</span>
 			))}
 			{onOpen ? (
@@ -205,5 +239,26 @@ export function PlannedBlockCard({
 		<section className="block planned" aria-label={label}>
 			{content}
 		</section>
+	);
+}
+
+/** A clipboard, marking the instructions written in the plan. */
+export function InstructionIcon() {
+	return (
+		<svg
+			width="14"
+			height="14"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className="accent"
+		>
+			<path d="M9 4h6v3H9z" />
+			<path d="M15 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
+		</svg>
 	);
 }

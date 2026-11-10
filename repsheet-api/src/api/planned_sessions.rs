@@ -10,12 +10,13 @@ use crate::{
     api::{
         AppState, authenticated,
         coaching::require_coach,
-        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
         templates::{
             BlockRequest, CreateTemplateBlockRequest, TemplateBlockResponse,
-            UpdateTemplateBlockRequest, check_block_ids, clean_note, resolve_blocks,
+            UpdateTemplateBlockRequest, check_block_ids, resolve_blocks,
         },
+        users::{AuthorResponse, author},
         workouts::WorkoutResponse,
     },
     auth::AuthUser,
@@ -104,25 +105,11 @@ pub fn routes() -> ApiRouter<AppState> {
 
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct PlannedSessionAuthorResponse {
-    pub id: Uuid,
-    pub name: String,
-}
-
-/// The coach who wrote the session; `None` once their account is deleted.
-fn author(id: Option<Uuid>, name: Option<String>) -> Option<PlannedSessionAuthorResponse> {
-    Some(PlannedSessionAuthorResponse {
-        id: id?,
-        name: name?,
-    })
-}
-
-#[derive(Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct PlannedSessionSummaryResponse {
     pub id: Uuid,
     pub athlete_id: Uuid,
-    pub author: Option<PlannedSessionAuthorResponse>,
+    /// The coach who wrote the session; none once their account is deleted.
+    pub author: Option<AuthorResponse>,
     /// The day the session is planned on.
     pub planned_on: NaiveDate,
     pub name: String,
@@ -152,7 +139,8 @@ impl From<PlannedSessionSummaryRow> for PlannedSessionSummaryResponse {
 pub struct PlannedSessionResponse {
     pub id: Uuid,
     pub athlete_id: Uuid,
-    pub author: Option<PlannedSessionAuthorResponse>,
+    /// The coach who wrote the session; none once their account is deleted.
+    pub author: Option<AuthorResponse>,
     pub planned_on: NaiveDate,
     pub name: String,
     pub note: Option<String>,
@@ -265,7 +253,7 @@ async fn create(
         &mut tx,
         request.athlete_id,
         request.name.trim(),
-        clean_note(request.note.as_deref()),
+        trimmed(request.note.as_deref()),
         Some(&Planned {
             on: request.planned_on,
             author_id: user.id,
@@ -321,7 +309,7 @@ async fn update(
         current.id,
         request.planned_on,
         request.name.trim(),
-        clean_note(request.note.as_deref()),
+        trimmed(request.note.as_deref()),
     )
     .await?;
     db::templates::replace_blocks(&mut tx, current.id, &blocks).await?;

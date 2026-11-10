@@ -10,6 +10,7 @@
 	--orange-soft: rgba(242, 106, 10, 0.14);
 	--ok: #3fb97f;
 	--ok-soft: rgba(63, 185, 127, 0.15);
+	--coach: #6ea8f5;
 	--danger: #e5534b;
 	--font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
 	--font-body: "Manrope Variable", "Segoe UI", system-ui, sans-serif;
@@ -769,6 +770,186 @@ ol {
 	color: var(--muted);
 	font-size: 13px;
 	text-align: right;
+}
+
+/* ---------- comments ---------- */
+
+.thread {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 6px;
+	padding: 9px 10px;
+	border-radius: 10px;
+	background: var(--orange-soft);
+	font-size: 13.5px;
+}
+
+.thread-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	color: var(--muted);
+}
+
+.thread-head .ex-letter {
+	width: 18px;
+	height: 18px;
+	background: var(--bg);
+}
+
+.comment {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+}
+
+.comment-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.comment-who {
+	font-size: 11.5px;
+	color: var(--muted);
+}
+
+.comment-who b {
+	color: var(--ink);
+	font-weight: 650;
+}
+
+.comment-text {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.comment-action {
+	color: var(--muted);
+	text-decoration: underline;
+	font-size: inherit;
+}
+
+.comment-action.danger {
+	color: var(--danger);
+}
+
+.avatar {
+	width: 20px;
+	height: 20px;
+	border-radius: 99px;
+	display: grid;
+	place-items: center;
+	flex: none;
+	font-size: 10.5px;
+	font-weight: 800;
+	color: var(--bg);
+	background: var(--surface-2);
+}
+
+.avatar-owner {
+	background: var(--orange);
+}
+
+.avatar-coach {
+	background: var(--coach);
+}
+
+.compose {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.compose-row {
+	display: flex;
+	gap: 6px;
+	align-items: flex-end;
+}
+
+.compose-input {
+	min-height: 44px;
+	padding: 10px 12px;
+	background: var(--bg);
+	resize: none;
+}
+
+.compose-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 16px;
+}
+
+.send-button {
+	width: 44px;
+	height: 44px;
+	border-radius: var(--radius-small);
+	background: var(--orange);
+	color: var(--bg);
+	display: grid;
+	place-items: center;
+	flex: none;
+}
+
+.comments-title {
+	font-size: 13px;
+	font-weight: 650;
+}
+
+.instructions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 12px;
+	border-radius: var(--radius-small);
+	background: var(--orange-soft);
+}
+
+.instructions-title {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--orange);
+}
+
+.instruction {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+	font-size: 13.5px;
+}
+
+.instruction .ex-letter {
+	background: var(--bg);
+}
+
+.instruction-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 0 6px 28px;
+}
+
+.instruction-field .input {
+	flex: 1;
+	min-width: 0;
+	min-height: 40px;
+}
+
+.instruction-planned {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	padding: 0 0 4px 28px;
+	font-size: 12.5px;
+	color: var(--ink);
 }
 
 /* ---------- sheet ---------- */

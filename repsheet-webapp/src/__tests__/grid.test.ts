@@ -7,6 +7,7 @@ import {
 	type GridExercise,
 	gridFromBlock,
 	initialGrid,
+	linkToBlock,
 	parseTarget,
 	parseTyped,
 	removeRound,
@@ -330,6 +331,7 @@ describe("gridFromBlock", () => {
 						exercise: bench,
 						mode: "reps",
 						equipment: "barbell",
+						comments: [],
 						grip: null,
 						sets: [
 							set(1, { reps: 10, weightKg: 40, warmup: true }),
@@ -341,6 +343,7 @@ describe("gridFromBlock", () => {
 						exercise: crunch,
 						mode: "time",
 						equipment: "bodyweight",
+						comments: [],
 						grip: null,
 						sets: [set(2, { durationSeconds: 60 })],
 					},
@@ -358,6 +361,41 @@ describe("gridFromBlock", () => {
 		});
 		expect(grid.rows[1]?.cells[1]?.duration).toBe(60);
 		expect(grid.exercises.map((e) => e.chosen.mode)).toEqual(["reps", "time"]);
+		expect(grid.exercises.map((e) => e.blockExerciseId)).toEqual([
+			"ex1",
+			"ex2",
+		]);
+	});
+
+	it("sends the ids of the logged exercises it keeps, and none for new ones", () => {
+		let grid = initialGrid({ exercises: [bench, dips], unit: "kg" });
+		grid = setCell(grid, 0, 0, "reps", 8);
+		grid = setCell(grid, 0, 0, "weight", 60);
+		grid = setCell(grid, 0, 1, "reps", 12);
+		const logged = {
+			id: "b1",
+			position: 1,
+			kind: "superset" as const,
+			templateBlockId: null,
+			restSeconds: null,
+			exercises: [{ id: "be1" }, { id: "be2" }].map((e, i) => ({
+				...e,
+				exercise: [bench, dips][i] as GridExercise,
+				mode: "reps" as const,
+				equipment: "barbell" as const,
+				grip: null,
+				comments: [],
+				sets: [],
+			})),
+		};
+		const linked = linkToBlock(grid, logged);
+		const result = toBlockExercises(linked, "kg");
+		expect(result.ok && result.exercises.map((e) => e.id)).toEqual([
+			"be1",
+			"be2",
+		]);
+		const fresh = toBlockExercises(grid, "kg");
+		expect(fresh.ok && fresh.exercises.every((e) => !("id" in e))).toBe(true);
 	});
 });
 
