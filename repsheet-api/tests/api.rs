@@ -3039,3 +3039,127 @@ async fn planned_sessions_carry_the_coach_instructions(pool: PgPool) {
         .await;
     assert_eq!(read["blocks"][0]["exercises"][0]["note"], "Prise serrée");
 }
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn block_exercises_keep_their_identity_across_updates(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let incline = app.exercise_id(&token, "Développé incliné").await;
+    let flyes = app.exercise_id(&token, "Écarté poulie").await;
+    let squat = app.exercise_id(&token, "Squat").await;
+    let workout = new_workout(&app, &token, "2026-10-22").await;
+    let set = |reps: i32| json!([{ "round": 1, "reps": reps, "weightKg": 20.0 }]);
+    let (status, block) = app
+        .post(
+            &format!("/v1/workouts/{workout}/blocks"),
+            &token,
+            json!({ "exercises": [
+                { "exerciseId": incline, "sets": set(10) },
+                { "exerciseId": flyes, "sets": set(12) }
+            ]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let incline_id = block["exercises"][0]["id"].as_str().unwrap().to_owned();
+    let flyes_id = block["exercises"][1]["id"].as_str().unwrap().to_owned();
+    let block_uri = format!(
+        "/v1/workouts/{workout}/blocks/{}",
+        block["id"].as_str().unwrap()
+    );
+
+    let (status, updated) = app
+        .put(
+            &block_uri,
+            &token,
+            json!({ "exercises": [
+                { "id": flyes_id, "exerciseId": flyes, "sets": set(15) },
+                { "exerciseId": squat, "sets": set(5) }
+            ]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    let exercises = &updated["exercises"];
+    assert_eq!(exercises[0]["id"], flyes_id.as_str(), "kept, moved first");
+    assert_eq!(exercises[0]["sets"][0]["reps"], 15);
+    assert_ne!(exercises[1]["id"], incline_id.as_str(), "squat is new");
+    assert_eq!(exercises.as_array().unwrap().len(), 2, "incline is gone");
+
+    let squat_id = exercises[1]["id"].as_str().unwrap();
+    for (exercises, field) in [
+        (
+            json!([{ "id": incline_id, "exerciseId": incline, "sets": set(8) }]),
+            "exercises[0].id",
+        ),
+        (
+            json!([{ "id": squat_id, "exerciseId": flyes, "sets": set(8) }]),
+            "exercises[0].id",
+        ),
+        (
+            json!([
+                { "id": flyes_id, "exerciseId": flyes, "sets": set(8) },
+                { "id": flyes_id, "exerciseId": flyes, "sets": set(8) }
+            ]),
+            "exercises[1].id",
+        ),
+    ] {
+        let (status, problem) = app
+            .put(&block_uri, &token, json!({ "exercises": exercises }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{exercises}");
+        assert_eq!(field_paths(&problem), vec![field]);
+    }
+
+    let (status, problem) = app
+        .post(
+            &format!("/v1/workouts/{workout}/blocks"),
+            &token,
+            json!({ "exercises": [{ "id": flyes_id, "exerciseId": flyes, "sets": set(8) }] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(field_paths(&problem), vec!["exercises[0].id"]);
+
+    let missing = format!("/v1/workouts/{workout}/blocks/{incline_id}");
+    let (status, _) = app
+        .put(
+            &missing,
+            &token,
+            json!({ "exercises": [{ "exerciseId": flyes, "sets": set(8) }] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn kept_block_exercises_take_their_new_choices(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let pull_up = app.exercise_id(&token, "Tractions").await;
+    let workout = new_workout(&app, &token, "2026-10-22").await;
+    let sets = json!([{ "round": 1, "reps": 8 }]);
+    let (status, block) = app
+        .post(
+            &format!("/v1/workouts/{workout}/blocks"),
+            &token,
+            json!({ "exercises": [{ "exerciseId": pull_up, "grip": "pronation", "sets": sets }] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{block}");
+    let kept = &block["exercises"][0]["id"];
+
+    let (status, updated) = app
+        .put(
+            &format!(
+                "/v1/workouts/{workout}/blocks/{}",
+                block["id"].as_str().unwrap()
+            ),
+            &token,
+            json!({ "exercises": [
+                { "id": kept, "exerciseId": pull_up, "grip": "supination", "sets": sets }
+            ]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["exercises"][0]["id"], *kept);
+    assert_eq!(updated["exercises"][0]["grip"], "supination");
+}
