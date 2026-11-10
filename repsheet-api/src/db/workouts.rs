@@ -5,7 +5,10 @@ use sqlx::{FromRow, PgConnection, PgExecutor};
 use uuid::Uuid;
 
 use crate::{
-    db::exercises::ExerciseSummaryRow,
+    db::{
+        comments::{self, CommentRow},
+        exercises::ExerciseSummaryRow,
+    },
     domain::{Equipment, Grip, Locale, Mode, SetValues},
 };
 
@@ -80,6 +83,7 @@ pub struct LoadedBlockExercise {
     pub mode: Mode,
     pub equipment: Equipment,
     pub grip: Option<Grip>,
+    pub comments: Vec<CommentRow>,
     pub sets: Vec<SetValues>,
 }
 
@@ -291,7 +295,8 @@ pub async fn load_blocks(
             .fetch_all(&mut *conn)
             .await?;
     let block_exercise_ids: Vec<Uuid> = exercise_rows.iter().map(|r| r.block_exercise_id).collect();
-    let mut sets = load_sets(conn, &block_exercise_ids).await?;
+    let mut sets = load_sets(&mut *conn, &block_exercise_ids).await?;
+    let mut comments = comments::list(conn, &block_exercise_ids).await?;
 
     let mut exercises_by_block: HashMap<Uuid, Vec<LoadedBlockExercise>> = HashMap::new();
     for row in exercise_rows {
@@ -301,6 +306,7 @@ pub async fn load_blocks(
             .push(LoadedBlockExercise {
                 id: row.block_exercise_id,
                 sets: sets.remove(&row.block_exercise_id).unwrap_or_default(),
+                comments: comments.remove(&row.block_exercise_id).unwrap_or_default(),
                 mode: row.mode,
                 equipment: row.equipment,
                 grip: row.grip,
@@ -473,4 +479,15 @@ async fn write_block_exercises(
             .await?;
     }
     Ok(())
+}
+
+/// The workout block exercise `id` belongs to.
+pub async fn block_exercise_workout(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar(include_str!("../../queries/blocks/exercise_workout.sql"))
+        .bind(id)
+        .fetch_optional(exec)
+        .await
 }

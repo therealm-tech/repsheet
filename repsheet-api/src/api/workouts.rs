@@ -15,6 +15,7 @@ use crate::{
     api::{
         AppState, authenticated,
         coaching::require_coach,
+        comments::CommentResponse,
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
@@ -238,6 +239,7 @@ impl From<LoadedBlock> for BlockResponse {
                     mode: e.mode.into(),
                     equipment: e.equipment.into(),
                     grip: e.grip.map(Into::into),
+                    comments: e.comments.into_iter().map(Into::into).collect(),
                     sets: e.sets.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
@@ -249,7 +251,8 @@ impl From<LoadedBlock> for BlockResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BlockExerciseResponse {
     /// Tells apart the exercises of the block, which may hold the same
-    /// exercise twice. Stays the same when the block is updated with this id.
+    /// exercise twice. Stays the same when the block is updated with this id,
+    /// and so does the exercise's thread of comments.
     pub id: Uuid,
     pub exercise: ExerciseSummaryResponse,
     /// The mode the exercise is counted in for every round of the block.
@@ -258,6 +261,8 @@ pub struct BlockExerciseResponse {
     pub equipment: EquipmentDto,
     /// The grip held for every round of the block; null when not recorded.
     pub grip: Option<GripDto>,
+    /// Oldest first.
+    pub comments: Vec<CommentResponse>,
     pub sets: Vec<SetResponse>,
 }
 

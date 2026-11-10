@@ -3163,3 +3163,247 @@ async fn kept_block_exercises_take_their_new_choices(pool: PgPool) {
     assert_eq!(updated["exercises"][0]["id"], *kept);
     assert_eq!(updated["exercises"][0]["grip"], "supination");
 }
+
+/// Logs a one-exercise squat block for the athlete, shares the workout with
+/// the coach and returns the workout and the block.
+async fn shared_squat_block(app: &TestApp, athlete: &str, coach: &str) -> (String, Value) {
+    let squat = app.exercise_id(athlete, "Squat").await;
+    let workout = new_workout(app, athlete, "2026-11-10").await;
+    let (status, block) = app
+        .post(
+            &format!("/v1/workouts/{workout}/blocks"),
+            athlete,
+            json!({ "exercises": [{ "exerciseId": squat, "sets": [
+                { "round": 1, "reps": 5, "weightKg": 100.0 },
+                { "round": 2, "reps": 5, "weightKg": 100.0 }
+            ]}]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let coach_id = app.user_id(coach).await;
+    let (status, _) = app
+        .put(
+            &format!("/v1/workouts/{workout}/shares/{coach_id}"),
+            athlete,
+            json!(null),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    (workout, block)
+}
+
+async fn comment(app: &TestApp, token: &str, block_exercise_id: &Value, text: &str) -> Value {
+    let (status, comment) = app
+        .post(
+            "/v1/comments",
+            token,
+            json!({ "blockExerciseId": block_exercise_id, "text": text }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{comment}");
+    comment
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn athletes_and_their_coaches_discuss_an_exercise(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, _) = coached_athlete(&app).await;
+    let athlete_id = app.user_id(&athlete).await;
+    let coach_id = app.user_id(&coach).await;
+    let (workout, block) = shared_squat_block(&app, &athlete, &coach).await;
+    let target = &block["exercises"][0]["id"];
+    let workout_uri = format!("/v1/workouts/{workout}");
+
+    let asked = comment(&app, &athlete, target, "  Gêne à l'épaule \n").await;
+    assert_eq!(asked["text"], "Gêne à l'épaule");
+    assert_eq!(asked["author"]["id"], athlete_id.as_str());
+    assert_eq!(asked["blockExerciseId"], *target);
+    let answered = comment(&app, &coach, target, "On redescend à 95 kg").await;
+    assert_eq!(answered["author"]["id"], coach_id.as_str());
+
+    for token in [&athlete, &coach] {
+        let (_, read) = app.get(&workout_uri, token).await;
+        let thread = &read["blocks"][0]["exercises"][0]["comments"];
+        assert_eq!(thread[0]["id"], asked["id"]);
+        assert_eq!(thread[1]["id"], answered["id"]);
+    }
+    let squat = block["exercises"][0]["exercise"]["id"].as_str().unwrap();
+    let (_, history) = app
+        .get(&format!("/v1/exercises/{squat}/performances"), &athlete)
+        .await;
+    let thread = &history["items"][0]["comments"];
+    assert_eq!(thread[1]["text"], "On redescend à 95 kg");
+    assert_eq!(thread[1]["author"]["id"], coach_id.as_str());
+
+    for text in [json!(""), json!("   "), json!("x".repeat(2001))] {
+        let (status, problem) = app
+            .post(
+                "/v1/comments",
+                &athlete,
+                json!({ "blockExerciseId": target, "text": text }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(field_paths(&problem), vec!["text"]);
+    }
+
+    let answered_uri = format!("/v1/comments/{}", answered["id"].as_str().unwrap());
+    let asked_uri = format!("/v1/comments/{}", asked["id"].as_str().unwrap());
+    let (status, problem) = app
+        .put(&answered_uri, &athlete, json!({ "text": "Non" }))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(problem["type"], "urn:repsheet:problem:not-author");
+    let (status, edited) = app
+        .put(
+            &answered_uri,
+            &coach,
+            json!({ "text": " On redescend à 92,5 kg " }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(edited["text"], "On redescend à 92,5 kg");
+    assert_ne!(edited["updatedAt"], edited["createdAt"]);
+    assert_eq!(
+        app.get(&answered_uri, &athlete).await.1["text"],
+        edited["text"]
+    );
+
+    assert_eq!(app.delete(&asked_uri, &coach).await, StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.delete(&answered_uri, &athlete).await,
+        StatusCode::NO_CONTENT,
+        "the owner moderates their workout"
+    );
+    assert_eq!(
+        app.delete(&asked_uri, &athlete).await,
+        StatusCode::NO_CONTENT
+    );
+    let (_, read) = app.get(&workout_uri, &athlete).await;
+    assert_eq!(read["blocks"][0]["exercises"][0]["comments"], json!([]));
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn only_readers_of_the_workout_comment(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, _) = coached_athlete(&app).await;
+    let other_coach = app.sign_up("thomas@example.com").await;
+    app.post(
+        "/v1/users/me/coaches",
+        &athlete,
+        json!({ "email": "thomas@example.com" }),
+    )
+    .await;
+    let stranger = app.sign_up("sam@example.com").await;
+    let (workout, block) = shared_squat_block(&app, &athlete, &coach).await;
+    let target = &block["exercises"][0]["id"];
+    let kept = comment(&app, &coach, target, "Bien").await;
+    let kept_uri = format!("/v1/comments/{}", kept["id"].as_str().unwrap());
+
+    for token in [&other_coach, &stranger] {
+        let (status, problem) = app
+            .post(
+                "/v1/comments",
+                token,
+                json!({ "blockExerciseId": target, "text": "Bonjour" }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(field_paths(&problem), vec!["blockExerciseId"]);
+        assert_eq!(app.get(&kept_uri, token).await.0, StatusCode::NOT_FOUND);
+        let (status, _) = app
+            .put(&kept_uri, token, json!({ "text": "Bonjour" }))
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(app.delete(&kept_uri, token).await, StatusCode::NO_CONTENT);
+    }
+    assert_eq!(app.get(&kept_uri, &athlete).await.0, StatusCode::OK);
+
+    let coach_id = app.user_id(&coach).await;
+    assert_eq!(
+        app.delete(&format!("/v1/users/me/coaches/{coach_id}"), &athlete)
+            .await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(app.get(&kept_uri, &coach).await.0, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .put(&kept_uri, &coach, json!({ "text": "Bonjour" }))
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "a removed coach loses the thread"
+    );
+    let (_, read) = app.get(&format!("/v1/workouts/{workout}"), &athlete).await;
+    assert_eq!(
+        read["blocks"][0]["exercises"][0]["comments"][0]["text"], "Bien",
+        "and the athlete keeps it"
+    );
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn comments_survive_edits_of_the_block(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, _) = coached_athlete(&app).await;
+    let (workout, block) = shared_squat_block(&app, &athlete, &coach).await;
+    let exercise = &block["exercises"][0];
+    comment(&app, &coach, &exercise["id"], "Garde le dos droit").await;
+    let block_uri = format!(
+        "/v1/workouts/{workout}/blocks/{}",
+        block["id"].as_str().unwrap()
+    );
+
+    let (status, edited) = app
+        .put(
+            &block_uri,
+            &athlete,
+            json!({ "exercises": [{
+                "id": exercise["id"],
+                "exerciseId": exercise["exercise"]["id"],
+                "sets": [{ "round": 1, "reps": 6, "weightKg": 100.0 }]
+            }]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["exercises"][0]["sets"][0]["reps"], 6);
+    assert_eq!(
+        edited["exercises"][0]["comments"][0]["text"],
+        "Garde le dos droit"
+    );
+
+    let (_, replaced) = app
+        .put(
+            &block_uri,
+            &athlete,
+            json!({ "exercises": [{
+                "exerciseId": exercise["exercise"]["id"],
+                "sets": [{ "round": 1, "reps": 6, "weightKg": 100.0 }]
+            }]}),
+        )
+        .await;
+    assert_eq!(
+        replaced["exercises"][0]["comments"],
+        json!([]),
+        "an exercise sent without its id is a new one"
+    );
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn comments_outlive_their_author(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let admin = app.super_admin().await;
+    let (athlete, coach, _) = coached_athlete(&app).await;
+    let coach_id = app.user_id(&coach).await;
+    let (workout, block) = shared_squat_block(&app, &athlete, &coach).await;
+    comment(&app, &coach, &block["exercises"][0]["id"], "Bien").await;
+
+    assert_eq!(
+        app.delete(&format!("/v1/users/{coach_id}"), &admin).await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (_, read) = app.get(&format!("/v1/workouts/{workout}"), &athlete).await;
+    let kept = &read["blocks"][0]["exercises"][0]["comments"][0];
+    assert_eq!(kept["text"], "Bien");
+    assert!(kept["author"].is_null());
+}

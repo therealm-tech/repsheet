@@ -9,6 +9,7 @@ use validator::{Validate, ValidationError};
 use crate::{
     api::{
         AppState, authenticated,
+        comments::CommentResponse,
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
         search::search_text,
@@ -556,6 +557,8 @@ pub struct PerformanceResponse {
     pub equipment: EquipmentDto,
     /// The grip held for this block; null when not recorded.
     pub grip: Option<GripDto>,
+    /// The thread on the exercise in this block, oldest first.
+    pub comments: Vec<CommentResponse>,
     pub sets: Vec<SetResponse>,
 }
 
@@ -793,6 +796,7 @@ async fn list_performances(
     let total = db::exercises::count_performances(&state.pool, &filter).await?;
     let ids: Vec<Uuid> = rows.iter().map(|r| r.block_exercise_id).collect();
     let mut sets = db::workouts::load_sets(&state.pool, &ids).await?;
+    let mut comments = db::comments::list(&state.pool, &ids).await?;
     let items = rows
         .into_iter()
         .map(|row| PerformanceResponse {
@@ -804,6 +808,12 @@ async fn list_performances(
             mode: row.mode.into(),
             equipment: row.equipment.into(),
             grip: row.grip.map(Into::into),
+            comments: comments
+                .remove(&row.block_exercise_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             sets: sets
                 .remove(&row.block_exercise_id)
                 .unwrap_or_default()

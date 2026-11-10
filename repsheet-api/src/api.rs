@@ -1,4 +1,5 @@
 mod coaching;
+mod comments;
 mod exercises;
 mod extract;
 mod pagination;
@@ -78,6 +79,11 @@ pub fn app(state: AppState) -> Router {
                 "Workouts and the blocks of sets logged in them.",
             ),
             (
+                "Comments",
+                "Threads on the exercises of logged blocks, written by the athlete and the \
+                 coaches who read the workout.",
+            ),
+            (
                 "Templates",
                 "Reusable workout plans: blocks of exercises with targets.",
             ),
@@ -111,6 +117,7 @@ pub fn app(state: AppState) -> Router {
         .merge(coaching::routes())
         .merge(planned_sessions::routes())
         .merge(workout_shares::routes())
+        .merge(comments::routes())
         .finish_api_with(&mut api, |t| {
             t.security_scheme(
                 BEARER_AUTH,

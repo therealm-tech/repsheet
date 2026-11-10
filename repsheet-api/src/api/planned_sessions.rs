@@ -16,6 +16,7 @@ use crate::{
             BlockRequest, CreateTemplateBlockRequest, TemplateBlockResponse,
             UpdateTemplateBlockRequest, check_block_ids, resolve_blocks,
         },
+        users::{AuthorResponse, author},
         workouts::WorkoutResponse,
     },
     auth::AuthUser,
@@ -104,25 +105,11 @@ pub fn routes() -> ApiRouter<AppState> {
 
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct PlannedSessionAuthorResponse {
-    pub id: Uuid,
-    pub name: String,
-}
-
-/// The coach who wrote the session; `None` once their account is deleted.
-fn author(id: Option<Uuid>, name: Option<String>) -> Option<PlannedSessionAuthorResponse> {
-    Some(PlannedSessionAuthorResponse {
-        id: id?,
-        name: name?,
-    })
-}
-
-#[derive(Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct PlannedSessionSummaryResponse {
     pub id: Uuid,
     pub athlete_id: Uuid,
-    pub author: Option<PlannedSessionAuthorResponse>,
+    /// The coach who wrote the session; none once their account is deleted.
+    pub author: Option<AuthorResponse>,
     /// The day the session is planned on.
     pub planned_on: NaiveDate,
     pub name: String,
@@ -152,7 +139,8 @@ impl From<PlannedSessionSummaryRow> for PlannedSessionSummaryResponse {
 pub struct PlannedSessionResponse {
     pub id: Uuid,
     pub athlete_id: Uuid,
-    pub author: Option<PlannedSessionAuthorResponse>,
+    /// The coach who wrote the session; none once their account is deleted.
+    pub author: Option<AuthorResponse>,
     pub planned_on: NaiveDate,
     pub name: String,
     pub note: Option<String>,
