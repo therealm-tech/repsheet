@@ -1,10 +1,13 @@
+mod coaching;
 mod exercises;
 mod extract;
 mod pagination;
+mod planned_sessions;
 mod search;
 mod templates;
 mod tokens;
 mod users;
+mod workout_shares;
 mod workouts;
 
 use std::sync::Arc;
@@ -78,6 +81,16 @@ pub fn app(state: AppState) -> Router {
                 "Templates",
                 "Reusable workout plans: blocks of exercises with targets.",
             ),
+            (
+                "Coaching",
+                "Coaches an account adds, who get access to it at once until it removes them, \
+                 and the workouts it shares with them.",
+            ),
+            (
+                "Planned sessions",
+                "Sessions a coach plans for an athlete on a given day, and the workouts \
+                 logged from them.",
+            ),
         ]
         .into_iter()
         .map(|(name, description)| Tag {
@@ -95,6 +108,9 @@ pub fn app(state: AppState) -> Router {
         .merge(exercises::routes())
         .merge(workouts::routes())
         .merge(templates::routes())
+        .merge(coaching::routes())
+        .merge(planned_sessions::routes())
+        .merge(workout_shares::routes())
         .finish_api_with(&mut api, |t| {
             t.security_scheme(
                 BEARER_AUTH,

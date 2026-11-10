@@ -52,7 +52,9 @@ The React and TypeScript client in [repsheet-webapp/](repsheet-webapp/), served 
 nginx ([repsheet-webapp/nginx/](repsheet-webapp/nginx/)). Every API response is parsed with `zod`
 before use, so a contract mismatch fails loudly at the boundary. It keeps the bearer token in
 `localStorage` and derives everything else from the API: the logging sheet's pre-filled values, the
-planned blocks of a workout, the progression charts. It is an installable Progressive Web App:
+planned blocks of a workout, the progression charts. A coach reads an athlete's planned sessions and
+shared workouts on pages of their own, read-only and without the "last time" comparisons, which
+would come from the coach's history, not the athlete's. It is an installable Progressive Web App:
 a web app manifest and a Workbox service worker are generated at build time
 ([repsheet-webapp/pwa.config.ts](repsheet-webapp/pwa.config.ts)), and its PNG icons are rendered
 from `public/logo.svg` during the same build.
@@ -93,6 +95,11 @@ erDiagram
     users ||--o{ access_tokens : "logs in with"
     users ||--o{ exercises : "creates (custom)"
     users ||--o{ templates : owns
+    users ||--o{ templates : "plans (as coach)"
+    users ||--o{ coaching_links : "is coached through"
+    users ||--o{ coaching_links : "coaches through"
+    workouts ||--o{ workout_shares : "shared through"
+    users ||--o{ workout_shares : "reads (as coach)"
     users ||--o{ workouts : logs
     templates ||--o{ template_blocks : "plans"
     template_blocks ||--o{ template_block_exercises : contains
@@ -128,8 +135,16 @@ erDiagram
   `exercise_name()` picks the name in the caller's locale and falls back on the other.
 - An account has a **role**: `user`, or `super_admin` for the accounts that manage the others and the
   built-in catalog.
-- Deleting a template keeps the workouts started from it: their `template_id` and their blocks'
-  `template_block_id` become null.
+- A **coaching link** (`coaching_links`) says that an athlete has an account as a coach. It is
+  written and removed by the athlete alone, and every coach check reads it at request time.
+- A **workout share** (`workout_shares`) lets one of the athlete's coaches read one workout. Removing
+  the coach deletes their shares, so adding them again starts with nothing shared; deleting the
+  workout deletes its shares.
+- A **planned session** is a template with a `planned_on` day and an `author_id`, the coach who wrote
+  it; it belongs to the athlete (`user_id`). Templates without a day form the template library.
+  Deleting the author's account sets `author_id` to null and keeps the session.
+- Deleting a template, planned session included, keeps the workouts started from it: their
+  `template_id` and their blocks' `template_block_id` become null.
 
 ## Design decisions
 
@@ -187,6 +202,35 @@ weight comes from the user's history, which is what moves from one week
 to the next. A workout block keeps a link to the template block it was logged from, which is how the
 client knows which planned blocks remain; updating a template keeps a block's identity when the
 request carries its `id`, so that link survives edits.
+
+**A coach is a link between two accounts, not a role.** Any account can coach any other, and an
+athlete can have several coaches, so a coach is not a kind of account: `Role` stays about
+administration. The athlete adds a coach by the email of their account, with no acceptance step,
+because the link only grants the coach access to the athlete's data and asks nothing of the coach.
+The athlete removes it alone and the coach loses access at once: nothing is cached, every request a
+coach makes checks the link. Adding by email tells the caller whether an account uses that email;
+sign-up already does, so this reveals nothing new.
+
+**A planned session is a dated template.** A coach's plan has the shape of a template, blocks of
+exercises with modes, equipment, grips and targets, plus a day. Storing it as a template with
+`planned_on` and `author_id` reuses all of it: the editor, the validation, and the links a workout
+already keeps to its template and template blocks, which is what tells whether the session was
+logged and which planned blocks remain. A separate table would duplicate the block structure and
+the logging path. The session belongs to the athlete, who logs from it like from any template and
+may edit or delete it; it stays theirs when the coach is removed. Planned sessions are listed apart
+(`/v1/planned-sessions`) and kept out of the template library, which is for reusable plans. A coach
+plans with the exercises the athlete can use, the catalog and the athlete's own, since the athlete
+could not log an exercise private to the coach.
+
+**A coach sees what they planned and what the athlete shares, nothing else.** While linked, a coach
+lists, reads, edits and deletes the planned sessions they wrote for the athlete, and reads the
+workouts logged from them, sets included: planning a session is what grants that read. Any other
+workout is private until the athlete shares it with that coach, one workout and one coach at a time,
+and the coach then reads it as they read an outcome, without editing it. The athlete's templates and
+exercises, the sessions another coach planned and the workouts logged from them stay private. Every
+read checks both the grant and the link, so removing a coach cuts both at once, and their shares are
+deleted with the link rather than kept dormant: adding the same coach back later shares nothing the
+athlete did not choose to share again.
 
 **Tokens are opaque and stored hashed.** A login returns 256 random bits; the database keeps their
 SHA-256. Unlike a self-contained JWT, a token can be revoked (`DELETE /v1/tokens/current`) and
@@ -248,9 +292,12 @@ carries its own version, and its `appVersion` names the release of the images it
 
 ## Invariants and constraints
 
-- Every query on user data filters by the authenticated user. A resource owned by someone else
-  answers `404`, never `403`, so its existence does not leak; `403` only answers a super-admin-only
-  action attempted by a user.
+- Every query on user data filters by the authenticated user, or for a planned session by its
+  athlete or by its author while the coaching link exists, and for reading a workout by its owner or
+  by a linked coach who planned its session or was shared it. A resource the caller cannot see answers
+  `404`, never `403`, so its existence does not leak. `403` answers a super-admin-only action
+  attempted by a user, and a coach action naming an athlete who does not have the caller as a coach
+  (`not-coach`), with the same answer whether that account exists or not.
 - Every error response is an RFC 9457 problem document (`application/problem+json`) with a stable
   `type` URN; validation failures list the offending fields by their JSON path
   (`exercises[0].sets[2].reps`).
@@ -271,4 +318,7 @@ carries its own version, and its `appVersion` names the release of the images it
   cannot log one until the API is reachable again.
 - There is no password reset and no email verification; an account is an email and a password.
 - One weight unit per user, applied to every exercise.
+- A coach's custom exercises cannot be used in a planned session: the athlete could not see them.
+- Nothing notifies an athlete of a new planned session or a coach of a logged one; each sees it the
+  next time they open the app.
 - The exercise picker lists the first 50 matches of a search.

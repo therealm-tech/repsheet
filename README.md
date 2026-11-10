@@ -26,12 +26,16 @@ performance of the workout before, so that logging a session takes a few minutes
 - Progression per exercise, mode, equipment and grip: max weight, most reps or longest set over
   time, records, full history (warm-up sets excluded)
 - Templates built by hand or from a workout you already logged
-- Multi-user: anyone can sign up; each account only sees its own data
+- Coaching: add your coaches' accounts; each plans sessions for you on given days and sees how each
+  one went, plus the other workouts you choose to share with them; remove a coach and their access
+  ends at once, while the sessions stay yours
+- Multi-user: anyone can sign up; each account only sees its own data, plus, as a coach, the
+  sessions it planned and the workouts shared with it
 - A super admin, configured on the server, manages the accounts and the built-in catalog
 - In French and English, interface and catalog alike; the language is a preference of the account
 
-RepSheet does not plan training or generate programs, and it has no timer: the coach runs the
-session, RepSheet keeps the record.
+RepSheet does not generate programs, and it has no timer: the coach runs the session, RepSheet
+keeps the record.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and the reasoning behind it.
 

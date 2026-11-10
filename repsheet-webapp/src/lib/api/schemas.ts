@@ -206,6 +206,49 @@ export const TemplateSchema = z.object({
 });
 export type Template = z.infer<typeof TemplateSchema>;
 
+/** A coach seen by their athlete, or an athlete seen by their coach. */
+export const LinkedAccountSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	email: z.string(),
+	linkedAt: z.string(),
+});
+export type LinkedAccount = z.infer<typeof LinkedAccountSchema>;
+
+export const PlannedSessionAuthorSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+});
+
+export const PlannedSessionSummarySchema = z.object({
+	id: z.string(),
+	athleteId: z.string(),
+	author: PlannedSessionAuthorSchema.nullable(),
+	plannedOn: z.string(),
+	name: z.string(),
+	blockCount: z.number(),
+	workoutCount: z.number(),
+	updatedAt: z.string(),
+});
+export type PlannedSessionSummary = z.infer<typeof PlannedSessionSummarySchema>;
+
+export const PlannedSessionSchema = z.object({
+	id: z.string(),
+	athleteId: z.string(),
+	author: PlannedSessionAuthorSchema.nullable(),
+	plannedOn: z.string(),
+	name: z.string(),
+	note: z.string().nullable(),
+	updatedAt: z.string(),
+	blocks: z.array(TemplateBlockSchema),
+});
+export type PlannedSession = z.infer<typeof PlannedSessionSchema>;
+
+export const WorkoutShareSchema = z.object({
+	coachId: z.string(),
+	sharedAt: z.string(),
+});
+
 export interface SetInput {
 	round: number;
 	reps?: number | null;
@@ -280,4 +323,12 @@ export interface TemplateInput {
 	name: string;
 	note?: string;
 	blocks: TemplateBlockInput[];
+}
+
+export interface UpdatePlannedSessionInput extends TemplateInput {
+	plannedOn: string;
+}
+
+export interface CreatePlannedSessionInput extends UpdatePlannedSessionInput {
+	athleteId: string;
 }

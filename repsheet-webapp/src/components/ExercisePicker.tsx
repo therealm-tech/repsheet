@@ -89,12 +89,15 @@ export function ExercisePicker({
 	excludeIds = [],
 	actionLabel = "＋",
 	wide = false,
+	builtInOnly = false,
 }: {
 	onSelect: (exercise: ExerciseSummary) => void;
 	excludeIds?: string[];
 	actionLabel?: string;
 	/** Lays results out as a card grid on wide screens (full pages, not sheets). */
 	wide?: boolean;
+	/** Lists only catalog exercises, and offers no way to create one. */
+	builtInOnly?: boolean;
 }) {
 	const { t } = useTranslation();
 	const [query, setQuery] = useState("");
@@ -112,6 +115,7 @@ export function ExercisePicker({
 	const items = (exercises.data?.items ?? []).filter(
 		(e) =>
 			!excludeIds.includes(e.id) &&
+			!(builtInOnly && e.custom) &&
 			(equipment === null || e.equipment.includes(equipment)),
 	);
 
@@ -192,15 +196,17 @@ export function ExercisePicker({
 					<li className="empty">{t("picker.empty")}</li>
 				) : null}
 			</ul>
-			<button
-				type="button"
-				className="btn btn-ghost"
-				onClick={() => setCreating(true)}
-			>
-				{query.trim()
-					? t("picker.createNamed", { name: query.trim() })
-					: t("picker.create")}
-			</button>
+			{builtInOnly ? null : (
+				<button
+					type="button"
+					className="btn btn-ghost"
+					onClick={() => setCreating(true)}
+				>
+					{query.trim()
+						? t("picker.createNamed", { name: query.trim() })
+						: t("picker.create")}
+				</button>
+			)}
 		</div>
 	);
 }

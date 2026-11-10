@@ -3,12 +3,17 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AccountPanel } from "@/components/AccountPanel";
+import { DateIcon } from "@/components/DateIcon";
 import { Logo } from "@/components/Logo";
 import { Empty, ErrorText, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
-import type { CreateWorkoutInput, WorkoutSummary } from "@/lib/api/schemas";
+import type {
+	CreateWorkoutInput,
+	PlannedSessionSummary,
+	WorkoutSummary,
+} from "@/lib/api/schemas";
 import {
 	formatDay,
 	formatLongDay,
@@ -21,6 +26,52 @@ import { useMe } from "@/lib/hooks";
 interface Draft {
 	name: string;
 	templateId?: string;
+	/** Set when the workout is logged from a planned session. */
+	planned?: PlannedSessionSummary;
+}
+
+/** A session a coach planned for the user, which they log like a template. */
+function PlannedRow({
+	session,
+	onLog,
+}: {
+	session: PlannedSessionSummary;
+	onLog: () => void;
+}) {
+	const { t } = useTranslation();
+	const meta = [
+		session.plannedOn === today()
+			? t("home.plannedToday")
+			: formatDay(session.plannedOn),
+		t("common.blocks", { count: session.blockCount }),
+		session.author ? t("home.plannedBy", { name: session.author.name }) : null,
+	]
+		.filter(Boolean)
+		.join(" · ");
+	return (
+		<li>
+			<button
+				type="button"
+				className="list-item"
+				aria-label={t("home.logPlannedNamed", {
+					name: session.name,
+					day: formatDay(session.plannedOn),
+				})}
+				onClick={onLog}
+			>
+				<DateIcon day={session.plannedOn} />
+				<span className="grow">
+					<span className="strong">{session.name}</span>
+					<span className="muted small line-block">{meta}</span>
+				</span>
+				{session.workoutCount > 0 ? (
+					<span className="tag tag-ok">{t("athlete.status.logged")}</span>
+				) : (
+					<span className="accent">{t("home.logPlanned")}</span>
+				)}
+			</button>
+		</li>
+	);
 }
 
 export function WorkoutRow({ workout }: { workout: WorkoutSummary }) {
@@ -65,6 +116,10 @@ export function HomePage() {
 		queryKey: [...keys.workouts, 1],
 		queryFn: () => api.workouts({ perPage: 50 }),
 	});
+	const planned = useQuery({
+		queryKey: [...keys.plannedSessions, "mine"],
+		queryFn: () => api.plannedSessions({ perPage: 10 }),
+	});
 	const [choosingTemplate, setChoosingTemplate] = useState(false);
 	const [draft, setDraft] = useState<Draft | null>(null);
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -78,6 +133,7 @@ export function HomePage() {
 		mutationFn: api.createWorkout,
 		onSuccess: (workout) => {
 			void queryClient.invalidateQueries({ queryKey: keys.workouts });
+			void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
 			void navigate({
 				to: "/workouts/$workoutId",
 				params: { workoutId: workout.id },
@@ -124,6 +180,34 @@ export function HomePage() {
 
 			<div className="home-grid">
 				<div className="home-side">
+					{planned.data && planned.data.items.length > 0 ? (
+						<section aria-labelledby="planned-title" className="stack-tight">
+							<div className="row">
+								<h2 id="planned-title" className="display section-title">
+									{t("home.planned")}
+								</h2>
+								<span className="grow" />
+								<span className="muted small">
+									{t("home.plannedCount", { count: planned.data.total })}
+								</span>
+							</div>
+							<ul className="card list">
+								{planned.data.items.map((session) => (
+									<PlannedRow
+										key={session.id}
+										session={session}
+										onLog={() =>
+											setDraft({
+												name: session.name,
+												templateId: session.id,
+												planned: session,
+											})
+										}
+									/>
+								))}
+							</ul>
+						</section>
+					) : null}
 					<section className="card stack-tight" aria-labelledby="start-title">
 						<h2 id="start-title" className="display section-title">
 							{t("home.logWorkout")}
@@ -249,6 +333,14 @@ export function HomePage() {
 				>
 					<h2 className="display sheet-title">{t("workoutForm.newTitle")}</h2>
 					<div className="sheet-body">
+						{draft.planned ? (
+							<p className="muted small">
+								{t("home.plannedFrom", {
+									name: draft.planned.name,
+									day: formatDay(draft.planned.plannedOn),
+								})}
+							</p>
+						) : null}
 						<WorkoutForm
 							title={t("workoutForm.newTitle")}
 							submitLabel={t("workoutForm.create")}

@@ -24,7 +24,7 @@ use crate::{
             TemplateSummaryRow,
         },
     },
-    domain::BlockKind,
+    domain::{BlockKind, Locale},
     error::{AppError, AppResult, FieldError},
 };
 
@@ -37,6 +37,7 @@ pub fn routes() -> ApiRouter<AppState> {
                     .tag("Templates")
                     .id("listTemplates")
                     .summary("List templates by name")
+                    .description("The template library: planned sessions are left out.")
             })
             .post_with(create, |op| {
                 authenticated(op)
@@ -52,6 +53,10 @@ pub fn routes() -> ApiRouter<AppState> {
                     .tag("Templates")
                     .id("getTemplate")
                     .summary("Get a template with its blocks")
+                    .description(
+                        "Also answers for the caller's planned sessions, which are templates \
+                         too, so that a workout logged from one shows its planned blocks.",
+                    )
             })
             .put_with(update, |op| {
                 authenticated(op)
@@ -111,26 +116,29 @@ impl TemplateResponse {
             name: row.name,
             note: row.note,
             updated_at: row.updated_at,
-            blocks: blocks
+            blocks: blocks.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<LoadedTemplateBlock> for TemplateBlockResponse {
+    fn from(block: LoadedTemplateBlock) -> Self {
+        Self {
+            id: block.row.id,
+            position: block.row.position,
+            kind: BlockKind::from_exercise_count(block.exercises.len()).into(),
+            rounds: block.row.rounds,
+            rest_seconds: block.row.rest_seconds,
+            exercises: block
+                .exercises
                 .into_iter()
-                .map(|block| TemplateBlockResponse {
-                    id: block.row.id,
-                    position: block.row.position,
-                    kind: BlockKind::from_exercise_count(block.exercises.len()).into(),
-                    rounds: block.row.rounds,
-                    rest_seconds: block.row.rest_seconds,
-                    exercises: block
-                        .exercises
-                        .into_iter()
-                        .map(|e| TemplateExerciseResponse {
-                            id: e.id,
-                            exercise: e.exercise.into(),
-                            mode: e.mode.into(),
-                            equipment: e.equipment.into(),
-                            grip: e.grip.map(Into::into),
-                            target: e.target,
-                        })
-                        .collect(),
+                .map(|e| TemplateExerciseResponse {
+                    id: e.id,
+                    exercise: e.exercise.into(),
+                    mode: e.mode.into(),
+                    equipment: e.equipment.into(),
+                    grip: e.grip.map(Into::into),
+                    target: e.target,
                 })
                 .collect(),
         }
@@ -232,30 +240,53 @@ pub struct TemplatePath {
 }
 
 /// One block of a create or update request.
-struct BlockRequest<'a> {
+pub(super) struct BlockRequest<'a> {
     id: Option<Uuid>,
     rounds: Option<i32>,
     rest_seconds: Option<i32>,
     exercises: &'a [TemplateExerciseRequest],
 }
 
-fn clean_note(note: Option<&str>) -> Option<&str> {
+impl<'a> From<&'a CreateTemplateBlockRequest> for BlockRequest<'a> {
+    fn from(block: &'a CreateTemplateBlockRequest) -> Self {
+        Self {
+            id: None,
+            rounds: block.rounds,
+            rest_seconds: block.rest_seconds,
+            exercises: &block.exercises,
+        }
+    }
+}
+
+impl<'a> From<&'a UpdateTemplateBlockRequest> for BlockRequest<'a> {
+    fn from(block: &'a UpdateTemplateBlockRequest) -> Self {
+        Self {
+            id: block.id,
+            rounds: block.rounds,
+            rest_seconds: block.rest_seconds,
+            exercises: &block.exercises,
+        }
+    }
+}
+
+pub(super) fn clean_note(note: Option<&str>) -> Option<&str> {
     note.map(str::trim).filter(|n| !n.is_empty())
 }
 
-/// Checks that every exercise is one the user can use, counted in one of its
-/// modes and done with one of its equipment and grips, and turns the blocks
-/// into what is stored.
-async fn resolve_blocks<'a>(
+/// Checks that every exercise is one `owner_id`, who owns the template, can
+/// use, counted in one of its modes and done with one of its equipment and
+/// grips, and turns the blocks into what is stored.
+pub(super) async fn resolve_blocks<'a>(
     conn: &mut sqlx::PgConnection,
-    user: &AuthUser,
+    owner_id: Uuid,
+    locale: Locale,
     blocks: &[BlockRequest<'a>],
 ) -> AppResult<Vec<TemplateBlockInput<'a>>> {
     let ids: Vec<Uuid> = blocks
         .iter()
         .flat_map(|b| b.exercises.iter().map(|e| e.exercise_id))
         .collect();
-    let known: HashMap<Uuid, _> = db::exercises::find_many(&mut *conn, &ids, user.id, user.locale)
+    let known: HashMap<Uuid, _> = db::exercises::find_many(&mut *conn, &ids, owner_id, locale)
         .await?
         .into_iter()
         .map(|e| (e.id, e))
@@ -308,6 +339,31 @@ async fn resolve_blocks<'a>(
     }
 }
 
+/// Rejects block ids that are not the template's, or given twice.
+pub(super) async fn check_block_ids(
+    conn: &mut sqlx::PgConnection,
+    template_id: Uuid,
+    blocks: &[BlockRequest<'_>],
+) -> AppResult<()> {
+    let existing: HashSet<Uuid> = db::templates::block_ids(&mut *conn, template_id)
+        .await?
+        .into_iter()
+        .collect();
+    let mut seen = HashSet::new();
+    let foreign: Vec<FieldError> = blocks
+        .iter()
+        .enumerate()
+        .filter_map(|(i, b)| b.id.map(|id| (i, id)))
+        .filter(|(_, id)| !existing.contains(id) || !seen.insert(*id))
+        .map(|(i, _)| FieldError::new(format!("blocks[{i}].id"), "not a block of this template"))
+        .collect();
+    if foreign.is_empty() {
+        Ok(())
+    } else {
+        Err(AppError::Validation(foreign))
+    }
+}
+
 async fn list(
     State(state): State<AppState>,
     user: AuthUser,
@@ -326,23 +382,15 @@ async fn create(
     user: AuthUser,
     ValidJson(request): ValidJson<CreateTemplateRequest>,
 ) -> AppResult<Created<TemplateResponse>> {
-    let requests: Vec<_> = request
-        .blocks
-        .iter()
-        .map(|b| BlockRequest {
-            id: None,
-            rounds: b.rounds,
-            rest_seconds: b.rest_seconds,
-            exercises: &b.exercises,
-        })
-        .collect();
+    let requests: Vec<BlockRequest> = request.blocks.iter().map(Into::into).collect();
     let mut tx = state.pool.begin().await?;
-    let blocks = resolve_blocks(&mut tx, &user, &requests).await?;
+    let blocks = resolve_blocks(&mut tx, user.id, user.locale, &requests).await?;
     let row = db::templates::insert(
         &mut tx,
         user.id,
         request.name.trim(),
         clean_note(request.note.as_deref()),
+        None,
         &blocks,
     )
     .await?;
@@ -374,36 +422,13 @@ async fn update(
     PathParams(path): PathParams<TemplatePath>,
     ValidJson(request): ValidJson<UpdateTemplateRequest>,
 ) -> AppResult<Json<TemplateResponse>> {
-    let requests: Vec<_> = request
-        .blocks
-        .iter()
-        .map(|b| BlockRequest {
-            id: b.id,
-            rounds: b.rounds,
-            rest_seconds: b.rest_seconds,
-            exercises: &b.exercises,
-        })
-        .collect();
+    let requests: Vec<BlockRequest> = request.blocks.iter().map(Into::into).collect();
     let mut tx = state.pool.begin().await?;
     db::templates::find(&mut *tx, path.template_id, user.id)
         .await?
         .ok_or(AppError::NotFound)?;
-    let existing: HashSet<Uuid> = db::templates::block_ids(&mut *tx, path.template_id)
-        .await?
-        .into_iter()
-        .collect();
-    let mut seen = HashSet::new();
-    let foreign: Vec<FieldError> = requests
-        .iter()
-        .enumerate()
-        .filter_map(|(i, b)| b.id.map(|id| (i, id)))
-        .filter(|(_, id)| !existing.contains(id) || !seen.insert(*id))
-        .map(|(i, _)| FieldError::new(format!("blocks[{i}].id"), "not a block of this template"))
-        .collect();
-    if !foreign.is_empty() {
-        return Err(AppError::Validation(foreign));
-    }
-    let blocks = resolve_blocks(&mut tx, &user, &requests).await?;
+    check_block_ids(&mut tx, path.template_id, &requests).await?;
+    let blocks = resolve_blocks(&mut tx, user.id, user.locale, &requests).await?;
     let row = db::templates::update(
         &mut tx,
         path.template_id,

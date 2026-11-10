@@ -19,6 +19,9 @@ const LOCALIZED = new Set([
 	"workout",
 	"templates",
 	"template",
+	"plannedSessions",
+	"plannedSession",
+	"plannedSessionWorkouts",
 ]);
 
 /** Who is signed in, language and unit preferences, the admin entry point and sign-out. */
@@ -101,6 +104,9 @@ export function AccountPanel() {
 					{errorMessage(preferences.error, { fallback: "saveFailed" })}
 				</ErrorText>
 			) : null}
+			<Link to="/coaching" className="btn btn-small">
+				{t("account.coaching")}
+			</Link>
 			{superAdmin ? (
 				<Link to="/admin/accounts" className="btn btn-small">
 					{t("account.accounts")}

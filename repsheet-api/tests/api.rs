@@ -2298,3 +2298,662 @@ async fn leaves_a_renamed_hammer_curl_alone(pool: PgPool) {
     let (_, pull_up) = app.get(&format!("/v1/exercises/{pull_up}"), &token).await;
     assert_eq!(pull_up["grips"], json!([]), "renamed, so left as it is");
 }
+
+/// Signs up an athlete and a coach the athlete adds; returns their tokens and
+/// the athlete's id.
+async fn coached_athlete(app: &TestApp) -> (String, String, String) {
+    let athlete = app.sign_up("paul@example.com").await;
+    let coach = app.sign_up("marie@example.com").await;
+    let (status, _) = app
+        .post(
+            "/v1/users/me/coaches",
+            &athlete,
+            json!({ "email": "marie@example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let athlete_id = app.user_id(&athlete).await;
+    (athlete, coach, athlete_id)
+}
+
+/// Plans a one-block bench session for `athlete_id` and returns it.
+async fn plan_session(app: &TestApp, coach: &str, athlete_id: &str) -> (StatusCode, Value) {
+    let bench = app.exercise_id(coach, "Développé couché").await;
+    app.post(
+        "/v1/planned-sessions",
+        coach,
+        json!({
+            "athleteId": athlete_id,
+            "plannedOn": "2026-11-12",
+            "name": "Upper push",
+            "note": "Keep 2 reps in reserve",
+            "blocks": [{ "rounds": 3, "exercises": [{ "exerciseId": bench, "target": "5×5" }] }]
+        }),
+    )
+    .await
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn athletes_add_and_remove_their_coaches(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let athlete = app.sign_up("paul@example.com").await;
+    let coach = app.sign_up("marie@example.com").await;
+    let coach_id = app.user_id(&coach).await;
+    let athlete_id = app.user_id(&athlete).await;
+
+    let (status, added) = app
+        .post(
+            "/v1/users/me/coaches",
+            &athlete,
+            json!({ "email": "Marie@Example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{added}");
+    assert_eq!(added["id"], coach_id.as_str());
+    assert_eq!(added["email"], "marie@example.com");
+
+    let (_, coaches) = app.get("/v1/users/me/coaches", &athlete).await;
+    assert_eq!(coaches["total"], 1);
+    let (_, athletes) = app.get("/v1/users/me/athletes", &coach).await;
+    assert_eq!(athletes["items"][0]["id"], athlete_id.as_str());
+    let athlete_uri = format!("/v1/users/me/athletes/{athlete_id}");
+    assert_eq!(app.get(&athlete_uri, &coach).await.0, StatusCode::OK);
+    let (_, none) = app.get("/v1/users/me/athletes", &athlete).await;
+    assert_eq!(none["total"], 0, "the link goes one way");
+
+    let (status, problem) = app
+        .post(
+            "/v1/users/me/coaches",
+            &athlete,
+            json!({ "email": "marie@example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(problem["type"], "urn:repsheet:problem:coach-already-added");
+
+    for (email, kind) in [
+        ("nobody@example.com", "unknown-account"),
+        ("paul@example.com", "own-coach"),
+    ] {
+        let (status, problem) = app
+            .post("/v1/users/me/coaches", &athlete, json!({ "email": email }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{email}");
+        assert_eq!(problem["type"], format!("urn:repsheet:problem:{kind}"));
+    }
+
+    let coach_uri = format!("/v1/users/me/coaches/{coach_id}");
+    assert_eq!(app.get(&coach_uri, &athlete).await.0, StatusCode::OK);
+    assert_eq!(
+        app.delete(&coach_uri, &athlete).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        app.delete(&coach_uri, &athlete).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(app.get(&coach_uri, &athlete).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(app.get(&athlete_uri, &coach).await.0, StatusCode::NOT_FOUND);
+    let (_, athletes) = app.get("/v1/users/me/athletes", &coach).await;
+    assert_eq!(athletes["total"], 0);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn coaches_plan_sessions_and_read_how_they_went(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+
+    let (status, planned) = plan_session(&app, &coach, &athlete_id).await;
+    assert_eq!(status, StatusCode::CREATED, "{planned}");
+    assert_eq!(planned["athleteId"], athlete_id.as_str());
+    assert_eq!(planned["plannedOn"], "2026-11-12");
+    assert_eq!(planned["author"]["id"], app.user_id(&coach).await.as_str());
+    assert_eq!(planned["blocks"][0]["exercises"][0]["target"], "5×5");
+    let session_id = planned["id"].as_str().unwrap();
+    let block_id = planned["blocks"][0]["id"].as_str().unwrap();
+    let bench = planned["blocks"][0]["exercises"][0]["exercise"]["id"].clone();
+
+    let (_, mine) = app.get("/v1/planned-sessions", &athlete).await;
+    assert_eq!(mine["total"], 1);
+    assert_eq!(mine["items"][0]["author"]["name"], "Alex");
+    assert_eq!(mine["items"][0]["workoutCount"], 0);
+    let (_, library) = app.get("/v1/templates", &athlete).await;
+    assert_eq!(
+        library["total"], 0,
+        "planned sessions stay out of the library"
+    );
+    let (status, as_template) = app
+        .get(&format!("/v1/templates/{session_id}"), &athlete)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(as_template["blocks"][0]["id"], block_id);
+
+    let (status, workout) = app
+        .post(
+            "/v1/workouts",
+            &athlete,
+            json!({ "name": "Upper push", "templateId": session_id, "performedOn": "2026-11-12" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let workout_id = workout["id"].as_str().unwrap();
+    let (status, _) = app
+        .post(
+            &format!("/v1/workouts/{workout_id}/blocks"),
+            &athlete,
+            json!({ "templateBlockId": block_id, "exercises": [{ "exerciseId": bench, "sets": [
+                { "round": 1, "reps": 5, "weightKg": 80.0 },
+                { "round": 2, "reps": 4, "weightKg": 80.0 }
+            ]}]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let athlete_query = format!("/v1/planned-sessions?athleteId={athlete_id}");
+    let (status, planned_for) = app.get(&athlete_query, &coach).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(planned_for["items"][0]["workoutCount"], 1);
+    let workouts_uri = format!("/v1/planned-sessions/{session_id}/workouts");
+    let (status, outcome) = app.get(&workouts_uri, &coach).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(outcome["total"], 1);
+    let logged = &outcome["items"][0]["blocks"][0];
+    assert_eq!(logged["templateBlockId"], block_id);
+    assert_eq!(logged["exercises"][0]["sets"][1]["reps"], 4);
+    assert_eq!(logged["exercises"][0]["sets"][1]["weightKg"], 80.0);
+
+    let session_uri = format!("/v1/planned-sessions/{session_id}");
+    let (status, updated) = app
+        .put(
+            &session_uri,
+            &coach,
+            json!({
+                "plannedOn": "2026-11-13",
+                "name": "Upper push",
+                "blocks": [{ "id": block_id, "rounds": 4, "exercises": [{ "exerciseId": bench, "target": "4×6" }] }]
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["plannedOn"], "2026-11-13");
+    assert_eq!(updated["blocks"][0]["id"], block_id);
+    assert!(updated["note"].is_null());
+
+    let (_, custom) = app
+        .post(
+            "/v1/exercises",
+            &coach,
+            json!({ "names": { "fr": "Pompes lestées" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["other"], "defaultEquipment": "other", "grips": [] }),
+        )
+        .await;
+    let (status, problem) = app
+        .post(
+            "/v1/planned-sessions",
+            &coach,
+            json!({
+                "athleteId": athlete_id,
+                "plannedOn": "2026-11-14",
+                "name": "Coach's own exercise",
+                "blocks": [{ "exercises": [{ "exerciseId": custom["id"] }] }]
+            }),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "the athlete cannot use the coach's exercises"
+    );
+    assert_eq!(
+        field_paths(&problem),
+        vec!["blocks[0].exercises[0].exerciseId"]
+    );
+
+    assert_eq!(
+        app.delete(&session_uri, &athlete).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        app.get(&session_uri, &athlete).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (_, workout) = app
+        .get(&format!("/v1/workouts/{workout_id}"), &athlete)
+        .await;
+    assert!(workout["templateId"].is_null(), "the workout is kept");
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn non_coaches_can_neither_plan_nor_read(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let stranger = app.sign_up("sam@example.com").await;
+    let (_, planned) = plan_session(&app, &coach, &athlete_id).await;
+    let session_uri = format!("/v1/planned-sessions/{}", planned["id"].as_str().unwrap());
+
+    for athlete in [athlete_id.as_str(), "00000000-0000-0000-0000-000000000000"] {
+        let (status, problem) = plan_session(&app, &stranger, athlete).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{athlete}");
+        assert_eq!(problem["type"], "urn:repsheet:problem:not-coach");
+        let (status, _) = app
+            .get(
+                &format!("/v1/planned-sessions?athleteId={athlete}"),
+                &stranger,
+            )
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{athlete}");
+    }
+    assert_eq!(
+        app.get(&session_uri, &stranger).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        app.get(&format!("{session_uri}/workouts"), &stranger)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    let (status, _) = app
+        .put(
+            &session_uri,
+            &stranger,
+            json!({ "plannedOn": "2026-11-13", "name": "Hijacked", "blocks": [] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        app.delete(&session_uri, &stranger).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        app.get(&session_uri, &coach).await.0,
+        StatusCode::OK,
+        "still there"
+    );
+    let (_, own) = app.get("/v1/planned-sessions", &stranger).await;
+    assert_eq!(own["total"], 0);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn revoked_coaches_lose_access_and_the_athlete_keeps_the_sessions(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let coach_id = app.user_id(&coach).await;
+    let (_, planned) = plan_session(&app, &coach, &athlete_id).await;
+    let session_uri = format!("/v1/planned-sessions/{}", planned["id"].as_str().unwrap());
+    assert_eq!(app.get(&session_uri, &coach).await.0, StatusCode::OK);
+
+    assert_eq!(
+        app.delete(&format!("/v1/users/me/coaches/{coach_id}"), &athlete)
+            .await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (status, problem) = plan_session(&app, &coach, &athlete_id).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(problem["type"], "urn:repsheet:problem:not-coach");
+    let (status, _) = app
+        .get(
+            &format!("/v1/planned-sessions?athleteId={athlete_id}"),
+            &coach,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(app.get(&session_uri, &coach).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(
+        app.get(&format!("{session_uri}/workouts"), &coach).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (status, _) = app
+        .put(
+            &session_uri,
+            &coach,
+            json!({ "plannedOn": "2026-11-13", "name": "Too late", "blocks": [] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        app.delete(&session_uri, &coach).await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (status, kept) = app.get(&session_uri, &athlete).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(kept["name"], "Upper push");
+    assert_eq!(kept["author"]["id"], coach_id.as_str());
+    let (_, mine) = app.get("/v1/planned-sessions", &athlete).await;
+    assert_eq!(mine["total"], 1);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn planned_sessions_outlive_their_author(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let admin = app.super_admin().await;
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let coach_id = app.user_id(&coach).await;
+    let (_, planned) = plan_session(&app, &coach, &athlete_id).await;
+
+    assert_eq!(
+        app.delete(&format!("/v1/users/{coach_id}"), &admin).await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (status, kept) = app
+        .get(
+            &format!("/v1/planned-sessions/{}", planned["id"].as_str().unwrap()),
+            &athlete,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(kept["author"].is_null());
+    let (_, coaches) = app.get("/v1/users/me/coaches", &athlete).await;
+    assert_eq!(coaches["total"], 0);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn each_coach_reads_only_the_sessions_they_planned(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach_a, athlete_id) = coached_athlete(&app).await;
+    let coach_b = app.sign_up("thomas@example.com").await;
+    let (status, _) = app
+        .post(
+            "/v1/users/me/coaches",
+            &athlete,
+            json!({ "email": "thomas@example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (_, coaches) = app.get("/v1/users/me/coaches", &athlete).await;
+    assert_eq!(coaches["total"], 2);
+
+    let (_, plan_a) = plan_session(&app, &coach_a, &athlete_id).await;
+    let (_, plan_b) = plan_session(&app, &coach_b, &athlete_id).await;
+    let (_, own_template) = app
+        .post(
+            "/v1/templates",
+            &athlete,
+            json!({ "name": "Mine", "blocks": [] }),
+        )
+        .await;
+    let mut workouts = Vec::new();
+    for template in [
+        &plan_a["id"],
+        &plan_b["id"],
+        &own_template["id"],
+        &Value::Null,
+    ] {
+        let (status, workout) = app
+            .post(
+                "/v1/workouts",
+                &athlete,
+                json!({ "name": "Session", "templateId": template, "performedOn": "2026-11-12" }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+        workouts.push(workout["id"].as_str().unwrap().to_owned());
+    }
+    let [from_a, from_b, from_own, free] = workouts.as_slice() else {
+        panic!("four workouts expected");
+    };
+
+    let (_, mine) = app.get("/v1/planned-sessions", &athlete).await;
+    assert_eq!(mine["total"], 2, "the athlete sees every coach's plans");
+
+    for (coach, own_plan, other_plan, own_outcome, other_outcome) in [
+        (&coach_a, &plan_a, &plan_b, from_a, from_b),
+        (&coach_b, &plan_b, &plan_a, from_b, from_a),
+    ] {
+        let (_, listed) = app
+            .get(
+                &format!("/v1/planned-sessions?athleteId={athlete_id}"),
+                coach,
+            )
+            .await;
+        assert_eq!(listed["total"], 1);
+        assert_eq!(listed["items"][0]["id"], own_plan["id"]);
+
+        let own_uri = format!("/v1/planned-sessions/{}", own_plan["id"].as_str().unwrap());
+        let (_, outcome) = app.get(&format!("{own_uri}/workouts"), coach).await;
+        assert_eq!(outcome["total"], 1);
+        assert_eq!(outcome["items"][0]["id"], own_outcome.as_str());
+
+        let other_uri = format!(
+            "/v1/planned-sessions/{}",
+            other_plan["id"].as_str().unwrap()
+        );
+        assert_eq!(app.get(&other_uri, coach).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            app.get(&format!("{other_uri}/workouts"), coach).await.0,
+            StatusCode::NOT_FOUND
+        );
+        let (status, _) = app
+            .put(
+                &other_uri,
+                coach,
+                json!({ "plannedOn": "2026-11-13", "name": "Mine now", "blocks": [] }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(app.delete(&other_uri, coach).await, StatusCode::NO_CONTENT);
+        assert_eq!(app.get(&other_uri, &athlete).await.0, StatusCode::OK);
+
+        for workout in [other_outcome, from_own, free] {
+            assert_eq!(
+                app.get(&format!("/v1/workouts/{workout}"), coach).await.0,
+                StatusCode::NOT_FOUND,
+                "neither planned by this coach nor shared with them"
+            );
+        }
+        assert_eq!(
+            app.get(&format!("/v1/workouts/{own_outcome}"), coach)
+                .await
+                .0,
+            StatusCode::OK
+        );
+        let other_template = other_plan["id"].as_str().unwrap();
+        for template in [other_template, own_template["id"].as_str().unwrap()] {
+            assert_eq!(
+                app.get(&format!("/v1/templates/{template}"), coach).await.0,
+                StatusCode::NOT_FOUND
+            );
+        }
+        let (_, coach_workouts) = app.get("/v1/workouts", coach).await;
+        assert_eq!(coach_workouts["total"], 0);
+    }
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn athletes_share_workouts_with_one_coach_at_a_time(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let other_coach = app.sign_up("thomas@example.com").await;
+    app.post(
+        "/v1/users/me/coaches",
+        &athlete,
+        json!({ "email": "thomas@example.com" }),
+    )
+    .await;
+    let coach_id = app.user_id(&coach).await;
+    let stranger = app.sign_up("sam@example.com").await;
+    let stranger_id = app.user_id(&stranger).await;
+    let workout = new_workout(&app, &athlete, "2026-11-10").await;
+    let squat = app.exercise_id(&athlete, "Squat").await;
+    app.post(
+        &format!("/v1/workouts/{workout}/blocks"),
+        &athlete,
+        json!({ "exercises": [{ "exerciseId": squat, "sets": [{ "round": 1, "reps": 5, "weightKg": 100.0 }] }] }),
+    )
+    .await;
+    let workout_uri = format!("/v1/workouts/{workout}");
+    let share_uri = format!("{workout_uri}/shares/{coach_id}");
+    let shared_list = format!("/v1/workouts?athleteId={athlete_id}");
+
+    assert_eq!(app.get(&workout_uri, &coach).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(
+        app.put(&share_uri, &athlete, json!(null)).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        app.put(&share_uri, &athlete, json!(null)).await.0,
+        StatusCode::NO_CONTENT,
+        "sharing again changes nothing"
+    );
+    let (_, shares) = app.get(&format!("{workout_uri}/shares"), &athlete).await;
+    assert_eq!(shares["total"], 1);
+    assert_eq!(shares["items"][0]["coachId"], coach_id.as_str());
+
+    let (status, read) = app.get(&workout_uri, &coach).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        read["blocks"][0]["exercises"][0]["sets"][0]["weightKg"],
+        100.0
+    );
+    let (_, listed) = app.get(&shared_list, &coach).await;
+    assert_eq!(listed["total"], 1);
+    assert_eq!(listed["items"][0]["id"], workout.as_str());
+    assert_eq!(
+        app.get(&workout_uri, &other_coach).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (_, nothing) = app.get(&shared_list, &other_coach).await;
+    assert_eq!(nothing["total"], 0);
+    assert_eq!(
+        app.get(&shared_list, &stranger).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, _) = app
+        .put(&format!("/v1/workouts/{workout}/blocks/{}", read["blocks"][0]["id"].as_str().unwrap()), &coach, json!({ "exercises": [{ "exerciseId": squat, "sets": [{ "round": 1, "reps": 1, "weightKg": 1.0 }] }] }))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "sharing is read-only");
+    assert_eq!(
+        app.delete(&workout_uri, &coach).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(app.get(&workout_uri, &athlete).await.0, StatusCode::OK);
+
+    assert_eq!(
+        app.put(
+            &format!("{workout_uri}/shares/{stranger_id}"),
+            &athlete,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND,
+        "only a coach of the athlete"
+    );
+    assert_eq!(
+        app.put(&share_uri, &other_coach, json!(null)).await.0,
+        StatusCode::NOT_FOUND,
+        "only the owner shares"
+    );
+
+    assert_eq!(
+        app.delete(&share_uri, &athlete).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(app.get(&workout_uri, &coach).await.0, StatusCode::NOT_FOUND);
+    let (_, listed) = app.get(&shared_list, &coach).await;
+    assert_eq!(listed["total"], 0);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn removing_a_coach_removes_their_shares_for_good(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let coach_id = app.user_id(&coach).await;
+    let workout = new_workout(&app, &athlete, "2026-11-10").await;
+    let workout_uri = format!("/v1/workouts/{workout}");
+    app.put(
+        &format!("{workout_uri}/shares/{coach_id}"),
+        &athlete,
+        json!(null),
+    )
+    .await;
+    assert_eq!(app.get(&workout_uri, &coach).await.0, StatusCode::OK);
+
+    let coach_uri = format!("/v1/users/me/coaches/{coach_id}");
+    assert_eq!(
+        app.delete(&coach_uri, &athlete).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(app.get(&workout_uri, &coach).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(
+        app.get(&format!("/v1/workouts?athleteId={athlete_id}"), &coach)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+
+    let (status, _) = app
+        .post(
+            "/v1/users/me/coaches",
+            &athlete,
+            json!({ "email": "marie@example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(
+        app.get(&workout_uri, &coach).await.0,
+        StatusCode::NOT_FOUND,
+        "a new link starts with nothing shared"
+    );
+    let (_, shares) = app.get(&format!("{workout_uri}/shares"), &athlete).await;
+    assert_eq!(shares["total"], 0);
+    let (_, listed) = app
+        .get(&format!("/v1/workouts?athleteId={athlete_id}"), &coach)
+        .await;
+    assert_eq!(listed["total"], 0);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn planned_sessions_plan_the_grip(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let pull_up = app.exercise_id(&coach, "Tractions").await;
+
+    let (status, planned) = app
+        .post(
+            "/v1/planned-sessions",
+            &coach,
+            json!({
+                "athleteId": athlete_id,
+                "plannedOn": "2026-11-12",
+                "name": "Pull",
+                "blocks": [{ "exercises": [
+                    { "exerciseId": pull_up, "grip": "supination", "target": "max" },
+                    { "exerciseId": pull_up, "target": "6" }
+                ]}]
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{planned}");
+    let exercises = &planned["blocks"][0]["exercises"];
+    assert_eq!(exercises[0]["grip"], "supination");
+    assert!(exercises[1]["grip"].is_null(), "left to the athlete");
+
+    let (_, as_template) = app
+        .get(
+            &format!("/v1/templates/{}", planned["id"].as_str().unwrap()),
+            &athlete,
+        )
+        .await;
+    assert_eq!(
+        as_template["blocks"][0]["exercises"][0]["grip"],
+        "supination"
+    );
+
+    let (status, problem) = app
+        .post(
+            "/v1/planned-sessions",
+            &coach,
+            json!({
+                "athleteId": athlete_id,
+                "plannedOn": "2026-11-13",
+                "name": "Pull",
+                "blocks": [{ "exercises": [{ "exerciseId": pull_up, "grip": "mixed" }] }]
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(field_paths(&problem), vec!["blocks[0].exercises[0].grip"]);
+}

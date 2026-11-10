@@ -35,6 +35,13 @@ pub enum AppError {
     InvalidCredentials,
     #[error("this action is reserved to super admins")]
     Forbidden,
+    /// The caller names an account that does not have them as a coach.
+    #[error("this account does not have you as a coach")]
+    NotCoach,
+    #[error("no account uses this email")]
+    UnknownAccount,
+    #[error("you cannot be your own coach")]
+    OwnCoach,
     #[error("the resource does not exist")]
     NotFound,
     #[error("{}", .0.detail())]
@@ -63,6 +70,7 @@ pub enum Conflict {
     ExerciseInUse,
     OwnRole,
     OwnAccount,
+    CoachAlreadyAdded,
 }
 
 impl Conflict {
@@ -76,6 +84,7 @@ impl Conflict {
             Self::ExerciseInUse => "urn:repsheet:problem:exercise-in-use",
             Self::OwnRole => "urn:repsheet:problem:own-role",
             Self::OwnAccount => "urn:repsheet:problem:own-account",
+            Self::CoachAlreadyAdded => "urn:repsheet:problem:coach-already-added",
         }
     }
 
@@ -89,6 +98,7 @@ impl Conflict {
             Self::ExerciseInUse => "the exercise is used in a workout or a template",
             Self::OwnRole => "a super admin cannot change their own role",
             Self::OwnAccount => "a super admin cannot delete their own account",
+            Self::CoachAlreadyAdded => "this account is already your coach",
         }
     }
 }
@@ -143,6 +153,21 @@ impl AppError {
                 StatusCode::FORBIDDEN,
                 "urn:repsheet:problem:forbidden",
                 "Forbidden",
+            ),
+            Self::NotCoach => (
+                StatusCode::FORBIDDEN,
+                "urn:repsheet:problem:not-coach",
+                "Forbidden",
+            ),
+            Self::UnknownAccount => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "urn:repsheet:problem:unknown-account",
+                "Unknown account",
+            ),
+            Self::OwnCoach => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "urn:repsheet:problem:own-coach",
+                "Own coach",
             ),
             Self::NotFound => (
                 StatusCode::NOT_FOUND,

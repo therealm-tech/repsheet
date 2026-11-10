@@ -87,6 +87,10 @@ function Progress({
 	);
 }
 
+/**
+ * A logged block. Without `onOpen` it is read-only, as a coach sees it: no
+ * comparison with "last time", which would be the reader's history.
+ */
 export function BlockCard({
 	block,
 	workoutId,
@@ -96,16 +100,12 @@ export function BlockCard({
 	block: Block;
 	workoutId: string;
 	unit: WeightUnit;
-	onOpen: () => void;
+	onOpen?: () => void;
 }) {
 	const { t } = useTranslation();
-	return (
-		<button
-			type="button"
-			className="block"
-			onClick={onOpen}
-			aria-label={t("block.title", { position: block.position })}
-		>
+	const label = t("block.title", { position: block.position });
+	const content = (
+		<>
 			<span className="block-head">
 				<b>{block.position}</b>
 				<KindTag kind={block.kind} />
@@ -124,7 +124,7 @@ export function BlockCard({
 							{summarizeSets(entry.mode, entry.exercise.load, entry.sets, unit)}
 						</span>
 					</span>
-					{block.exercises.length === 1 ? (
+					{onOpen && block.exercises.length === 1 ? (
 						<Progress
 							exercise={entry.exercise}
 							chosen={entry}
@@ -135,32 +135,41 @@ export function BlockCard({
 					) : null}
 				</span>
 			))}
+		</>
+	);
+	return onOpen ? (
+		<button type="button" className="block" onClick={onOpen} aria-label={label}>
+			{content}
 		</button>
+	) : (
+		<section className="block" aria-label={label}>
+			{content}
+		</section>
 	);
 }
 
+/** A block planned and not logged yet. Without `onOpen` it is read-only. */
 export function PlannedBlockCard({
 	block,
 	index,
 	onOpen,
+	status,
 }: {
 	block: TemplateBlock;
 	index: number;
-	onOpen: () => void;
+	onOpen?: () => void;
+	/** What the corner says; "planned" by default. */
+	status?: string;
 }) {
 	const { t } = useTranslation();
-	return (
-		<button
-			type="button"
-			className="block planned"
-			onClick={onOpen}
-			aria-label={t("block.plannedLabel", { position: index })}
-		>
+	const label = t("block.plannedLabel", { position: index });
+	const content = (
+		<>
 			<span className="block-head">
 				<b>{index}</b>
 				<KindTag kind={block.kind} />
 				<span className="grow" />
-				<span className="muted small">{t("block.planned")}</span>
+				<span className="muted small">{status ?? t("block.planned")}</span>
 			</span>
 			{block.exercises.map((entry, i) => (
 				<span key={entry.id} className="ex muted">
@@ -178,7 +187,23 @@ export function PlannedBlockCard({
 					</span>
 				</span>
 			))}
-			<span className="small accent">{t("block.tapToLog")}</span>
+			{onOpen ? (
+				<span className="small accent">{t("block.tapToLog")}</span>
+			) : null}
+		</>
+	);
+	return onOpen ? (
+		<button
+			type="button"
+			className="block planned"
+			onClick={onOpen}
+			aria-label={label}
+		>
+			{content}
 		</button>
+	) : (
+		<section className="block planned" aria-label={label}>
+			{content}
+		</section>
 	);
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::{FromRow, PgConnection, PgExecutor};
 use uuid::Uuid;
 
@@ -70,6 +70,12 @@ pub struct TemplateExerciseInput<'a> {
     pub target: Option<&'a str>,
 }
 
+/// What makes a template a planned session: its day and the coach who wrote it.
+pub struct Planned {
+    pub on: NaiveDate,
+    pub author_id: Uuid,
+}
+
 pub struct TemplateBlockInput<'a> {
     /// Set to keep the identity of an existing block on update.
     pub id: Option<Uuid>,
@@ -116,21 +122,22 @@ pub async fn insert(
     user_id: Uuid,
     name: &str,
     note: Option<&str>,
+    planned: Option<&Planned>,
     blocks: &[TemplateBlockInput<'_>],
 ) -> sqlx::Result<TemplateRow> {
     let template: TemplateRow = sqlx::query_as(include_str!("../../queries/templates/insert.sql"))
         .bind(user_id)
         .bind(name)
         .bind(note)
+        .bind(planned.map(|p| p.on))
+        .bind(planned.map(|p| p.author_id))
         .fetch_one(&mut *conn)
         .await?;
     write_blocks(conn, template.id, blocks).await?;
     Ok(template)
 }
 
-/// Updates the template and reconciles its blocks: blocks carrying a known id
-/// are updated in place, the others are created, and the missing ones deleted.
-/// Callers check beforehand that every given id belongs to the template.
+/// Updates the template and reconciles its blocks as [`replace_blocks`] does.
 pub async fn update(
     conn: &mut PgConnection,
     id: Uuid,
@@ -150,16 +157,27 @@ pub async fn update(
     else {
         return Ok(None);
     };
+    replace_blocks(conn, template.id, blocks).await?;
+    Ok(Some(template))
+}
+
+/// Reconciles the template's blocks: blocks carrying a known id are updated in
+/// place, the others are created, and the missing ones deleted. Callers check
+/// beforehand that every given id belongs to the template.
+pub async fn replace_blocks(
+    conn: &mut PgConnection,
+    template_id: Uuid,
+    blocks: &[TemplateBlockInput<'_>],
+) -> sqlx::Result<()> {
     let kept: Vec<Uuid> = blocks.iter().filter_map(|b| b.id).collect();
     sqlx::query(include_str!(
         "../../queries/templates/delete_blocks_except.sql"
     ))
-    .bind(template.id)
+    .bind(template_id)
     .bind(&kept)
     .execute(&mut *conn)
     .await?;
-    write_blocks(conn, template.id, blocks).await?;
-    Ok(Some(template))
+    write_blocks(conn, template_id, blocks).await
 }
 
 pub async fn delete(exec: impl PgExecutor<'_>, id: Uuid, user_id: Uuid) -> sqlx::Result<()> {
