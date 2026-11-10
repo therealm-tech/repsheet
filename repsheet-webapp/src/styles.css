@@ -369,6 +369,9 @@ ol {
 	background: var(--surface);
 	border: 1px solid var(--line);
 	padding: 0 14px;
+	/* iOS Safari zooms the page on focus below 16px and never zooms back out,
+	   leaving it wider than the screen. */
+	font-size: 16px;
 }
 
 .input:focus {
@@ -392,7 +395,6 @@ ol {
 	width: 76px;
 	min-height: 36px;
 	padding: 0 10px;
-	font-size: 13.5px;
 }
 
 .textarea {
