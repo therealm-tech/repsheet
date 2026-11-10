@@ -150,7 +150,7 @@ describe("comments on an exercise", () => {
 		});
 		await renderRoute(
 			() => <SharedWorkoutPage athleteId="a1" workoutId="w1" />,
-			"/coaching/athletes/a1/workouts/w1",
+			"/athletes/a1/workouts/w1",
 		);
 
 		const block = await screen.findByRole("region", { name: "Bloc 1" });

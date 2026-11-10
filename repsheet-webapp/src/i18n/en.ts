@@ -20,6 +20,7 @@ export const en: Catalog = {
 		workouts_other: "{{count}} sessions",
 	},
 	nav: {
+		athletes: "Athletes",
 		brandHome: "RepSheet, home",
 		exercises: "Exercises",
 		history: "History",
@@ -30,7 +31,7 @@ export const en: Catalog = {
 	},
 	account: {
 		accounts: "Accounts",
-		coaching: "Coaching",
+		coaching: "My coaches",
 		language: "Language",
 		languageBoth: "Langue / Language",
 		logout: "Sign out",
@@ -358,24 +359,19 @@ export const en: Catalog = {
 	},
 	coaching: {
 		addCoach: "Add as my coach",
-		athletesEmpty: "Nobody has added you as their coach.",
-		athletesIntro:
-			"People who added you as their coach. You can plan sessions for them and see how they went.",
-		athletesTitle: "My athletes",
 		back: "Back",
 		coachEmail: "Add a coach by email",
 		coachesEmpty: "You have no coach.",
 		coachesIntro:
 			"A coach plans sessions for you and sees the workouts you log from them, plus the ones you choose to share. They get access as soon as you add them, and lose it as soon as you remove them.",
-		coachesTitle: "My coaches",
 		confirmRemove: "Confirm removal",
-		loadFailed: "Couldn't load your coaching.",
+		loadFailed: "Couldn't load your coaches.",
 		remove: "Remove",
 		removeMessage:
 			"{{name}} will no longer plan sessions for you or see your workouts. The sessions they planned stay yours.",
 		removeNamed: "Remove {{name}}",
 		since: "since {{date}}",
-		title: "Coaching",
+		title: "My coaches",
 	},
 	athlete: {
 		backToAthletes: "Back to my athletes",
@@ -395,6 +391,17 @@ export const en: Catalog = {
 			missed: "Missed",
 			planned: "Planned",
 		},
+	},
+	athletes: {
+		empty: "Nobody has added you as their coach.",
+		intro:
+			"People who added you as their coach. You can plan sessions for them and see how they went.",
+		last: "Last: {{day}} · {{status}}",
+		loadFailed: "Couldn't load your athletes.",
+		next: "Next: {{day}} · {{name}}",
+		nothingPlanned: "Nothing planned",
+		since: "Athlete since {{date}}",
+		title: "My athletes",
 	},
 	plannedSession: {
 		create: "Create the draft",

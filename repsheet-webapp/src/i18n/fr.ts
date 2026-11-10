@@ -18,6 +18,7 @@ export const fr = {
 		workouts_other: "{{count}} séances",
 	},
 	nav: {
+		athletes: "Athlètes",
 		brandHome: "RepSheet, accueil",
 		exercises: "Exercices",
 		history: "Historique",
@@ -28,7 +29,7 @@ export const fr = {
 	},
 	account: {
 		accounts: "Comptes",
-		coaching: "Coaching",
+		coaching: "Mes coachs",
 		language: "Langue",
 		languageBoth: "Langue / Language",
 		logout: "Se déconnecter",
@@ -356,24 +357,19 @@ export const fr = {
 	},
 	coaching: {
 		addCoach: "Ajouter comme coach",
-		athletesEmpty: "Personne ne t'a encore ajouté comme coach.",
-		athletesIntro:
-			"Les personnes qui t'ont ajouté comme coach. Tu peux leur prévoir des séances et voir comment elles se sont passées.",
-		athletesTitle: "Mes athlètes",
 		back: "Retour",
 		coachEmail: "Ajouter un coach par email",
 		coachesEmpty: "Tu n'as pas de coach.",
 		coachesIntro:
 			"Un coach te prévoit des séances et voit celles que tu notes à partir d'elles, ainsi que celles que tu choisis de partager. Il a accès dès que tu l'ajoutes, et le perd dès que tu le retires.",
-		coachesTitle: "Mes coachs",
 		confirmRemove: "Confirmer le retrait",
-		loadFailed: "Impossible de charger le coaching.",
+		loadFailed: "Impossible de charger tes coachs.",
 		remove: "Retirer",
 		removeMessage:
 			"{{name}} ne pourra plus te prévoir de séances ni voir tes séances. Celles qu'il a prévues restent à toi.",
 		removeNamed: "Retirer {{name}}",
 		since: "depuis le {{date}}",
-		title: "Coaching",
+		title: "Mes coachs",
 	},
 	athlete: {
 		backToAthletes: "Retour à mes athlètes",
@@ -393,6 +389,17 @@ export const fr = {
 			missed: "Manquée",
 			planned: "Prévue",
 		},
+	},
+	athletes: {
+		empty: "Personne ne t'a encore ajouté comme coach.",
+		intro:
+			"Les personnes qui t'ont ajouté comme coach. Tu peux leur prévoir des séances et voir comment elles se sont passées.",
+		last: "Dernière : {{day}} · {{status}}",
+		loadFailed: "Impossible de charger tes athlètes.",
+		next: "Prochaine : {{day}} · {{name}}",
+		nothingPlanned: "Rien de prévu",
+		since: "Athlète depuis le {{date}}",
+		title: "Mes athlètes",
 	},
 	plannedSession: {
 		create: "Créer le brouillon",

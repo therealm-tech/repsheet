@@ -11,6 +11,14 @@ export function useMe() {
 	});
 }
 
+/** The caller's athletes, as the tab bar and the athletes tab both read them. */
+export function useAthletes() {
+	return useQuery({
+		queryKey: [...keys.athletes, 1],
+		queryFn: () => api.athletes({ perPage: 100 }),
+	});
+}
+
 export function useIsSuperAdmin(): boolean {
 	return useMe().data?.role === "superAdmin";
 }

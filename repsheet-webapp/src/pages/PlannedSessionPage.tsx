@@ -150,7 +150,7 @@ export function PlannedSessionPage({
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
 			void navigate({
-				to: "/coaching/athletes/$athleteId",
+				to: "/athletes/$athleteId",
 				params: { athleteId },
 			});
 		},
@@ -184,7 +184,7 @@ export function PlannedSessionPage({
 		<main className="screen with-fab">
 			<header className="bar">
 				<Link
-					to="/coaching/athletes/$athleteId"
+					to="/athletes/$athleteId"
 					params={{ athleteId }}
 					className="icon-button"
 					aria-label={t("coaching.back")}

@@ -41,7 +41,7 @@ export function SharedWorkoutPage({
 		<main className="screen narrow">
 			<header className="bar">
 				<Link
-					to="/coaching/athletes/$athleteId"
+					to="/athletes/$athleteId"
 					params={{ athleteId }}
 					className="icon-button"
 					aria-label={t("coaching.back")}

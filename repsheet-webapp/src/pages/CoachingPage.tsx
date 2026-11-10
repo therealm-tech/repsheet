@@ -26,49 +26,6 @@ function AccountLine({ account }: { account: LinkedAccount }) {
 	);
 }
 
-function Athletes() {
-	const { t } = useTranslation();
-	const athletes = useQuery({
-		queryKey: [...keys.athletes, 1],
-		queryFn: () => api.athletes({ perPage: 100 }),
-	});
-	const items = athletes.data?.items ?? [];
-	return (
-		<section className="stack-tight" aria-labelledby="athletes-title">
-			<h2 id="athletes-title" className="display section-title">
-				{t("coaching.athletesTitle")}
-			</h2>
-			{athletes.isError ? (
-				<ErrorText>{t("coaching.loadFailed")}</ErrorText>
-			) : null}
-			{athletes.isSuccess && items.length === 0 ? (
-				<Empty>{t("coaching.athletesEmpty")}</Empty>
-			) : null}
-			{items.length > 0 ? (
-				<>
-					<p className="muted small">{t("coaching.athletesIntro")}</p>
-					<ul className="card list">
-						{items.map((athlete) => (
-							<li key={athlete.id}>
-								<Link
-									to="/coaching/athletes/$athleteId"
-									params={{ athleteId: athlete.id }}
-									className="list-item"
-								>
-									<AccountLine account={athlete} />
-									<span className="muted" aria-hidden="true">
-										›
-									</span>
-								</Link>
-							</li>
-						))}
-					</ul>
-				</>
-			) : null}
-		</section>
-	);
-}
-
 function Coaches() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
@@ -101,10 +58,7 @@ function Coaches() {
 	}
 
 	return (
-		<section className="stack-tight" aria-labelledby="coaches-title">
-			<h2 id="coaches-title" className="display section-title">
-				{t("coaching.coachesTitle")}
-			</h2>
+		<section className="stack-tight" aria-label={t("coaching.title")}>
 			<p className="muted small">{t("coaching.coachesIntro")}</p>
 			{coaches.isError ? (
 				<ErrorText>{t("coaching.loadFailed")}</ErrorText>
@@ -170,11 +124,6 @@ function Coaches() {
 
 export function CoachingPage() {
 	const { t } = useTranslation();
-	const athletes = useQuery({
-		queryKey: [...keys.athletes, 1],
-		queryFn: () => api.athletes({ perPage: 100 }),
-	});
-	const coachFirst = (athletes.data?.items.length ?? 0) > 0;
 	return (
 		<main className="screen narrow">
 			<header className="bar">
@@ -186,17 +135,7 @@ export function CoachingPage() {
 				</h1>
 				<span className="icon-spacer" />
 			</header>
-			{coachFirst ? (
-				<>
-					<Athletes />
-					<Coaches />
-				</>
-			) : (
-				<>
-					<Coaches />
-					<Athletes />
-				</>
-			)}
+			<Coaches />
 		</main>
 	);
 }

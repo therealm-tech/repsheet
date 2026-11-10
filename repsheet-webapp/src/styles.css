@@ -1445,9 +1445,10 @@ ol {
 	flex-direction: column;
 	align-items: center;
 	gap: 2px;
+	flex: 1 1 0;
+	min-width: 0;
 	font-size: 11px;
 	color: var(--muted);
-	min-width: 64px;
 }
 
 .tabbar a span {
