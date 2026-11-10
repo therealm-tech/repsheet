@@ -270,7 +270,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "Développé Arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
+            json!({ "names": { "fr": "Développé Arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
         )
         .await;
     assert_eq!(status, StatusCode::CREATED);
@@ -281,7 +281,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "developpe arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": ["other"], "defaultEquipment": "other" }),
+            json!({ "names": { "fr": "developpe arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": ["other"], "defaultEquipment": "other", "grips": [] }),
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
@@ -290,7 +290,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "SQUAT" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell" }),
+            json!({ "names": { "fr": "SQUAT" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell", "grips": [] }),
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT, "built-in names are taken too");
@@ -613,6 +613,13 @@ async fn serves_the_openapi_document_and_the_probe(pool: PgPool) {
     assert!(document["paths"]["/v1/workouts/{workoutId}/blocks"]["post"].is_object());
     assert!(document["components"]["securitySchemes"]["BearerAuth"].is_object());
     assert!(document["paths"].get("/healthz").is_none());
+    for schema in ["CreateExerciseRequest", "UpdateExerciseRequest"] {
+        let required = &document["components"]["schemas"][schema]["required"];
+        assert!(
+            required.as_array().unwrap().contains(&json!("grips")),
+            "{schema} requires {required}"
+        );
+    }
     let grip_filter = &document["components"]["schemas"]["GripFilter"];
     assert_eq!(
         grip_filter["enum"],
@@ -739,7 +746,7 @@ async fn deleting_an_account_deletes_its_data(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
         )
         .await;
     let (_, workout) = app
@@ -784,7 +791,7 @@ async fn super_admins_curate_the_catalog(pool: PgPool) {
 
     let new_exercise = json!({
         "names": { "fr": "Pull-over", "en": "Dumbbell pullover" },
-        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "builtIn": true
+        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "builtIn": true
     });
     let (status, _) = app.post("/v1/exercises", &alex, new_exercise.clone()).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
@@ -804,7 +811,7 @@ async fn super_admins_curate_the_catalog(pool: PgPool) {
     );
     let edit = json!({
         "names": { "fr": "Pull-over haltère", "en": "Dumbbell pullover" },
-        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false
+        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "unilateral": false
     });
     assert_eq!(
         app.put(&uri, &alex, edit.clone()).await.0,
@@ -826,7 +833,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
         )
         .await;
     let uri = format!("/v1/exercises/{}", custom["id"].as_str().unwrap());
@@ -835,7 +842,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .put(
             &uri,
             &alex,
-            json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
+            json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "unilateral": false }),
         )
         .await;
     assert_eq!(
@@ -864,7 +871,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .put(
             &uri,
             &alex,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "unilateral": false }),
         )
         .await;
     assert_eq!(
@@ -876,7 +883,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .put(
             &uri,
             &alex,
-            json!({ "names": { "fr": "Spider curl" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": true }),
+            json!({ "names": { "fr": "Spider curl" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "unilateral": true }),
         )
         .await;
     assert_eq!(status, StatusCode::OK);
@@ -980,7 +987,7 @@ async fn names_exercises_in_the_user_language(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
         )
         .await;
     assert_eq!(
@@ -993,7 +1000,7 @@ async fn names_exercises_in_the_user_language(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": { "en": "BENCH PRESS" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell" }),
+            json!({ "names": { "en": "BENCH PRESS" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell", "grips": [] }),
         )
         .await;
     assert_eq!(
@@ -1006,7 +1013,7 @@ async fn names_exercises_in_the_user_language(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": {}, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": ["other"], "defaultEquipment": "other" }),
+            json!({ "names": {}, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": ["other"], "defaultEquipment": "other", "grips": [] }),
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1021,7 +1028,7 @@ async fn catalog_exercises_need_both_names(pool: PgPool) {
         .post(
             "/v1/exercises",
             &admin,
-            json!({ "names": { "fr": "Pull-over" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "builtIn": true }),
+            json!({ "names": { "fr": "Pull-over" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "builtIn": true }),
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1036,7 +1043,7 @@ async fn conflicts_say_which_rule_they_break(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
         )
         .await;
     let uri = format!("/v1/exercises/{}", custom["id"].as_str().unwrap());
@@ -1061,7 +1068,7 @@ async fn conflicts_say_which_rule_they_break(pool: PgPool) {
             app.put(
                 &uri,
                 &token,
-                json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
+                json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "unilateral": false }),
             )
             .await,
             "urn:repsheet:problem:mode-locked",
@@ -1070,7 +1077,7 @@ async fn conflicts_say_which_rule_they_break(pool: PgPool) {
             app.put(
                 &uri,
                 &token,
-                json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
+                json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [], "unilateral": false }),
             )
             .await,
             "urn:repsheet:problem:exercise-name-taken",
@@ -1128,7 +1135,7 @@ async fn describes_how_exercises_are_counted(pool: PgPool) {
             json!({
                 "names": { "fr": "Crunch oblique" },
                 "modes": ["time", "reps"], "defaultMode": "time", "load": "optional",
-                "equipment": ["bodyweight"], "defaultEquipment": "bodyweight"
+                "equipment": ["bodyweight"], "defaultEquipment": "bodyweight", "grips": []
             }),
         )
         .await;
@@ -1158,6 +1165,7 @@ async fn describes_how_exercises_are_counted(pool: PgPool) {
         body["names"] = json!({ "fr": "Gainage dynamique" });
         body["equipment"] = json!(["bodyweight"]);
         body["defaultEquipment"] = json!("bodyweight");
+        body["grips"] = json!([]);
         let (status, problem) = app.post("/v1/exercises", &token, body).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(field_paths(&problem), vec![field]);
@@ -1315,7 +1323,7 @@ async fn logged_modes_cannot_be_removed(pool: PgPool) {
             json!({
                 "names": { "fr": "Crunch oblique" },
                 "modes": ["reps", "time", "distance"], "defaultMode": "reps", "load": "none",
-                "equipment": ["bodyweight"], "defaultEquipment": "bodyweight"
+                "equipment": ["bodyweight"], "defaultEquipment": "bodyweight", "grips": []
             }),
         )
         .await;
@@ -1346,7 +1354,7 @@ async fn logged_modes_cannot_be_removed(pool: PgPool) {
     let edit = |modes: Value, default_mode: &str, load: &str| {
         json!({
             "names": { "fr": "Crunch oblique" }, "modes": modes, "defaultMode": default_mode,
-            "load": load, "equipment": ["bodyweight"], "defaultEquipment": "bodyweight", "unilateral": false
+            "load": load, "equipment": ["bodyweight"], "defaultEquipment": "bodyweight", "grips": [], "unilateral": false
         })
     };
     let (status, problem) = app
@@ -1441,7 +1449,7 @@ async fn describes_the_equipment_of_exercises(pool: PgPool) {
             json!({
                 "names": { "fr": "Développé Arnold" },
                 "modes": ["reps"], "defaultMode": "reps", "load": "required",
-                "equipment": ["kettlebell", "dumbbell"], "defaultEquipment": "kettlebell"
+                "equipment": ["kettlebell", "dumbbell"], "defaultEquipment": "kettlebell", "grips": []
             }),
         )
         .await;
@@ -1465,7 +1473,7 @@ async fn describes_the_equipment_of_exercises(pool: PgPool) {
                 json!({
                     "names": { "fr": "Tirage nuque" },
                     "modes": ["reps"], "defaultMode": "reps", "load": "required",
-                    "equipment": equipment, "defaultEquipment": default_equipment
+                    "equipment": equipment, "defaultEquipment": default_equipment, "grips": []
                 }),
             )
             .await;
@@ -1600,7 +1608,7 @@ async fn logged_equipment_cannot_be_removed(pool: PgPool) {
             json!({
                 "names": { "fr": "Tirage menton" },
                 "modes": ["reps"], "defaultMode": "reps", "load": "required",
-                "equipment": ["barbell", "dumbbell", "cable"], "defaultEquipment": "barbell"
+                "equipment": ["barbell", "dumbbell", "cable"], "defaultEquipment": "barbell", "grips": []
             }),
         )
         .await;
@@ -1631,7 +1639,7 @@ async fn logged_equipment_cannot_be_removed(pool: PgPool) {
     let edit = |equipment: Value, default_equipment: &str| {
         json!({
             "names": { "fr": "Tirage menton" }, "modes": ["reps"], "defaultMode": "reps",
-            "load": "required", "equipment": equipment, "defaultEquipment": default_equipment,
+            "load": "required", "equipment": equipment, "defaultEquipment": default_equipment, "grips": [],
             "unilateral": false
         })
     };
@@ -1701,7 +1709,7 @@ async fn describes_the_grips_of_exercises(pool: PgPool) {
     );
     assert_eq!(created["defaultGrip"], "neutral");
 
-    let (status, created) = app
+    let (status, problem) = app
         .post(
             "/v1/exercises",
             &token,
@@ -1712,9 +1720,18 @@ async fn describes_the_grips_of_exercises(pool: PgPool) {
             }),
         )
         .await;
-    assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(created["grips"], json!([]), "no grip unless given");
-    assert_eq!(created["defaultGrip"], Value::Null);
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "grips are required, if empty"
+    );
+    assert!(
+        problem["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("grips"),
+        "{problem}"
+    );
 
     for (grips, default_grip, field) in [
         (json!(["mixed", "mixed"]), json!("mixed"), "grips"),
@@ -1989,6 +2006,22 @@ async fn logged_grips_cannot_be_removed(pool: PgPool) {
         )
         .await;
     assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .put(
+            &format!("/v1/exercises/{unlogged_id}"),
+            &token,
+            json!({
+                "names": { "fr": "Rowing T" }, "modes": ["reps"], "defaultMode": "reps",
+                "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell",
+                "unilateral": false
+            }),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "an update without grips does not clear them"
+    );
     let (status, _) = app
         .put(
             &format!("/v1/exercises/{unlogged_id}"),

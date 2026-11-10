@@ -474,9 +474,7 @@ pub struct CreateExerciseRequest {
     pub equipment: Vec<EquipmentDto>,
     /// One of `equipment`.
     pub default_equipment: EquipmentDto,
-    /// Distinct grips; empty or omitted when the grip does not apply to the
-    /// exercise.
-    #[serde(default)]
+    /// Distinct grips; empty when the grip does not apply to the exercise.
     #[validate(length(max = 4), custom(function = distinct))]
     pub grips: Vec<GripDto>,
     /// One of `grips`; null or omitted exactly when `grips` is empty.
@@ -507,9 +505,8 @@ pub struct UpdateExerciseRequest {
     pub equipment: Vec<EquipmentDto>,
     /// One of `equipment`.
     pub default_equipment: EquipmentDto,
-    /// Distinct grips; empty or omitted when the grip does not apply to the
-    /// exercise. A grip the exercise was logged with cannot be removed.
-    #[serde(default)]
+    /// Distinct grips; empty when the grip does not apply to the exercise. A
+    /// grip the exercise was logged with cannot be removed.
     #[validate(length(max = 4), custom(function = distinct))]
     pub grips: Vec<GripDto>,
     /// One of `grips`; null or omitted exactly when `grips` is empty.
