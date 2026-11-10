@@ -97,6 +97,22 @@ ol {
 	overscroll-behavior-y: contain;
 }
 
+/* iOS 26 home-screen apps (viewport-fit=cover, black-translucent status bar) get a viewport short of
+   the screen by the top inset, leaving an empty band under the tab bar
+   (https://bugs.webkit.org/show_bug.cgi?id=301108). A document as tall as the screen makes WebKit
+   extend it; 100lvh caps that where the viewport already reaches the bottom (earlier iOS, Android). */
+@media (display-mode: standalone) {
+	html {
+		height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px)));
+	}
+
+	body,
+	#root,
+	.app {
+		height: 100%;
+	}
+}
+
 .screen {
 	display: flex;
 	flex-direction: column;

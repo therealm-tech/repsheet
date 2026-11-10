@@ -129,7 +129,7 @@ describe("AppLayout", () => {
 		const router = createAppRouter(
 			createMemoryHistory({ initialEntries: ["/"] }),
 		);
-		render(
+		const { container } = render(
 			<QueryClientProvider client={newClient()}>
 				<RouterProvider router={router} />
 			</QueryClientProvider>,
@@ -139,8 +139,16 @@ describe("AppLayout", () => {
 		if (!scroller) {
 			throw new Error("no app scroller");
 		}
-		return { router, scroller };
+		return { container, router, scroller };
 	}
+
+	it("mounts the shell straight under the root, so it can take the root's full height", async () => {
+		const { container, scroller } = await renderApp();
+
+		expect(container.children).toHaveLength(1);
+		expect(container.firstElementChild).toBe(scroller.parentElement);
+		expect(container.firstElementChild).toHaveClass("app");
+	});
 
 	it("lays the tab bar out after the scrolling content, not over it", async () => {
 		const { scroller } = await renderApp();
