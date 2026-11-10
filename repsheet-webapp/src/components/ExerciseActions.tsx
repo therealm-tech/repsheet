@@ -63,6 +63,7 @@ export function ExerciseActions({ exercise }: { exercise: Exercise }) {
 					defaultMode: exercise.defaultMode,
 					load: exercise.load,
 					equipment: exercise.equipment,
+					defaultEquipment: exercise.defaultEquipment,
 					unilateral: exercise.unilateral,
 					builtIn: !exercise.custom,
 				}}

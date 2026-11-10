@@ -7,8 +7,19 @@ import { LineChart } from "@/components/LineChart";
 import { Empty, ErrorText, KindTag, Segmented } from "@/components/ui";
 import i18n from "@/i18n";
 import { api, keys } from "@/lib/api/endpoints";
-import type { Load, Mode, WeightUnit, WorkoutSet } from "@/lib/api/schemas";
-import { describeExercise, modeIn, modeInLower } from "@/lib/blocks";
+import type {
+	Equipment,
+	Load,
+	Mode,
+	WeightUnit,
+	WorkoutSet,
+} from "@/lib/api/schemas";
+import {
+	describeExercise,
+	equipmentLabel,
+	modeIn,
+	modeInLower,
+} from "@/lib/blocks";
 import { formatDay } from "@/lib/dates";
 import { useUnit } from "@/lib/hooks";
 import {
@@ -110,6 +121,9 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 		queryFn: () => api.performances(exerciseId, { perPage: HISTORY_SIZE }),
 	});
 	const [chosenMode, setChosenMode] = useState<Mode | null>(null);
+	const [chosenEquipment, setChosenEquipment] = useState<Equipment | null>(
+		null,
+	);
 
 	if (exercise.isError) {
 		return (
@@ -130,7 +144,17 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 		(latestMode !== undefined && modes.includes(latestMode)
 			? latestMode
 			: (ex?.defaultMode ?? "reps"));
-	const inMode = items.filter((p) => p.mode === mode);
+	const equipmentOptions = ex?.equipment ?? [];
+	const latestEquipment = items[0]?.equipment;
+	const equipment =
+		chosenEquipment ??
+		(latestEquipment !== undefined && equipmentOptions.includes(latestEquipment)
+			? latestEquipment
+			: (ex?.defaultEquipment ?? "other"));
+	// Loads lifted with different equipment are not comparable: progress,
+	// records and volume only ever look at one equipment.
+	const withEquipment = items.filter((p) => p.equipment === equipment);
+	const inMode = withEquipment.filter((p) => p.mode === mode);
 	const metric = metricFor(mode, load);
 	const points = progression(metric, inMode);
 	const latest = points[points.length - 1];
@@ -138,13 +162,14 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 	const records = [mode, ...modes.filter((m) => m !== mode)].flatMap((m) => {
 		const set = bestSet(
 			metricFor(m, load),
-			items.filter((p) => p.mode === m),
+			withEquipment.filter((p) => p.mode === m),
 		);
 		return set ? [{ mode: m, set }] : [];
 	});
 	const volume = metric === "load" ? bestVolume(inMode) : null;
 	const metricFormat = (v: number) => formatMetric(metric, v, unit);
 	const multiMode = modes.length > 1;
+	const multiEquipment = equipmentOptions.length > 1;
 
 	return (
 		<main className="screen">
@@ -172,6 +197,18 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 							value={mode}
 							onChange={setChosenMode}
 							options={modes.map((m) => ({ value: m, label: modeIn(m) }))}
+						/>
+					) : null}
+
+					{multiEquipment ? (
+						<Segmented
+							label={t("exercise.equipmentShown")}
+							value={equipment}
+							onChange={setChosenEquipment}
+							options={equipmentOptions.map((e) => ({
+								value: e,
+								label: equipmentLabel(e),
+							}))}
 						/>
 					) : null}
 
@@ -247,9 +284,11 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 						</h2>
 						<ul className="card list">
 							{items.map((p) => {
-								const other = p.mode !== mode;
+								const otherMode = p.mode !== mode;
+								const otherEquipment = p.equipment !== equipment;
+								const other = otherMode || otherEquipment;
 								return (
-									<li key={`${p.workoutId}-${p.mode}`}>
+									<li key={`${p.workoutId}-${p.mode}-${p.equipment}`}>
 										<Link
 											to="/workouts/$workoutId"
 											params={{ workoutId: p.workoutId }}
@@ -261,8 +300,13 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 														{formatDay(p.performedOn)}
 													</span>
 													<KindTag kind={p.blockKind} />
-													{other ? (
+													{otherMode ? (
 														<span className="tag">{modeIn(p.mode)}</span>
+													) : null}
+													{otherEquipment ? (
+														<span className="tag">
+															{equipmentLabel(p.equipment)}
+														</span>
 													) : null}
 												</span>
 												<span className="muted small line-block">

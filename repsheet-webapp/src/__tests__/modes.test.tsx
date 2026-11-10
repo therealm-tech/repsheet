@@ -27,12 +27,14 @@ const crunch: Exercise = exercise({
 	modes: ["reps", "time"],
 	defaultMode: "reps",
 	load: "none",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 });
 const cableCrunch: Exercise = exercise({
 	id: "cable-crunch",
 	name: "Crunch à la poulie",
-	equipment: "cable",
+	equipment: ["cable"],
+	defaultEquipment: "cable",
 });
 
 function sets(field: "reps" | "durationSeconds", values: number[]) {
@@ -80,7 +82,9 @@ describe("exercise form", () => {
 			),
 		);
 		await ui.click(screen.getByRole("radio", { name: "Aucune" }));
-		await ui.click(screen.getByRole("button", { name: "Poids du corps" }));
+		const equipment = within(screen.getByRole("group", { name: "Matériel" }));
+		await ui.click(equipment.getByRole("button", { name: "Poids du corps" }));
+		await ui.click(equipment.getByRole("button", { name: "Barre" }));
 		await ui.click(screen.getByRole("button", { name: "Créer l'exercice" }));
 
 		await waitFor(() =>
@@ -89,7 +93,8 @@ describe("exercise form", () => {
 				modes: ["reps", "time"],
 				defaultMode: "time",
 				load: "none",
-				equipment: "bodyweight",
+				equipment: ["bodyweight"],
+				defaultEquipment: "bodyweight",
 				unilateral: false,
 			}),
 		);
@@ -143,19 +148,21 @@ describe("exercise detail", () => {
 			"GET /v1/exercises/crunch": () => ({ status: 200, body: crunch }),
 			"GET /v1/exercises/crunch/performances": () => ({
 				status: 200,
-				body: page([
-					performance(
-						sets("durationSeconds", [60, 60, 50]),
-						"2026-10-22",
-						"time",
-					),
-					performance(sets("reps", [20, 20, 18]), "2026-10-15", "reps"),
-					performance(
-						sets("durationSeconds", [45, 45, 45]),
-						"2026-10-08",
-						"time",
-					),
-				]),
+				body: page(
+					[
+						performance(
+							sets("durationSeconds", [60, 60, 50]),
+							"2026-10-22",
+							"time",
+						),
+						performance(sets("reps", [20, 20, 18]), "2026-10-15", "reps"),
+						performance(
+							sets("durationSeconds", [45, 45, 45]),
+							"2026-10-08",
+							"time",
+						),
+					].map((p) => ({ ...p, equipment: "bodyweight" as const })),
+				),
 			}),
 		});
 		await renderRoute(
@@ -211,7 +218,14 @@ describe("template editor", () => {
 					kind: "simple",
 					rounds: 3,
 					restSeconds: null,
-					exercises: [{ exercise: crunch, mode: "reps", target: "20" }],
+					exercises: [
+						{
+							exercise: crunch,
+							mode: "reps",
+							equipment: "bodyweight",
+							target: "20",
+						},
+					],
 				},
 			],
 		};
@@ -244,7 +258,12 @@ describe("template editor", () => {
 						id: "tb1",
 						rounds: 3,
 						exercises: [
-							{ exerciseId: "crunch", mode: "time", target: "1 min" },
+							{
+								exerciseId: "crunch",
+								mode: "time",
+								equipment: "bodyweight",
+								target: "1 min",
+							},
 						],
 					},
 				],

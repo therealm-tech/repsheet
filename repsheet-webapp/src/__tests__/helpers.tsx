@@ -87,7 +87,8 @@ export function exercise(
 		modes: ["reps"],
 		defaultMode: "reps",
 		load: "required",
-		equipment: "barbell",
+		equipment: ["barbell"],
+		defaultEquipment: "barbell",
 		unilateral: false,
 		custom: false,
 		lastUsedOn: null,
@@ -100,6 +101,7 @@ export function performance(
 	sets: Performance["sets"],
 	performedOn = "2026-10-15",
 	mode: Performance["mode"] = "reps",
+	equipment: Performance["equipment"] = "barbell",
 ): Performance {
 	return {
 		workoutId: `w-${performedOn}`,
@@ -107,6 +109,7 @@ export function performance(
 		performedOn,
 		blockKind: "simple",
 		mode,
+		equipment,
 		sets,
 	};
 }

@@ -8,7 +8,8 @@ const squat: ExerciseSummary = {
 	modes: ["reps"],
 	defaultMode: "reps",
 	load: "required",
-	equipment: "barbell",
+	equipment: ["barbell"],
+	defaultEquipment: "barbell",
 	unilateral: false,
 };
 const crunch: ExerciseSummary = {
@@ -17,7 +18,8 @@ const crunch: ExerciseSummary = {
 	modes: ["reps", "time"],
 	defaultMode: "reps",
 	load: "none",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 	unilateral: false,
 };
 
@@ -39,6 +41,7 @@ const workout: Workout = {
 				{
 					exercise: squat,
 					mode: "reps",
+					equipment: "barbell",
 					sets: [1, 2, 3].map((round) => ({
 						round,
 						reps: 8,
@@ -51,6 +54,7 @@ const workout: Workout = {
 				{
 					exercise: crunch,
 					mode: "time",
+					equipment: "bodyweight",
 					sets: [1, 2, 3].map((round) => ({
 						round,
 						reps: null,
@@ -75,8 +79,18 @@ describe("template drafts", () => {
 					rounds: 3,
 					restSeconds: 90,
 					exercises: [
-						{ exerciseId: "squat", mode: "reps", target: "8" },
-						{ exerciseId: "crunch", mode: "time", target: "1 min" },
+						{
+							exerciseId: "squat",
+							mode: "reps",
+							equipment: "barbell",
+							target: "8",
+						},
+						{
+							exerciseId: "crunch",
+							mode: "time",
+							equipment: "bodyweight",
+							target: "1 min",
+						},
 					],
 				},
 			],
@@ -93,7 +107,14 @@ describe("template drafts", () => {
 					id: "tb1",
 					rounds: null,
 					restSeconds: null,
-					exercises: [{ exercise: squat, mode: "reps", target: "  " }],
+					exercises: [
+						{
+							exercise: squat,
+							mode: "reps",
+							equipment: "barbell",
+							target: "  ",
+						},
+					],
 				},
 				{ key: "k2", rounds: 3, restSeconds: null, exercises: [] },
 			],
@@ -102,7 +123,12 @@ describe("template drafts", () => {
 			name: "Push A",
 			note: "Descente 3 s",
 			blocks: [
-				{ id: "tb1", exercises: [{ exerciseId: "squat", mode: "reps" }] },
+				{
+					id: "tb1",
+					exercises: [
+						{ exerciseId: "squat", mode: "reps", equipment: "barbell" },
+					],
+				},
 			],
 		});
 	});

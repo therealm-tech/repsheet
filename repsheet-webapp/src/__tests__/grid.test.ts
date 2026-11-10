@@ -13,11 +13,12 @@ import {
 	setCell,
 	stepValue,
 	switchDiscards,
+	switchEquipment,
 	switchMode,
 	targetFromSets,
 	toBlockExercises,
 	toggleWarmup,
-	withMode,
+	withChoices,
 } from "@/lib/grid";
 
 const bench: GridExercise = {
@@ -26,9 +27,11 @@ const bench: GridExercise = {
 	modes: ["reps"],
 	defaultMode: "reps",
 	load: "required",
-	equipment: "barbell",
+	equipment: ["barbell"],
+	defaultEquipment: "barbell",
 	unilateral: false,
 	mode: "reps",
+	chosenEquipment: "barbell",
 };
 const dips: GridExercise = {
 	id: "dips",
@@ -36,9 +39,11 @@ const dips: GridExercise = {
 	modes: ["reps"],
 	defaultMode: "reps",
 	load: "optional",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 	unilateral: false,
 	mode: "reps",
+	chosenEquipment: "bodyweight",
 };
 const plank: GridExercise = {
 	id: "plank",
@@ -46,9 +51,11 @@ const plank: GridExercise = {
 	modes: ["time"],
 	defaultMode: "time",
 	load: "optional",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 	unilateral: false,
 	mode: "time",
+	chosenEquipment: "bodyweight",
 };
 const crunch: GridExercise = {
 	id: "crunch",
@@ -56,9 +63,11 @@ const crunch: GridExercise = {
 	modes: ["reps", "time"],
 	defaultMode: "reps",
 	load: "none",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 	unilateral: false,
 	mode: "reps",
+	chosenEquipment: "bodyweight",
 };
 
 function set(round: number, fields: Partial<WorkoutSet>): WorkoutSet {
@@ -230,6 +239,7 @@ describe("toBlockExercises", () => {
 				{
 					exerciseId: "bench",
 					mode: "reps",
+					equipment: "barbell",
 					sets: [
 						{ round: 1, warmup: true, reps: 10, weightKg: 43.09 },
 						{ round: 2, warmup: false, reps: 8, weightKg: 61.23 },
@@ -238,6 +248,7 @@ describe("toBlockExercises", () => {
 				{
 					exerciseId: "dips",
 					mode: "reps",
+					equipment: "bodyweight",
 					sets: [
 						{ round: 1, warmup: true, reps: 12 },
 						{ round: 2, warmup: false, reps: 10, weightKg: 4.54 },
@@ -308,6 +319,7 @@ describe("gridFromBlock", () => {
 					{
 						exercise: bench,
 						mode: "reps",
+						equipment: "barbell",
 						sets: [
 							set(1, { reps: 10, weightKg: 40, warmup: true }),
 							set(2, { reps: 8, weightKg: 60 }),
@@ -316,6 +328,7 @@ describe("gridFromBlock", () => {
 					{
 						exercise: crunch,
 						mode: "time",
+						equipment: "bodyweight",
 						sets: [set(2, { durationSeconds: 60 })],
 					},
 				],
@@ -361,10 +374,10 @@ describe("targetFromSets", () => {
 
 describe("modes", () => {
 	it("counts an exercise in its default mode unless the template says otherwise", () => {
-		const { mode: _mode, ...summary } = crunch;
-		expect(withMode(summary).mode).toBe("reps");
-		expect(withMode(summary, "time").mode).toBe("time");
-		expect(withMode(summary, "distance").mode).toBe("reps");
+		const { mode: _mode, chosenEquipment: _equipment, ...summary } = crunch;
+		expect(withChoices(summary).mode).toBe("reps");
+		expect(withChoices(summary, "time").mode).toBe("time");
+		expect(withChoices(summary, "distance").mode).toBe("reps");
 	});
 
 	it("asks for a weight only when the exercise takes one", () => {
@@ -389,11 +402,11 @@ describe("modes", () => {
 			rounds: 2,
 			unit: "kg",
 		});
-		expect(switchDiscards(grid, 0)).toBe(false);
+		expect(switchDiscards(grid, 0, "mode")).toBe(false);
 		grid = setCell(grid, 0, 0, "reps", 20);
 		grid = setCell(grid, 1, 0, "reps", 18);
 		grid = setCell(grid, 0, 1, "reps", 10);
-		expect(switchDiscards(grid, 0)).toBe(true);
+		expect(switchDiscards(grid, 0, "mode")).toBe(true);
 
 		grid = switchMode(
 			grid,
@@ -413,6 +426,7 @@ describe("modes", () => {
 		expect(result.ok && result.exercises[0]).toEqual({
 			exerciseId: "crunch",
 			mode: "time",
+			equipment: "bodyweight",
 			sets: [
 				{ round: 1, warmup: false, durationSeconds: 45 },
 				{ round: 2, warmup: false, durationSeconds: 40 },
@@ -426,5 +440,66 @@ describe("modes", () => {
 		grid = switchMode(grid, 0, "time", undefined, "kg");
 		expect(grid.rows[0]?.cells[0]?.duration).toBeNull();
 		expect(toBlockExercises(grid, "kg").ok).toBe(false);
+	});
+});
+
+describe("equipment", () => {
+	const press: GridExercise = {
+		...bench,
+		id: "press",
+		name: "Développé militaire",
+		equipment: ["barbell", "dumbbell"],
+	};
+
+	it("does an exercise with its default equipment unless the template says otherwise", () => {
+		const { mode: _mode, chosenEquipment: _equipment, ...summary } = press;
+		expect(withChoices(summary).chosenEquipment).toBe("barbell");
+		expect(withChoices(summary, "reps", "dumbbell").chosenEquipment).toBe(
+			"dumbbell",
+		);
+		expect(withChoices(summary, "reps", "cable").chosenEquipment).toBe(
+			"barbell",
+		);
+	});
+
+	it("swaps the loads for those of the other equipment, keeping the reps", () => {
+		let grid = initialGrid({
+			exercises: [press],
+			rounds: 2,
+			lastSets: [[set(1, { reps: 8, weightKg: 40 })]],
+			unit: "kg",
+		});
+		expect(switchDiscards(grid, 0, "equipment")).toBe(true);
+		grid = setCell(grid, 1, 0, "reps", 6);
+
+		grid = switchEquipment(
+			grid,
+			0,
+			"dumbbell",
+			[set(1, { reps: 10, weightKg: 16 }), set(2, { reps: 10, weightKg: 14 })],
+			"kg",
+		);
+		expect(grid.exercises[0]?.chosenEquipment).toBe("dumbbell");
+		expect(grid.rows.map((r) => r.cells[0])).toEqual([
+			{ reps: 8, weight: 16, duration: null, distance: null },
+			{ reps: 6, weight: 14, duration: null, distance: null },
+		]);
+		const result = toBlockExercises(grid, "kg");
+		expect(result.ok && result.exercises[0]?.equipment).toBe("dumbbell");
+	});
+
+	it("clears the loads when the other equipment was never logged", () => {
+		let grid = initialGrid({
+			exercises: [press],
+			lastSets: [[set(1, { reps: 8, weightKg: 40 })]],
+			unit: "kg",
+		});
+		grid = switchEquipment(grid, 0, "dumbbell", undefined, "kg");
+		expect(grid.rows[0]?.cells[0]).toEqual({
+			reps: 8,
+			weight: null,
+			duration: null,
+			distance: null,
+		});
 	});
 });

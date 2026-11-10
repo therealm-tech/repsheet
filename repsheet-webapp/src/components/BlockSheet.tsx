@@ -5,6 +5,7 @@ import { ExercisePicker } from "@/components/ExercisePicker";
 import { Stepper } from "@/components/Stepper";
 import {
 	ConfirmButton,
+	EquipmentSwitch,
 	ErrorText,
 	KindTag,
 	ModeSwitch,
@@ -16,6 +17,7 @@ import { errorMessage } from "@/lib/api/errors";
 import type {
 	Block,
 	BlockInput,
+	Equipment,
 	ExerciseSummary,
 	Load,
 	Mode,
@@ -23,7 +25,14 @@ import type {
 	WeightUnit,
 	WorkoutSet,
 } from "@/lib/api/schemas";
-import { kindOf, letter, modeInLower, summarizeSets } from "@/lib/blocks";
+import {
+	choicesText,
+	equipmentWith,
+	kindOf,
+	letter,
+	modeInLower,
+	summarizeSets,
+} from "@/lib/blocks";
 import { formatShortDay } from "@/lib/dates";
 import {
 	addExercise,
@@ -41,11 +50,12 @@ import {
 	stepFor,
 	stepValue,
 	switchDiscards,
+	switchEquipment,
 	switchMode,
 	toBlockExercises,
 	toggleWarmup,
 	weightRequired,
-	withMode,
+	withChoices,
 } from "@/lib/grid";
 import { useUnit } from "@/lib/hooks";
 import {
@@ -152,10 +162,9 @@ interface Active {
 	col: number;
 }
 
-interface PendingSwitch {
-	col: number;
-	mode: Mode;
-}
+type PendingSwitch =
+	| { kind: "mode"; col: number; mode: Mode }
+	| { kind: "equipment"; col: number; equipment: Equipment };
 
 export function BlockSheet({
 	workoutId,
@@ -185,10 +194,12 @@ export function BlockSheet({
 	);
 
 	const planned =
-		templateBlock?.exercises.map((e) => withMode(e.exercise, e.mode)) ?? [];
+		templateBlock?.exercises.map((e) =>
+			withChoices(e.exercise, e.mode, e.equipment),
+		) ?? [];
 	const prefill = useQueries({
 		queries: planned.map((e) =>
-			previousPerformanceQuery(e.id, workoutId, e.mode),
+			previousPerformanceQuery(e.id, workoutId, e.mode, e.chosenEquipment),
 		),
 	});
 	const prefillDone = prefill.every((q) => !q.isPending);
@@ -199,7 +210,7 @@ export function BlockSheet({
 		}
 		const next = initialGrid({
 			exercises: templateBlock.exercises.map((e) =>
-				withMode(e.exercise, e.mode),
+				withChoices(e.exercise, e.mode, e.equipment),
 			),
 			targets: templateBlock.exercises.map((e) => e.target),
 			rounds: templateBlock.rounds,
@@ -215,7 +226,7 @@ export function BlockSheet({
 	const exerciseIds = grid?.exercises.map((e) => e.id) ?? [];
 	const lastPerformances = useQueries({
 		queries: (grid?.exercises ?? []).map((e) =>
-			previousPerformanceQuery(e.id, workoutId, e.mode),
+			previousPerformanceQuery(e.id, workoutId, e.mode, e.chosenEquipment),
 		),
 	});
 
@@ -250,10 +261,11 @@ export function BlockSheet({
 	async function lastSetsIn(
 		exerciseId: string,
 		mode: Mode,
+		equipment: Equipment,
 	): Promise<WorkoutSet[] | undefined> {
 		try {
 			const page = await queryClient.fetchQuery(
-				previousPerformanceQuery(exerciseId, workoutId, mode),
+				previousPerformanceQuery(exerciseId, workoutId, mode, equipment),
 			);
 			return page.items[0]?.sets;
 		} catch {
@@ -263,11 +275,15 @@ export function BlockSheet({
 
 	async function pick(exercise: ExerciseSummary) {
 		setPicking(false);
-		const lastSets = await lastSetsIn(exercise.id, exercise.defaultMode);
+		const lastSets = await lastSetsIn(
+			exercise.id,
+			exercise.defaultMode,
+			exercise.defaultEquipment,
+		);
 		setGrid((current) =>
 			addExercise(
 				current ?? { exercises: [], rows: [] },
-				withMode(exercise),
+				withChoices(exercise),
 				lastSets,
 				unit,
 			),
@@ -275,20 +291,39 @@ export function BlockSheet({
 		setFocusExercise(exercise.id);
 	}
 
-	async function applySwitch({ col, mode }: PendingSwitch) {
+	async function applySwitch(change: PendingSwitch) {
 		setPendingSwitch(null);
-		const exercise = grid?.exercises[col];
+		const exercise = grid?.exercises[change.col];
 		if (!exercise) {
 			return;
 		}
-		const lastSets = await lastSetsIn(exercise.id, mode);
+		if (change.kind === "mode") {
+			const lastSets = await lastSetsIn(
+				exercise.id,
+				change.mode,
+				exercise.chosenEquipment,
+			);
+			setGrid((current) =>
+				current
+					? switchMode(current, change.col, change.mode, lastSets, unit)
+					: current,
+			);
+			return;
+		}
+		const lastSets = await lastSetsIn(
+			exercise.id,
+			exercise.mode,
+			change.equipment,
+		);
 		setGrid((current) =>
-			current ? switchMode(current, col, mode, lastSets, unit) : current,
+			current
+				? switchEquipment(current, change.col, change.equipment, lastSets, unit)
+				: current,
 		);
 	}
 
 	function requestSwitch(change: PendingSwitch) {
-		if (grid && switchDiscards(grid, change.col)) {
+		if (grid && switchDiscards(grid, change.col, change.kind)) {
 			setPendingSwitch(change);
 		} else {
 			void applySwitch(change);
@@ -407,14 +442,16 @@ export function BlockSheet({
 										unit,
 									),
 								};
+								const how = choicesText(
+									exercise,
+									exercise.mode,
+									exercise.chosenEquipment,
+								);
 								return (
 									<li key={exercise.id} className="muted small">
 										<b className="accent">{letter(i)}</b>{" "}
-										{exercise.modes.length > 1
-											? t("block.lastTimeIn", {
-													...details,
-													mode: modeInLower(exercise.mode),
-												})
+										{how
+											? t("block.lastTimeIn", { ...details, how })
 											: t("block.lastTime", details)}
 									</li>
 								);
@@ -424,11 +461,17 @@ export function BlockSheet({
 						{pendingSwitch && switching ? (
 							<div className="switch-confirm">
 								<p>
-									{t("block.switchConfirm", {
-										name: switching.name,
-										mode: modeInLower(pendingSwitch.mode),
-										previous: modeInLower(switching.mode),
-									})}
+									{pendingSwitch.kind === "mode"
+										? t("block.switchConfirm", {
+												name: switching.name,
+												mode: modeInLower(pendingSwitch.mode),
+												previous: modeInLower(switching.mode),
+											})
+										: t("block.switchEquipmentConfirm", {
+												name: switching.name,
+												equipment: equipmentWith(pendingSwitch.equipment),
+												previous: equipmentWith(switching.chosenEquipment),
+											})}
 								</p>
 								<div className="row">
 									<button
@@ -466,7 +509,19 @@ export function BlockSheet({
 												modes={exercise.modes}
 												value={exercise.mode}
 												label={t("block.modeOf", { name: exercise.name })}
-												onChange={(mode) => requestSwitch({ col, mode })}
+												onChange={(mode) =>
+													requestSwitch({ kind: "mode", col, mode })
+												}
+											/>
+										) : null}
+										{exercise.equipment.length > 1 ? (
+											<EquipmentSwitch
+												equipment={exercise.equipment}
+												value={exercise.chosenEquipment}
+												label={t("block.equipmentOf", { name: exercise.name })}
+												onChange={(equipment) =>
+													requestSwitch({ kind: "equipment", col, equipment })
+												}
 											/>
 										) : null}
 										<button

@@ -4,26 +4,52 @@ import { KindTag } from "@/components/ui";
 import { previousPerformanceQuery } from "@/lib/api/endpoints";
 import type {
 	Block,
+	Equipment,
 	ExerciseSummary,
 	Mode,
 	TemplateBlock,
 	WeightUnit,
 	WorkoutSet,
 } from "@/lib/api/schemas";
-import { letter, maxWorkingWeight, summarizeSets } from "@/lib/blocks";
+import {
+	equipmentLabel,
+	letter,
+	maxWorkingWeight,
+	summarizeSets,
+} from "@/lib/blocks";
 import { formatShortDay } from "@/lib/dates";
 import { formatNumber, kgToUnit } from "@/lib/units";
 
-/** "+2,5 kg vs 14 oct." against the last time this exercise was done before this workout. */
+/** The exercise's name, followed by the equipment used when it offers a choice. */
+function ExerciseName({
+	exercise,
+	equipment,
+}: {
+	exercise: ExerciseSummary;
+	equipment: Equipment;
+}) {
+	return (
+		<span className="ex-name">
+			{exercise.name}
+			{exercise.equipment.length > 1 ? (
+				<span className="muted"> · {equipmentLabel(equipment)}</span>
+			) : null}
+		</span>
+	);
+}
+
+/** "+2,5 kg vs 14 oct." against the last time this exercise was done the same way before this workout. */
 function Progress({
 	exercise,
 	mode,
+	equipment,
 	sets,
 	workoutId,
 	unit,
 }: {
 	exercise: ExerciseSummary;
 	mode: Mode;
+	equipment: Equipment;
 	sets: WorkoutSet[];
 	workoutId: string;
 	unit: WeightUnit;
@@ -31,7 +57,7 @@ function Progress({
 	const { t } = useTranslation();
 	const current = maxWorkingWeight(sets);
 	const performances = useQuery({
-		...previousPerformanceQuery(exercise.id, workoutId, mode),
+		...previousPerformanceQuery(exercise.id, workoutId, mode, equipment),
 		enabled:
 			mode === "reps" && exercise.load === "required" && current !== null,
 	});
@@ -91,7 +117,10 @@ export function BlockCard({
 				<span key={entry.exercise.id} className="block-exercise">
 					<span className="ex">
 						<span className="ex-letter">{letter(i)}</span>
-						<span className="ex-name">{entry.exercise.name}</span>
+						<ExerciseName
+							exercise={entry.exercise}
+							equipment={entry.equipment}
+						/>
 						<span className="ex-value">
 							{summarizeSets(entry.mode, entry.exercise.load, entry.sets, unit)}
 						</span>
@@ -100,6 +129,7 @@ export function BlockCard({
 						<Progress
 							exercise={entry.exercise}
 							mode={entry.mode}
+							equipment={entry.equipment}
 							sets={entry.sets}
 							workoutId={workoutId}
 							unit={unit}
@@ -137,7 +167,7 @@ export function PlannedBlockCard({
 			{block.exercises.map((entry, i) => (
 				<span key={entry.exercise.id} className="ex muted">
 					<span className="ex-letter">{letter(i)}</span>
-					<span className="ex-name">{entry.exercise.name}</span>
+					<ExerciseName exercise={entry.exercise} equipment={entry.equipment} />
 					<span className="ex-value">
 						{[
 							block.rounds && i === 0

@@ -99,7 +99,8 @@ export const fr = {
 		deleteRound: "Supprimer le tour {{round}}",
 		done: "fait",
 		lastTime: "Dernière fois ({{date}}) : {{summary}}",
-		lastTimeIn: "Dernière fois {{mode}} ({{date}}) : {{summary}}",
+		equipmentOf: "Matériel de {{name}}",
+		lastTimeIn: "Dernière fois {{how}} ({{date}}) : {{summary}}",
 		modeOf: "Mode de {{name}}",
 		newTitle: "Nouveau bloc",
 		planned: "prévu",
@@ -113,6 +114,8 @@ export const fr = {
 		stepHint: "± {{step}} · ou tape la valeur",
 		switchConfirm:
 			"Compter {{name}} {{mode}} ? Les valeurs déjà saisies {{previous}} seront effacées.",
+		switchEquipmentConfirm:
+			"Faire {{name}} {{equipment}} ? Les charges déjà saisies {{previous}} seront effacées.",
 		switchMode: "Changer",
 		tapToLog: "Toucher pour logger →",
 		title: "Bloc {{position}}",
@@ -212,6 +215,24 @@ export const fr = {
 		machine: "Machine",
 		other: "Autre",
 	},
+	equipmentLower: {
+		barbell: "barre",
+		bodyweight: "poids du corps",
+		cable: "poulie",
+		dumbbell: "haltères",
+		kettlebell: "kettlebell",
+		machine: "machine",
+		other: "autre",
+	},
+	equipmentWith: {
+		barbell: "à la barre",
+		bodyweight: "au poids du corps",
+		cable: "à la poulie",
+		dumbbell: "aux haltères",
+		kettlebell: "à la kettlebell",
+		machine: "à la machine",
+		other: "avec un autre matériel",
+	},
 	picker: {
 		all: "Tous",
 		create: "＋ Créer un exercice",
@@ -233,6 +254,7 @@ export const fr = {
 		deleteCatalogMessage:
 			"L'exercice disparaît du catalogue pour tout le monde.",
 		deleteCustomMessage: "L'exercice disparaît de ta liste.",
+		equipmentShown: "Matériel affiché",
 		modeShown: "Mode affiché",
 		noSets: "Pas encore de série enregistrée pour cet exercice.",
 		notFound: "Exercice introuvable.",
@@ -246,6 +268,7 @@ export const fr = {
 		builtIn: "Ajouter au catalogue (visible par tous)",
 		create: "Créer l'exercice",
 		defaultMode: "Par défaut",
+		defaultEquipment: "Matériel par défaut",
 		editTitle: "Modifier l'exercice",
 		equipment: "Matériel",
 		load: "Charge",
@@ -311,9 +334,14 @@ export const fr = {
 		dateRequired: "Choisis la date de la séance.",
 		defaultModeInvalid:
 			"Le mode par défaut doit faire partie des modes choisis.",
+		defaultEquipmentInvalid:
+			"Le matériel par défaut doit faire partie du matériel choisi.",
 		deleteFailed: "Suppression impossible.",
 		durationRange: "La durée va de 1 à 1440 minutes.",
 		emailTaken: "Un compte existe déjà avec cet email.",
+		equipmentLocked:
+			"Ce matériel a déjà des séries enregistrées : il ne peut pas être retiré.",
+		equipmentRequired: "Choisis au moins un matériel.",
 		exerciseInUse:
 			"Cet exercice est utilisé dans une séance ou un modèle : il ne peut pas être supprimé.",
 		exerciseNameTaken: "Un exercice porte déjà ce nom.",

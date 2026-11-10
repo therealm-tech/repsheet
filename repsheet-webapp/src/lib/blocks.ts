@@ -50,10 +50,10 @@ export function modesText(modes: Mode[]): string {
 	);
 }
 
-/** How an exercise is counted, for lists: "Bodyweight · reps or time", "Cable · reps · load". */
+/** How an exercise is done and counted, for lists: "Bodyweight · reps or time", "Barbell or dumbbells · reps · load". */
 export function describeExercise(exercise: ExerciseSummary): string[] {
 	return [
-		equipmentLabel(exercise.equipment),
+		equipmentText(exercise.equipment),
 		modesText(exercise.modes),
 		exercise.load === "none" ? null : i18n.t(`loadTags.${exercise.load}`),
 		exercise.unilateral ? i18n.t("exercise.perSide") : null,
@@ -62,6 +62,35 @@ export function describeExercise(exercise: ExerciseSummary): string[] {
 
 export function equipmentLabel(equipment: Equipment): string {
 	return i18n.t(`equipment.${equipment}`);
+}
+
+/** "Barbell or dumbbells": the equipment an exercise can be done with. */
+export function equipmentText(equipment: Equipment[]): string {
+	const text = new Intl.ListFormat(intlTag(), { type: "disjunction" }).format(
+		equipment.map((e) => i18n.t(`equipmentLower.${e}`)),
+	);
+	return text.charAt(0).toLocaleUpperCase(intlTag()) + text.slice(1);
+}
+
+/** "with dumbbells": an equipment as an adverbial phrase, inside a sentence. */
+export function equipmentWith(equipment: Equipment): string {
+	return i18n.t(`equipmentWith.${equipment}`);
+}
+
+/**
+ * "in reps, with dumbbells": how a block does an exercise, naming only the
+ * choices the exercise leaves open; null when it leaves none.
+ */
+export function choicesText(
+	exercise: ExerciseSummary,
+	mode: Mode,
+	equipment: Equipment,
+): string | null {
+	const parts = [
+		exercise.modes.length > 1 ? modeInLower(mode) : null,
+		exercise.equipment.length > 1 ? equipmentWith(equipment) : null,
+	].filter((part): part is string => part !== null);
+	return parts.length > 0 ? parts.join(", ") : null;
 }
 
 function allEqual(values: number[]): boolean {

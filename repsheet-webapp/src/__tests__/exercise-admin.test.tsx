@@ -20,7 +20,8 @@ const builtIn = exercise({ id: "e1", name: "Squat" });
 const custom = exercise({
 	id: "e1",
 	name: "Dév. Arnold",
-	equipment: "dumbbell",
+	equipment: ["dumbbell"],
+	defaultEquipment: "dumbbell",
 	custom: true,
 });
 
@@ -139,7 +140,8 @@ describe("exercise detail permissions", () => {
 			modes: ["reps", "time"],
 			defaultMode: "time",
 			load: "required",
-			equipment: "dumbbell",
+			equipment: ["dumbbell"],
+			defaultEquipment: "dumbbell",
 			unilateral: false,
 		});
 	});
@@ -210,7 +212,8 @@ describe("catalog toggle on creation", () => {
 				modes: ["reps"],
 				defaultMode: "reps",
 				load: "required",
-				equipment: "barbell",
+				equipment: ["barbell"],
+				defaultEquipment: "barbell",
 				unilateral: false,
 				builtIn: true,
 			}),
@@ -239,7 +242,8 @@ describe("catalog toggle on creation", () => {
 				modes: ["reps"],
 				defaultMode: "reps",
 				load: "required",
-				equipment: "barbell",
+				equipment: ["barbell"],
+				defaultEquipment: "barbell",
 				unilateral: false,
 			}),
 		);

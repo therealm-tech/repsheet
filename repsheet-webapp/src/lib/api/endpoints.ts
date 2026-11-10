@@ -4,6 +4,7 @@ import {
 	BlockSchema,
 	type CreateExerciseInput,
 	type CreateWorkoutInput,
+	type Equipment,
 	ExerciseSchema,
 	type Locale,
 	type Mode,
@@ -65,7 +66,11 @@ export const api = {
 	deleteExercise: (id: string) => requestVoid("DELETE", `/exercises/${id}`),
 	performances: (
 		id: string,
-		params: PageParams & { beforeWorkoutId?: string; mode?: Mode } = {},
+		params: PageParams & {
+			beforeWorkoutId?: string;
+			mode?: Mode;
+			equipment?: Equipment;
+		} = {},
 	) =>
 		request("GET", `/exercises/${id}/performances`, PerformancePageSchema, {
 			query: { ...params },
@@ -108,6 +113,7 @@ export const keys = {
 		perPage: number,
 		beforeWorkoutId?: string,
 		mode?: Mode,
+		equipment?: Equipment,
 	) =>
 		[
 			"performances",
@@ -115,6 +121,7 @@ export const keys = {
 			perPage,
 			beforeWorkoutId ?? null,
 			mode ?? null,
+			equipment ?? null,
 		] as const,
 	workouts: ["workouts"] as const,
 	workout: (id: string) => ["workout", id] as const,
@@ -122,16 +129,31 @@ export const keys = {
 	template: (id: string) => ["template", id] as const,
 };
 
-/** The latest performance of an exercise in `mode`, logged before the given workout. */
+/**
+ * The latest performance of an exercise in `mode` and with `equipment`,
+ * logged before the given workout.
+ */
 export function previousPerformanceQuery(
 	exerciseId: string,
 	beforeWorkoutId: string,
 	mode: Mode,
+	equipment: Equipment,
 ) {
 	return {
-		queryKey: keys.performances(exerciseId, 1, beforeWorkoutId, mode),
+		queryKey: keys.performances(
+			exerciseId,
+			1,
+			beforeWorkoutId,
+			mode,
+			equipment,
+		),
 		queryFn: () =>
-			api.performances(exerciseId, { perPage: 1, beforeWorkoutId, mode }),
+			api.performances(exerciseId, {
+				perPage: 1,
+				beforeWorkoutId,
+				mode,
+				equipment,
+			}),
 		staleTime: 60_000,
 	};
 }

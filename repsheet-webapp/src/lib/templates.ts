@@ -1,4 +1,5 @@
 import type {
+	Equipment,
 	ExerciseSummary,
 	Mode,
 	Template,
@@ -12,6 +13,7 @@ import { targetFromSets } from "@/lib/grid";
 export interface DraftExercise {
 	exercise: ExerciseSummary;
 	mode: Mode;
+	equipment: Equipment;
 	target: string;
 }
 
@@ -51,6 +53,7 @@ export function draftFromTemplate(template: Template): Draft {
 			exercises: block.exercises.map((e) => ({
 				exercise: e.exercise,
 				mode: e.mode,
+				equipment: e.equipment,
 				target: e.target ?? "",
 			})),
 		})),
@@ -70,6 +73,7 @@ export function draftFromWorkout(workout: Workout): Draft {
 			exercises: block.exercises.map((e) => ({
 				exercise: e.exercise,
 				mode: e.mode,
+				equipment: e.equipment,
 				target: targetFromSets(e.mode, e.sets) ?? "",
 			})),
 		})),
@@ -85,7 +89,11 @@ export function draftToInput(draft: Draft): TemplateInput {
 				const out: TemplateBlockInput = {
 					exercises: block.exercises.map((e) => {
 						const target = e.target.trim();
-						const exercise = { exerciseId: e.exercise.id, mode: e.mode };
+						const exercise = {
+							exerciseId: e.exercise.id,
+							mode: e.mode,
+							equipment: e.equipment,
+						};
 						return target ? { ...exercise, target } : exercise;
 					}),
 				};
