@@ -44,6 +44,7 @@ export function WorkoutForm({
 	initial,
 	withNote,
 	withDuration = true,
+	notePlaceholder,
 	submitLabel,
 	pending,
 	error,
@@ -54,6 +55,7 @@ export function WorkoutForm({
 	initial: WorkoutFormInitial;
 	withNote: boolean;
 	withDuration?: boolean;
+	notePlaceholder?: string;
 	submitLabel: string;
 	pending: boolean;
 	error: string | null;
@@ -137,7 +139,7 @@ export function WorkoutForm({
 					<textarea
 						id={`${id}-note`}
 						className="input textarea"
-						placeholder={t("workoutForm.notePlaceholder")}
+						placeholder={notePlaceholder ?? t("workoutForm.notePlaceholder")}
 						value={note}
 						onChange={(e) => setNote(e.target.value)}
 					/>

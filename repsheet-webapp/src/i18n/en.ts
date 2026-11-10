@@ -413,6 +413,7 @@ export const en: Catalog = {
 		newTitle: "Plan for {{name}}",
 		notLogged: "Not logged yet",
 		notLoggedBlock: "not logged",
+		notePlaceholder: "For the whole session: warm-up, goal…",
 		send: "Send",
 		whatWasLogged: "What was logged",
 	},

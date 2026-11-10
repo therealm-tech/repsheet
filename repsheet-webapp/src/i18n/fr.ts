@@ -412,6 +412,7 @@ export const fr = {
 		newTitle: "Prévoir pour {{name}}",
 		notLogged: "Pas encore notée",
 		notLoggedBlock: "pas noté",
+		notePlaceholder: "Pour toute la séance : échauffement, objectif…",
 		send: "Envoyer",
 		whatWasLogged: "Ce qui a été noté",
 	},

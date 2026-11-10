@@ -182,6 +182,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 							submitLabel={t("plannedSession.create")}
 							withNote
 							withDuration={false}
+							notePlaceholder={t("plannedSession.notePlaceholder")}
 							initial={{
 								name: "",
 								performedOn: today(),

@@ -319,6 +319,7 @@ export function PlannedSessionPage({
 							submitLabel={t("common.save")}
 							withNote
 							withDuration={false}
+							notePlaceholder={t("plannedSession.notePlaceholder")}
 							initial={{
 								name: s.name,
 								performedOn: s.plannedOn,

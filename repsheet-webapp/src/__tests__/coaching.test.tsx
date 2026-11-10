@@ -374,6 +374,7 @@ describe("logging a planned session", () => {
 		});
 		const bySet: PlannedSession = {
 			...session,
+			note: "Échauffement 10 min de rameur avant.",
 			blocks: [
 				{
 					id: "tb1",
@@ -412,6 +413,9 @@ describe("logging a planned session", () => {
 		expect(card).toHaveTextContent("« Talons surélevés »");
 		expect(card).toHaveTextContent("Marie · coach");
 		expect(await screen.findByText(/prévue par Marie/)).toBeVisible();
+		expect(
+			screen.getByText("Échauffement 10 min de rameur avant."),
+		).toBeVisible();
 	});
 });
 

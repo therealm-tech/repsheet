@@ -149,6 +149,9 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 				</div>
 
 				<div className="workout-aside">
+					{coach && template.data?.note ? (
+						<p className="workout-note">{template.data.note}</p>
+					) : null}
 					{w.note ? <p className="workout-note">{w.note}</p> : null}
 					<ShareWithCoaches workoutId={w.id} />
 					<div className="stack-tight workout-actions">
