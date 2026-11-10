@@ -55,6 +55,8 @@ pub enum Conflict {
     ExerciseNameTaken,
     /// A mode an exercise was logged in cannot be removed from it.
     ModeLocked,
+    /// Equipment an exercise was logged with cannot be removed from it.
+    EquipmentLocked,
     /// A workout or a template still references the exercise.
     ExerciseInUse,
     OwnRole,
@@ -67,6 +69,7 @@ impl Conflict {
             Self::EmailTaken => "urn:repsheet:problem:email-taken",
             Self::ExerciseNameTaken => "urn:repsheet:problem:exercise-name-taken",
             Self::ModeLocked => "urn:repsheet:problem:mode-locked",
+            Self::EquipmentLocked => "urn:repsheet:problem:equipment-locked",
             Self::ExerciseInUse => "urn:repsheet:problem:exercise-in-use",
             Self::OwnRole => "urn:repsheet:problem:own-role",
             Self::OwnAccount => "urn:repsheet:problem:own-account",
@@ -78,6 +81,7 @@ impl Conflict {
             Self::EmailTaken => "an account already uses this email",
             Self::ExerciseNameTaken => "an exercise with this name already exists",
             Self::ModeLocked => "a mode the exercise was logged in cannot be removed",
+            Self::EquipmentLocked => "equipment the exercise was logged with cannot be removed",
             Self::ExerciseInUse => "the exercise is used in a workout or a template",
             Self::OwnRole => "a super admin cannot change their own role",
             Self::OwnAccount => "a super admin cannot delete their own account",

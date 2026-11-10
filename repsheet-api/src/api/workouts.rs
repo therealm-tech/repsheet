@@ -14,7 +14,7 @@ use validator::{Validate, ValidationErrors};
 use crate::{
     api::{
         AppState, authenticated,
-        exercises::{ExerciseSummaryResponse, ModeDto},
+        exercises::{EquipmentDto, ExerciseSummaryResponse, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{PageQuery, PageResponse},
     },
@@ -26,7 +26,7 @@ use crate::{
             WorkoutSummaryRow,
         },
     },
-    domain::{BlockKind, Mode, SetField, SetValues, SetViolation},
+    domain::{BlockKind, Equipment, Mode, SetField, SetValues, SetViolation},
     error::{AppError, AppResult, FieldError},
 };
 
@@ -224,6 +224,7 @@ impl From<LoadedBlock> for BlockResponse {
                 .map(|e| BlockExerciseResponse {
                     exercise: e.exercise.into(),
                     mode: e.mode.into(),
+                    equipment: e.equipment.into(),
                     sets: e.sets.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
@@ -237,6 +238,8 @@ pub struct BlockExerciseResponse {
     pub exercise: ExerciseSummaryResponse,
     /// The mode the exercise is counted in for every round of the block.
     pub mode: ModeDto,
+    /// The equipment the exercise is done with for every round of the block.
+    pub equipment: EquipmentDto,
     pub sets: Vec<SetResponse>,
 }
 
@@ -303,6 +306,8 @@ pub struct BlockExerciseRequest {
     /// carries the field of this mode, and a weight as the exercise's load
     /// rule says.
     pub mode: Option<ModeDto>,
+    /// One of the exercise's equipment; its default equipment when omitted.
+    pub equipment: Option<EquipmentDto>,
     #[validate(length(min = 1, max = 50), nested)]
     pub sets: Vec<SetRequest>,
 }
@@ -520,15 +525,18 @@ async fn delete_block(
     Ok(NoContent)
 }
 
-/// The sets of a block exercise, with the mode they are counted in.
+/// The sets of a block exercise, with the mode they are counted in and the
+/// equipment they are done with.
 struct CheckedExercise {
     mode: Mode,
+    equipment: Equipment,
     sets: Vec<SetValues>,
 }
 
 /// Checks what field-level validation cannot: that the exercises and the
 /// template block are the user's, that each exercise is counted in one of its
-/// modes, and that each set fits that mode and the exercise's load rule.
+/// modes and done with one of its equipment, and that each set fits that mode
+/// and the exercise's load rule.
 /// Returns the checked exercises, in request order.
 async fn check_block(
     conn: &mut sqlx::PgConnection,
@@ -559,14 +567,25 @@ async fn check_block(
             ));
             continue;
         };
-        let Some(mode) = known
+        let mode = known
             .modes
-            .choose(exercise.mode.map(Into::into), known.default_mode)
-        else {
+            .choose(exercise.mode.map(Into::into), known.default_mode);
+        if mode.is_none() {
             errors.push(FieldError::new(
                 format!("exercises[{i}].mode"),
                 "not a mode of the exercise",
             ));
+        }
+        let equipment = known
+            .equipment
+            .choose(exercise.equipment.map(Into::into), known.default_equipment);
+        if equipment.is_none() {
+            errors.push(FieldError::new(
+                format!("exercises[{i}].equipment"),
+                "not an equipment of the exercise",
+            ));
+        }
+        let (Some(mode), Some(equipment)) = (mode, equipment) else {
             continue;
         };
         for (j, set) in sets.iter().enumerate() {
@@ -580,7 +599,11 @@ async fn check_block(
                 )
             }));
         }
-        checked.push(CheckedExercise { mode, sets });
+        checked.push(CheckedExercise {
+            mode,
+            equipment,
+            sets,
+        });
     }
 
     if errors.is_empty() {
@@ -622,6 +645,7 @@ fn new_block_exercises<'a>(
         .map(|(exercise, checked)| NewBlockExercise {
             exercise_id: exercise.exercise_id,
             mode: checked.mode,
+            equipment: checked.equipment,
             sets: &checked.sets,
         })
         .collect()

@@ -244,7 +244,7 @@ async fn searches_the_catalog_ignoring_case_and_accents(pool: PgPool) {
     let app = TestApp::new(pool);
     let token = app.sign_up("alex@example.com").await;
 
-    let (status, page) = app.get("/v1/exercises?q=DEVELOPPE%20couche", &token).await;
+    let (status, page) = app.get("/v1/exercises?q=DEVELOPPE%20Inclin", &token).await;
     assert_eq!(status, StatusCode::OK);
     let names: Vec<&str> = page["items"]
         .as_array()
@@ -252,8 +252,8 @@ async fn searches_the_catalog_ignoring_case_and_accents(pool: PgPool) {
         .iter()
         .map(|e| e["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, vec!["Développé couché", "Développé couché haltères"]);
-    assert_eq!(page["total"], 2);
+    assert_eq!(names, vec!["Développé incliné"]);
+    assert_eq!(page["total"], 1);
     assert_eq!(page["perPage"], 50);
 
     let (status, _) = app.get("/v1/exercises?perPage=101", &token).await;
@@ -270,7 +270,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "Développé Arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell" }),
+            json!({ "names": { "fr": "Développé Arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
         )
         .await;
     assert_eq!(status, StatusCode::CREATED);
@@ -281,7 +281,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "developpe arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": "other" }),
+            json!({ "names": { "fr": "developpe arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": ["other"], "defaultEquipment": "other" }),
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT);
@@ -290,7 +290,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "SQUAT" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "barbell" }),
+            json!({ "names": { "fr": "SQUAT" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell" }),
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT, "built-in names are taken too");
@@ -304,7 +304,7 @@ async fn custom_exercises_are_private_and_unique(pool: PgPool) {
 async fn logs_blocks_in_a_workout(pool: PgPool) {
     let app = TestApp::new(pool);
     let token = app.sign_up("alex@example.com").await;
-    let incline = app.exercise_id(&token, "Développé incliné haltères").await;
+    let incline = app.exercise_id(&token, "Développé incliné").await;
     let flyes = app.exercise_id(&token, "Écarté poulie").await;
 
     let (status, workout) = app
@@ -326,7 +326,7 @@ async fn logs_blocks_in_a_workout(pool: PgPool) {
             json!({
                 "restSeconds": 90,
                 "exercises": [
-                    { "exerciseId": incline, "sets": [
+                    { "exerciseId": incline, "equipment": "dumbbell", "sets": [
                         { "round": 1, "reps": 10, "weightKg": 22.0 },
                         { "round": 2, "reps": 10, "weightKg": 22.0 }
                     ]},
@@ -342,13 +342,18 @@ async fn logs_blocks_in_a_workout(pool: PgPool) {
     assert_eq!(block["kind"], "superset");
     assert_eq!(block["position"], 1);
     assert_eq!(block["exercises"][1]["sets"][1]["weightKg"], 12.5);
+    assert_eq!(block["exercises"][0]["equipment"], "dumbbell");
 
     let (status, fetched) = app.get(&workout_uri, &token).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(fetched["blocks"].as_array().unwrap().len(), 1);
     assert_eq!(
         fetched["blocks"][0]["exercises"][0]["exercise"]["name"],
-        "Développé incliné haltères"
+        "Développé incliné"
+    );
+    assert_eq!(
+        fetched["blocks"][0]["exercises"][0]["equipment"],
+        "dumbbell"
     );
 
     let block_uri = format!("{workout_uri}/blocks/{}", block["id"].as_str().unwrap());
@@ -364,6 +369,10 @@ async fn logs_blocks_in_a_workout(pool: PgPool) {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(replaced["kind"], "simple");
     assert_eq!(replaced["id"], block["id"]);
+    assert_eq!(
+        replaced["exercises"][0]["equipment"], "barbell",
+        "defaults to the default equipment"
+    );
 
     let (status, performances) = app
         .get(&format!("/v1/exercises/{incline}/performances"), &token)
@@ -724,7 +733,7 @@ async fn deleting_an_account_deletes_its_data(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
         )
         .await;
     let (_, workout) = app
@@ -769,7 +778,7 @@ async fn super_admins_curate_the_catalog(pool: PgPool) {
 
     let new_exercise = json!({
         "names": { "fr": "Pull-over", "en": "Dumbbell pullover" },
-        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell", "builtIn": true
+        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "builtIn": true
     });
     let (status, _) = app.post("/v1/exercises", &alex, new_exercise.clone()).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
@@ -789,7 +798,7 @@ async fn super_admins_curate_the_catalog(pool: PgPool) {
     );
     let edit = json!({
         "names": { "fr": "Pull-over haltère", "en": "Dumbbell pullover" },
-        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell", "unilateral": false
+        "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false
     });
     assert_eq!(
         app.put(&uri, &alex, edit.clone()).await.0,
@@ -811,7 +820,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .post(
             "/v1/exercises",
             &alex,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
         )
         .await;
     let uri = format!("/v1/exercises/{}", custom["id"].as_str().unwrap());
@@ -820,7 +829,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .put(
             &uri,
             &alex,
-            json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell", "unilateral": false }),
+            json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
         )
         .await;
     assert_eq!(
@@ -849,7 +858,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .put(
             &uri,
             &alex,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": "dumbbell", "unilateral": false }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
         )
         .await;
     assert_eq!(
@@ -861,7 +870,7 @@ async fn owners_edit_their_exercises_without_breaking_history(pool: PgPool) {
         .put(
             &uri,
             &alex,
-            json!({ "names": { "fr": "Spider curl" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell", "unilateral": true }),
+            json!({ "names": { "fr": "Spider curl" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": true }),
         )
         .await;
     assert_eq!(status, StatusCode::OK);
@@ -965,7 +974,7 @@ async fn names_exercises_in_the_user_language(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
         )
         .await;
     assert_eq!(
@@ -978,7 +987,7 @@ async fn names_exercises_in_the_user_language(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": { "en": "BENCH PRESS" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "barbell" }),
+            json!({ "names": { "en": "BENCH PRESS" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["barbell"], "defaultEquipment": "barbell" }),
         )
         .await;
     assert_eq!(
@@ -991,7 +1000,7 @@ async fn names_exercises_in_the_user_language(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": {}, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": "other" }),
+            json!({ "names": {}, "modes": ["reps"], "defaultMode": "reps", "load": "optional", "equipment": ["other"], "defaultEquipment": "other" }),
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1006,7 +1015,7 @@ async fn catalog_exercises_need_both_names(pool: PgPool) {
         .post(
             "/v1/exercises",
             &admin,
-            json!({ "names": { "fr": "Pull-over" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell", "builtIn": true }),
+            json!({ "names": { "fr": "Pull-over" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "builtIn": true }),
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1021,7 +1030,7 @@ async fn conflicts_say_which_rule_they_break(pool: PgPool) {
         .post(
             "/v1/exercises",
             &token,
-            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell" }),
+            json!({ "names": { "fr": "Curl araignée" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell" }),
         )
         .await;
     let uri = format!("/v1/exercises/{}", custom["id"].as_str().unwrap());
@@ -1046,7 +1055,7 @@ async fn conflicts_say_which_rule_they_break(pool: PgPool) {
             app.put(
                 &uri,
                 &token,
-                json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": "dumbbell", "unilateral": false }),
+                json!({ "names": { "fr": "Curl araignée" }, "modes": ["time"], "defaultMode": "time", "load": "none", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
             )
             .await,
             "urn:repsheet:problem:mode-locked",
@@ -1055,7 +1064,7 @@ async fn conflicts_say_which_rule_they_break(pool: PgPool) {
             app.put(
                 &uri,
                 &token,
-                json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": "dumbbell", "unilateral": false }),
+                json!({ "names": { "fr": "Squat" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "unilateral": false }),
             )
             .await,
             "urn:repsheet:problem:exercise-name-taken",
@@ -1113,7 +1122,7 @@ async fn describes_how_exercises_are_counted(pool: PgPool) {
             json!({
                 "names": { "fr": "Crunch oblique" },
                 "modes": ["time", "reps"], "defaultMode": "time", "load": "optional",
-                "equipment": "bodyweight"
+                "equipment": ["bodyweight"], "defaultEquipment": "bodyweight"
             }),
         )
         .await;
@@ -1141,7 +1150,8 @@ async fn describes_how_exercises_are_counted(pool: PgPool) {
     ] {
         let mut body = body;
         body["names"] = json!({ "fr": "Gainage dynamique" });
-        body["equipment"] = json!("bodyweight");
+        body["equipment"] = json!(["bodyweight"]);
+        body["defaultEquipment"] = json!("bodyweight");
         let (status, problem) = app.post("/v1/exercises", &token, body).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(field_paths(&problem), vec![field]);
@@ -1299,7 +1309,7 @@ async fn logged_modes_cannot_be_removed(pool: PgPool) {
             json!({
                 "names": { "fr": "Crunch oblique" },
                 "modes": ["reps", "time", "distance"], "defaultMode": "reps", "load": "none",
-                "equipment": "bodyweight"
+                "equipment": ["bodyweight"], "defaultEquipment": "bodyweight"
             }),
         )
         .await;
@@ -1330,7 +1340,7 @@ async fn logged_modes_cannot_be_removed(pool: PgPool) {
     let edit = |modes: Value, default_mode: &str, load: &str| {
         json!({
             "names": { "fr": "Crunch oblique" }, "modes": modes, "defaultMode": default_mode,
-            "load": load, "equipment": "bodyweight", "unilateral": false
+            "load": load, "equipment": ["bodyweight"], "defaultEquipment": "bodyweight", "unilateral": false
         })
     };
     let (status, problem) = app
@@ -1407,4 +1417,348 @@ async fn templates_keep_the_mode_with_the_target(pool: PgPool) {
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(field_paths(&problem), vec!["blocks[0].exercises[1].mode"]);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn describes_the_equipment_of_exercises(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let bench = app.exercise_id(&token, "Développé couché").await;
+    let (_, exercise) = app.get(&format!("/v1/exercises/{bench}"), &token).await;
+    assert_eq!(exercise["equipment"], json!(["barbell", "dumbbell"]));
+    assert_eq!(exercise["defaultEquipment"], "barbell");
+
+    let (status, created) = app
+        .post(
+            "/v1/exercises",
+            &token,
+            json!({
+                "names": { "fr": "Développé Arnold" },
+                "modes": ["reps"], "defaultMode": "reps", "load": "required",
+                "equipment": ["kettlebell", "dumbbell"], "defaultEquipment": "kettlebell"
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(
+        created["equipment"],
+        json!(["dumbbell", "kettlebell"]),
+        "in the fixed order"
+    );
+    assert_eq!(created["defaultEquipment"], "kettlebell");
+
+    for (equipment, default_equipment, field) in [
+        (json!([]), "barbell", "equipment"),
+        (json!(["cable", "cable"]), "cable", "equipment"),
+        (json!(["cable"]), "machine", "defaultEquipment"),
+    ] {
+        let (status, problem) = app
+            .post(
+                "/v1/exercises",
+                &token,
+                json!({
+                    "names": { "fr": "Tirage nuque" },
+                    "modes": ["reps"], "defaultMode": "reps", "load": "required",
+                    "equipment": equipment, "defaultEquipment": default_equipment
+                }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(field_paths(&problem), vec![field]);
+    }
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn blocks_and_templates_do_each_exercise_with_one_of_its_equipment(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let bench = app.exercise_id(&token, "Développé couché").await;
+    let workout = new_workout(&app, &token, "2026-10-22").await;
+    let uri = format!("/v1/workouts/{workout}/blocks");
+
+    let (status, problem) = app
+        .post(
+            &uri,
+            &token,
+            json!({ "exercises": [
+                { "exerciseId": bench, "equipment": "machine", "sets": [
+                    { "round": 1, "reps": 8, "weightKg": 60.0 }
+                ]}
+            ]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(field_paths(&problem), vec!["exercises[0].equipment"]);
+
+    let (status, template) = app
+        .post(
+            "/v1/templates",
+            &token,
+            json!({ "name": "Push A", "blocks": [{ "exercises": [
+                { "exerciseId": bench, "equipment": "dumbbell", "target": "8" }
+            ]}]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(
+        template["blocks"][0]["exercises"][0]["equipment"],
+        "dumbbell"
+    );
+
+    let (status, problem) = app
+        .put(
+            &format!("/v1/templates/{}", template["id"].as_str().unwrap()),
+            &token,
+            json!({ "name": "Push A", "blocks": [{ "exercises": [
+                { "exerciseId": bench, "mode": "time", "equipment": "cable" }
+            ]}]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        field_paths(&problem),
+        vec![
+            "blocks[0].exercises[0].mode",
+            "blocks[0].exercises[0].equipment"
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn filters_performances_by_equipment(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let bench = app.exercise_id(&token, "Développé couché").await;
+    let mut workouts = Vec::new();
+    for (day, equipment, weight) in [
+        ("2026-10-08", "barbell", 60.0),
+        ("2026-10-15", "dumbbell", 22.0),
+        ("2026-10-22", "barbell", 62.5),
+    ] {
+        let workout = new_workout(&app, &token, day).await;
+        let (status, _) = app
+            .post(
+                &format!("/v1/workouts/{workout}/blocks"),
+                &token,
+                json!({ "exercises": [{ "exerciseId": bench, "equipment": equipment, "sets": [
+                    { "round": 1, "reps": 8, "weightKg": weight }
+                ]}]}),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+        workouts.push(workout);
+    }
+    let uri = format!("/v1/exercises/{bench}/performances");
+
+    let (_, all) = app.get(&uri, &token).await;
+    assert_eq!(all["total"], 3);
+    assert_eq!(all["items"][1]["equipment"], "dumbbell");
+
+    let (_, barbell) = app.get(&format!("{uri}?equipment=barbell"), &token).await;
+    assert_eq!(barbell["total"], 2);
+    let weights: Vec<f64> = barbell["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["sets"][0]["weightKg"].as_f64().unwrap())
+        .collect();
+    assert_eq!(weights, vec![62.5, 60.0]);
+
+    let (_, last_time) = app
+        .get(
+            &format!(
+                "{uri}?mode=reps&equipment=barbell&beforeWorkoutId={}&perPage=1",
+                workouts[2]
+            ),
+            &token,
+        )
+        .await;
+    assert_eq!(last_time["total"], 1);
+    assert_eq!(
+        last_time["items"][0]["performedOn"], "2026-10-08",
+        "skips the dumbbell session in between"
+    );
+
+    let (status, _) = app.get(&format!("{uri}?equipment=rope"), &token).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn logged_equipment_cannot_be_removed(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let (_, custom) = app
+        .post(
+            "/v1/exercises",
+            &token,
+            json!({
+                "names": { "fr": "Tirage menton" },
+                "modes": ["reps"], "defaultMode": "reps", "load": "required",
+                "equipment": ["barbell", "dumbbell", "cable"], "defaultEquipment": "barbell"
+            }),
+        )
+        .await;
+    let id = custom["id"].as_str().unwrap();
+    let uri = format!("/v1/exercises/{id}");
+    let workout = new_workout(&app, &token, "2026-10-22").await;
+    let (status, _) = app
+        .post(
+            &format!("/v1/workouts/{workout}/blocks"),
+            &token,
+            json!({ "exercises": [{ "exerciseId": id, "equipment": "dumbbell", "sets": [
+                { "round": 1, "reps": 12, "weightKg": 10.0 }
+            ]}]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, template) = app
+        .post(
+            "/v1/templates",
+            &token,
+            json!({ "name": "Épaules", "blocks": [
+                { "exercises": [{ "exerciseId": id, "equipment": "cable", "target": "12" }] }
+            ]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let edit = |equipment: Value, default_equipment: &str| {
+        json!({
+            "names": { "fr": "Tirage menton" }, "modes": ["reps"], "defaultMode": "reps",
+            "load": "required", "equipment": equipment, "defaultEquipment": default_equipment,
+            "unilateral": false
+        })
+    };
+    let (status, problem) = app
+        .put(&uri, &token, edit(json!(["barbell", "cable"]), "barbell"))
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(problem["type"], "urn:repsheet:problem:equipment-locked");
+
+    let (status, updated) = app
+        .put(
+            &uri,
+            &token,
+            edit(json!(["dumbbell", "barbell"]), "dumbbell"),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "cable was never logged");
+    assert_eq!(updated["equipment"], json!(["barbell", "dumbbell"]));
+    assert_eq!(updated["defaultEquipment"], "dumbbell");
+
+    let (_, template) = app
+        .get(
+            &format!("/v1/templates/{}", template["id"].as_str().unwrap()),
+            &token,
+        )
+        .await;
+    assert_eq!(
+        template["blocks"][0]["exercises"][0]["equipment"], "dumbbell",
+        "removed equipment falls back on the default equipment"
+    );
+    assert_eq!(template["blocks"][0]["exercises"][0]["target"], "12");
+}
+
+/// Runs the migrations up to `version`, the state of a database deployed then.
+async fn migrate_to(pool: &PgPool, version: i64) {
+    repsheet_api::MIGRATOR.run_to(version, pool).await.unwrap();
+}
+
+#[sqlx::test(migrations = false)]
+async fn merges_the_barbell_and_dumbbell_variants_of_the_catalog(pool: PgPool) {
+    migrate_to(&pool, 1).await;
+    let app = TestApp::new(pool.clone());
+    let token = app.sign_up("alex@example.com").await;
+    let user_id = app.user_id(&token).await;
+    let workout = new_workout(&app, &token, "2026-10-22").await;
+    sqlx::query(
+        "WITH b AS (
+            INSERT INTO blocks (workout_id, position) VALUES ($1::UUID, 1) RETURNING id
+        ),
+        be AS (
+            INSERT INTO block_exercises (block_id, position, exercise_id, mode)
+            SELECT b.id, 1, e.id, 'reps' FROM b, exercises AS e
+            WHERE e.name_fr = 'Curl biceps haltères'
+            RETURNING id
+        )
+        INSERT INTO workout_sets (block_exercise_id, round, reps, weight_kg)
+        SELECT be.id, 1, 10, 14 FROM be",
+    )
+    .bind(&workout)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "WITH t AS (
+            INSERT INTO templates (user_id, name) VALUES ($1::UUID, 'Bras') RETURNING id
+        ),
+        tb AS (
+            INSERT INTO template_blocks (template_id, position) SELECT t.id, 1 FROM t RETURNING id
+        )
+        INSERT INTO template_block_exercises (template_block_id, position, exercise_id, mode)
+        SELECT tb.id, 1, e.id, 'reps' FROM tb, exercises AS e
+        WHERE e.name_fr IN ('Développé épaules haltères', 'Squat')",
+    )
+    .bind(&user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repsheet_api::MIGRATOR.run(&pool).await.unwrap();
+
+    let (_, logged) = app.get(&format!("/v1/workouts/{workout}"), &token).await;
+    let curl = &logged["blocks"][0]["exercises"][0];
+    assert_eq!(curl["exercise"]["name"], "Curl biceps");
+    assert_eq!(
+        curl["exercise"]["equipment"],
+        json!(["barbell", "dumbbell"])
+    );
+    assert_eq!(curl["equipment"], "dumbbell");
+    assert_eq!(curl["sets"][0]["weightKg"], 14.0);
+
+    let curl_id = curl["exercise"]["id"].as_str().unwrap();
+    let (_, dumbbell) = app
+        .get(
+            &format!("/v1/exercises/{curl_id}/performances?equipment=dumbbell"),
+            &token,
+        )
+        .await;
+    assert_eq!(dumbbell["total"], 1);
+
+    let (_, templates) = app.get("/v1/templates", &token).await;
+    let template_id = templates["items"][0]["id"].as_str().unwrap();
+    let (_, template) = app
+        .get(&format!("/v1/templates/{template_id}"), &token)
+        .await;
+    let mut planned: Vec<(&str, &str)> = template["blocks"][0]["exercises"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["exercise"]["name"].as_str().unwrap(),
+                e["equipment"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    planned.sort_unstable();
+    assert_eq!(
+        planned,
+        vec![("Développé militaire", "dumbbell"), ("Squat", "barbell")]
+    );
+
+    let (_, catalog) = app.get("/v1/exercises?q=halt", &token).await;
+    let names: Vec<&str> = catalog["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["Écarté haltères", "Rowing haltère"],
+        "the one-arm row stays a movement of its own"
+    );
+    let (_, curls) = app.get("/v1/exercises?q=curl%20biceps", &token).await;
+    assert_eq!(curls["total"], 1);
 }

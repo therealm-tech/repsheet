@@ -171,6 +171,62 @@ impl TryFrom<Vec<String>> for Modes {
     }
 }
 
+/// The equipment an exercise can be done with: never empty, without
+/// duplicates, in the declaration order of [`Equipment`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EquipmentSet(Vec<Equipment>);
+
+impl EquipmentSet {
+    /// `None` when `equipment` is empty or holds a kind twice.
+    pub fn new(equipment: impl IntoIterator<Item = Equipment>) -> Option<Self> {
+        let mut equipment: Vec<Equipment> = equipment.into_iter().collect();
+        let given = equipment.len();
+        equipment.sort_unstable();
+        equipment.dedup();
+        (given > 0 && equipment.len() == given).then_some(Self(equipment))
+    }
+
+    pub fn contains(&self, equipment: Equipment) -> bool {
+        self.0.contains(&equipment)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Equipment> + '_ {
+        self.0.iter().copied()
+    }
+
+    pub fn as_strs(&self) -> Vec<&'static str> {
+        self.iter().map(Equipment::as_str).collect()
+    }
+
+    /// The equipment a block or a template does the exercise with: the
+    /// requested one when the exercise offers it, its default one when none is
+    /// requested.
+    pub fn choose(
+        &self,
+        requested: Option<Equipment>,
+        default_equipment: Equipment,
+    ) -> Option<Equipment> {
+        let equipment = requested.unwrap_or(default_equipment);
+        self.contains(equipment).then_some(equipment)
+    }
+}
+
+impl TryFrom<Vec<String>> for EquipmentSet {
+    type Error = UnknownVariant;
+
+    fn try_from(values: Vec<String>) -> Result<Self, Self::Error> {
+        let joined = values.join(",");
+        let equipment = values
+            .into_iter()
+            .map(Equipment::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::new(equipment).ok_or(UnknownVariant {
+            kind: "equipment set",
+            value: joined,
+        })
+    }
+}
+
 impl Mode {
     /// The set field that carries the count in this mode.
     pub fn field(self) -> SetField {
@@ -294,6 +350,36 @@ mod tests {
         assert_eq!(modes.choose(None, Mode::Reps), Some(Mode::Reps));
         assert_eq!(modes.choose(Some(Mode::Time), Mode::Reps), Some(Mode::Time));
         assert_eq!(modes.choose(Some(Mode::Distance), Mode::Reps), None);
+    }
+
+    #[test]
+    fn equipment_is_a_non_empty_set() {
+        assert_eq!(
+            EquipmentSet::new([Equipment::Dumbbell, Equipment::Barbell])
+                .unwrap()
+                .as_strs(),
+            vec!["barbell", "dumbbell"]
+        );
+        assert!(EquipmentSet::new([]).is_none());
+        assert!(EquipmentSet::new([Equipment::Cable, Equipment::Cable]).is_none());
+        assert!(EquipmentSet::try_from(vec!["barbell".to_owned(), "rope".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn the_chosen_equipment_must_be_offered() {
+        let equipment = EquipmentSet::new([Equipment::Barbell, Equipment::Dumbbell]).unwrap();
+        assert_eq!(
+            equipment.choose(None, Equipment::Barbell),
+            Some(Equipment::Barbell)
+        );
+        assert_eq!(
+            equipment.choose(Some(Equipment::Dumbbell), Equipment::Barbell),
+            Some(Equipment::Dumbbell)
+        );
+        assert_eq!(
+            equipment.choose(Some(Equipment::Machine), Equipment::Barbell),
+            None
+        );
     }
 
     #[test]

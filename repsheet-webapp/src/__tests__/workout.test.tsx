@@ -167,10 +167,12 @@ describe("WorkoutPage", () => {
 							modes: ["reps"],
 							defaultMode: "reps",
 							load: "required",
-							equipment: "barbell",
+							equipment: ["barbell"],
+							defaultEquipment: "barbell",
 							unilateral: false,
 						},
 						mode: "reps",
+						equipment: "barbell",
 						sets: [1, 2].map((round) => ({
 							round,
 							reps: 8,

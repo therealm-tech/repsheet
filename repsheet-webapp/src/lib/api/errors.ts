@@ -17,6 +17,8 @@ const FIELD_MESSAGES: Record<string, ErrorKey> = {
 	"names.en": "nameEnRequired",
 	modes: "modesRequired",
 	defaultMode: "defaultModeInvalid",
+	equipment: "equipmentRequired",
+	defaultEquipment: "defaultEquipmentInvalid",
 	performedOn: "dateRequired",
 	durationMinutes: "durationRange",
 };
@@ -43,6 +45,8 @@ function byType(error: ApiError): ErrorKey | null {
 			return "exerciseNameTaken";
 		case `${PROBLEM}mode-locked`:
 			return "modeLocked";
+		case `${PROBLEM}equipment-locked`:
+			return "equipmentLocked";
 		case `${PROBLEM}exercise-in-use`:
 			return "exerciseInUse";
 		case `${PROBLEM}own-role`:

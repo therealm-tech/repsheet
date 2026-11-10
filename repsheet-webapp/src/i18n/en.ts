@@ -101,7 +101,8 @@ export const en: Catalog = {
 		deleteRound: "Delete round {{round}}",
 		done: "done",
 		lastTime: "Last time ({{date}}): {{summary}}",
-		lastTimeIn: "Last time {{mode}} ({{date}}): {{summary}}",
+		equipmentOf: "Equipment for {{name}}",
+		lastTimeIn: "Last time {{how}} ({{date}}): {{summary}}",
 		modeOf: "How {{name}} is counted",
 		newTitle: "New block",
 		planned: "planned",
@@ -115,6 +116,8 @@ export const en: Catalog = {
 		stepHint: "± {{step}} · or type the value",
 		switchConfirm:
 			"Count {{name}} {{mode}}? The values already entered {{previous}} will be cleared.",
+		switchEquipmentConfirm:
+			"Do {{name}} {{equipment}}? The loads already entered {{previous}} will be cleared.",
 		switchMode: "Switch",
 		tapToLog: "Tap to log →",
 		title: "Block {{position}}",
@@ -214,6 +217,24 @@ export const en: Catalog = {
 		machine: "Machine",
 		other: "Other",
 	},
+	equipmentLower: {
+		barbell: "barbell",
+		bodyweight: "bodyweight",
+		cable: "cable",
+		dumbbell: "dumbbells",
+		kettlebell: "kettlebell",
+		machine: "machine",
+		other: "other",
+	},
+	equipmentWith: {
+		barbell: "with a barbell",
+		bodyweight: "at bodyweight",
+		cable: "on a cable",
+		dumbbell: "with dumbbells",
+		kettlebell: "with a kettlebell",
+		machine: "on a machine",
+		other: "with other equipment",
+	},
 	picker: {
 		all: "All",
 		create: "＋ Create an exercise",
@@ -235,6 +256,7 @@ export const en: Catalog = {
 		deleteCatalogMessage:
 			"The exercise disappears from the catalog for everyone.",
 		deleteCustomMessage: "The exercise disappears from your list.",
+		equipmentShown: "Equipment shown",
 		modeShown: "Mode shown",
 		noSets: "No sets logged for this exercise yet.",
 		notFound: "Exercise not found.",
@@ -248,6 +270,7 @@ export const en: Catalog = {
 		builtIn: "Add to the catalog (visible to everyone)",
 		create: "Create the exercise",
 		defaultMode: "Default",
+		defaultEquipment: "Default equipment",
 		editTitle: "Edit the exercise",
 		equipment: "Equipment",
 		load: "Load",
@@ -311,9 +334,14 @@ export const en: Catalog = {
 		createWorkoutFailed: "Couldn't create the session.",
 		dateRequired: "Pick the date of the session.",
 		defaultModeInvalid: "The default mode must be one of the chosen modes.",
+		defaultEquipmentInvalid:
+			"The default equipment must be one of the chosen equipment.",
 		deleteFailed: "Couldn't delete it.",
 		durationRange: "The duration goes from 1 to 1440 minutes.",
 		emailTaken: "An account already exists with this email.",
+		equipmentLocked:
+			"This equipment already has logged sets, so it can't be removed.",
+		equipmentRequired: "Pick at least one piece of equipment.",
 		exerciseInUse:
 			"This exercise is used in a session or a template, so it can't be deleted.",
 		exerciseNameTaken: "An exercise already has this name.",

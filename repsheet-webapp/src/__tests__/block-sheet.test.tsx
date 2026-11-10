@@ -20,7 +20,8 @@ const bench: ExerciseSummary = {
 	modes: ["reps"],
 	defaultMode: "reps",
 	load: "required",
-	equipment: "barbell",
+	equipment: ["barbell"],
+	defaultEquipment: "barbell",
 	unilateral: false,
 };
 const plank: ExerciseSummary = {
@@ -29,7 +30,8 @@ const plank: ExerciseSummary = {
 	modes: ["time"],
 	defaultMode: "time",
 	load: "optional",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 	unilateral: false,
 };
 const crunch: ExerciseSummary = {
@@ -38,7 +40,8 @@ const crunch: ExerciseSummary = {
 	modes: ["reps", "time"],
 	defaultMode: "reps",
 	load: "none",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 	unilateral: false,
 };
 
@@ -84,8 +87,13 @@ describe("BlockSheet", () => {
 			rounds: 2,
 			restSeconds: 90,
 			exercises: [
-				{ exercise: bench, mode: "reps", target: "6–8" },
-				{ exercise: plank, mode: "time", target: "45 s" },
+				{ exercise: bench, mode: "reps", equipment: "barbell", target: "6–8" },
+				{
+					exercise: plank,
+					mode: "time",
+					equipment: "bodyweight",
+					target: "45 s",
+				},
 			],
 		};
 		const calls = mockApi({
@@ -172,6 +180,7 @@ describe("BlockSheet", () => {
 				{
 					exerciseId: "bench",
 					mode: "reps",
+					equipment: "barbell",
 					sets: [
 						{ round: 1, warmup: false, reps: 8, weightKg: 60 },
 						{ round: 2, warmup: false, reps: 8, weightKg: 62.5 },
@@ -180,6 +189,7 @@ describe("BlockSheet", () => {
 				{
 					exerciseId: "plank",
 					mode: "time",
+					equipment: "bodyweight",
 					sets: [
 						{ round: 1, warmup: false, durationSeconds: 45 },
 						{ round: 2, warmup: false, durationSeconds: 40 },
@@ -254,6 +264,7 @@ describe("BlockSheet", () => {
 				{
 					exerciseId: "bench",
 					mode: "reps",
+					equipment: "barbell",
 					sets: [
 						{ round: 1, warmup: true, reps: 5, weightKg: 80 },
 						{ round: 2, warmup: false, reps: 5, weightKg: 82.5 },
@@ -384,6 +395,7 @@ describe("BlockSheet", () => {
 				{
 					exerciseId: "crunch",
 					mode: "time",
+					equipment: "bodyweight",
 					sets: [{ round: 1, warmup: false, durationSeconds: 75 }],
 				},
 			],
@@ -418,7 +430,14 @@ describe("BlockSheet", () => {
 						kind: "simple",
 						rounds: 3,
 						restSeconds: null,
-						exercises: [{ exercise: crunch, mode: "time", target: "1 min" }],
+						exercises: [
+							{
+								exercise: crunch,
+								mode: "time",
+								equipment: "bodyweight",
+								target: "1 min",
+							},
+						],
 					},
 				}}
 				onClose={vi.fn()}
@@ -449,6 +468,7 @@ describe("BlockSheet", () => {
 				{
 					exercise: bench,
 					mode: "reps",
+					equipment: "barbell",
 					sets: [
 						{
 							round: 1,
@@ -497,6 +517,7 @@ describe("BlockSheet", () => {
 				{
 					exerciseId: "bench",
 					mode: "reps",
+					equipment: "barbell",
 					sets: [{ round: 1, warmup: false, reps: 9, weightKg: 60 }],
 				},
 			],

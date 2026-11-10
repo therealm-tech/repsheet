@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     db::exercises::ExerciseSummaryRow,
-    domain::{Locale, Mode, Modes},
+    domain::{Equipment, EquipmentSet, Locale, Mode, Modes},
 };
 
 #[derive(FromRow)]
@@ -38,6 +38,8 @@ struct TemplateBlockExerciseRow {
     template_block_id: Uuid,
     #[sqlx(try_from = "String")]
     mode: Mode,
+    #[sqlx(rename = "chosen_equipment", try_from = "String")]
+    equipment: Equipment,
     target: Option<String>,
     #[sqlx(flatten)]
     exercise: ExerciseSummaryRow,
@@ -51,12 +53,14 @@ pub struct LoadedTemplateBlock {
 pub struct LoadedTemplateExercise {
     pub exercise: ExerciseSummaryRow,
     pub mode: Mode,
+    pub equipment: Equipment,
     pub target: Option<String>,
 }
 
 pub struct TemplateExerciseInput<'a> {
     pub exercise_id: Uuid,
     pub mode: Mode,
+    pub equipment: Equipment,
     pub target: Option<&'a str>,
 }
 
@@ -197,6 +201,23 @@ pub async fn reset_modes(
     Ok(())
 }
 
+/// Points the template exercises done with equipment the exercise no longer
+/// offers at its default equipment.
+pub async fn reset_equipment(
+    exec: impl PgExecutor<'_>,
+    exercise_id: Uuid,
+    equipment: &EquipmentSet,
+    default_equipment: Equipment,
+) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/templates/reset_equipment.sql"))
+        .bind(exercise_id)
+        .bind(default_equipment.as_str())
+        .bind(equipment.as_strs())
+        .execute(exec)
+        .await?;
+    Ok(())
+}
+
 pub async fn load_blocks(
     conn: &mut PgConnection,
     template_id: Uuid,
@@ -222,6 +243,7 @@ pub async fn load_blocks(
             .or_default()
             .push(LoadedTemplateExercise {
                 mode: row.mode,
+                equipment: row.equipment,
                 target: row.target,
                 exercise: row.exercise,
             });
@@ -284,6 +306,13 @@ async fn write_blocks(
                 .exercises
                 .iter()
                 .map(|e| e.mode.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            block
+                .exercises
+                .iter()
+                .map(|e| e.equipment.as_str())
                 .collect::<Vec<_>>(),
         )
         .bind(block.exercises.iter().map(|e| e.target).collect::<Vec<_>>())

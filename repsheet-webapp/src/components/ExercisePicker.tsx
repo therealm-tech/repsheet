@@ -60,7 +60,8 @@ function CreateExerciseForm({
 				modes: ["reps"],
 				defaultMode: "reps",
 				load: "required",
-				equipment: "barbell",
+				equipment: ["barbell"],
+				defaultEquipment: "barbell",
 				unilateral: false,
 				builtIn: false,
 			}}
@@ -109,7 +110,7 @@ export function ExercisePicker({
 	const items = (exercises.data?.items ?? []).filter(
 		(e) =>
 			!excludeIds.includes(e.id) &&
-			(equipment === null || e.equipment === equipment),
+			(equipment === null || e.equipment.includes(equipment)),
 	);
 
 	if (creating) {

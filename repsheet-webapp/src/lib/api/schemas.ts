@@ -74,7 +74,8 @@ export const ExerciseSummarySchema = z.object({
 	modes: z.array(ModeSchema).min(1),
 	defaultMode: ModeSchema,
 	load: LoadSchema,
-	equipment: EquipmentSchema,
+	equipment: z.array(EquipmentSchema).min(1),
+	defaultEquipment: EquipmentSchema,
 	unilateral: z.boolean(),
 });
 export type ExerciseSummary = z.infer<typeof ExerciseSummarySchema>;
@@ -108,6 +109,7 @@ export const PerformanceSchema = z.object({
 	performedOn: z.string(),
 	blockKind: BlockKindSchema,
 	mode: ModeSchema,
+	equipment: EquipmentSchema,
 	sets: z.array(SetSchema),
 });
 export type Performance = z.infer<typeof PerformanceSchema>;
@@ -122,6 +124,7 @@ export const BlockSchema = z.object({
 		z.object({
 			exercise: ExerciseSummarySchema,
 			mode: ModeSchema,
+			equipment: EquipmentSchema,
 			sets: z.array(SetSchema),
 		}),
 	),
@@ -159,6 +162,7 @@ export const TemplateBlockSchema = z.object({
 		z.object({
 			exercise: ExerciseSummarySchema,
 			mode: ModeSchema,
+			equipment: EquipmentSchema,
 			target: z.string().nullable(),
 		}),
 	),
@@ -194,7 +198,12 @@ export interface SetInput {
 export interface BlockInput {
 	templateBlockId?: string;
 	restSeconds?: number;
-	exercises: { exerciseId: string; mode: Mode; sets: SetInput[] }[];
+	exercises: {
+		exerciseId: string;
+		mode: Mode;
+		equipment: Equipment;
+		sets: SetInput[];
+	}[];
 }
 
 export interface ExerciseNamesInput {
@@ -207,7 +216,8 @@ export interface UpdateExerciseInput {
 	modes: Mode[];
 	defaultMode: Mode;
 	load: Load;
-	equipment: Equipment;
+	equipment: Equipment[];
+	defaultEquipment: Equipment;
 	unilateral: boolean;
 }
 
@@ -234,7 +244,12 @@ export interface TemplateBlockInput {
 	id?: string;
 	rounds?: number;
 	restSeconds?: number;
-	exercises: { exerciseId: string; mode: Mode; target?: string }[];
+	exercises: {
+		exerciseId: string;
+		mode: Mode;
+		equipment: Equipment;
+		target?: string;
+	}[];
 }
 
 export interface TemplateInput {

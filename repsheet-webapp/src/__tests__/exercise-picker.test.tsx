@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExercisePicker } from "@/components/ExercisePicker";
@@ -8,7 +8,8 @@ const bench = exercise({ id: "bench", name: "Développé couché" });
 const incline = exercise({
 	id: "incline",
 	name: "Développé incliné haltères",
-	equipment: "dumbbell",
+	equipment: ["dumbbell"],
+	defaultEquipment: "dumbbell",
 });
 const dips = exercise({
 	id: "dips",
@@ -16,7 +17,8 @@ const dips = exercise({
 	modes: ["reps"],
 	defaultMode: "reps",
 	load: "optional",
-	equipment: "bodyweight",
+	equipment: ["bodyweight"],
+	defaultEquipment: "bodyweight",
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -78,7 +80,8 @@ describe("ExercisePicker", () => {
 		const created = exercise({
 			id: "arnold",
 			name: "Dév. Arnold",
-			equipment: "dumbbell",
+			equipment: ["dumbbell"],
+			defaultEquipment: "dumbbell",
 			custom: true,
 		});
 		const calls = mockApi({
@@ -94,7 +97,9 @@ describe("ExercisePicker", () => {
 			await screen.findByRole("button", { name: "＋ Créer « Dév. Arnold »" }),
 		);
 		expect(screen.getByLabelText("Nom")).toHaveValue("Dév. Arnold");
-		await ui.click(screen.getByRole("button", { name: "Haltères" }));
+		const equipment = within(screen.getByRole("group", { name: "Matériel" }));
+		await ui.click(equipment.getByRole("button", { name: "Haltères" }));
+		await ui.click(equipment.getByRole("button", { name: "Barre" }));
 		await ui.click(screen.getByRole("checkbox"));
 		await ui.click(screen.getByRole("button", { name: "Créer l'exercice" }));
 
@@ -104,7 +109,8 @@ describe("ExercisePicker", () => {
 			modes: ["reps"],
 			defaultMode: "reps",
 			load: "required",
-			equipment: "dumbbell",
+			equipment: ["dumbbell"],
+			defaultEquipment: "dumbbell",
 			unilateral: true,
 		});
 	});

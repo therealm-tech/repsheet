@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { BlockKind, Mode, Role } from "@/lib/api/schemas";
-import { kindLabel } from "@/lib/blocks";
+import type { BlockKind, Equipment, Mode, Role } from "@/lib/api/schemas";
+import { equipmentLabel, kindLabel } from "@/lib/blocks";
 
 export function KindTag({ kind, auto }: { kind: BlockKind; auto?: boolean }) {
 	const { t } = useTranslation();
@@ -77,6 +77,40 @@ export function ModeSwitch({
 					}}
 				>
 					{t(`modesShort.${mode}`)}
+				</button>
+			))}
+		</fieldset>
+	);
+}
+
+/** A compact "Barbell | Dumbbells" switch between the equipment of an exercise. */
+export function EquipmentSwitch({
+	equipment,
+	value,
+	label,
+	onChange,
+}: {
+	equipment: Equipment[];
+	value: Equipment;
+	label: string;
+	onChange: (equipment: Equipment) => void;
+}) {
+	return (
+		<fieldset className="mini-seg">
+			<legend className="sr-only">{label}</legend>
+			{equipment.map((kind) => (
+				<button
+					key={kind}
+					type="button"
+					className={kind === value ? "on" : undefined}
+					aria-pressed={kind === value}
+					onClick={() => {
+						if (kind !== value) {
+							onChange(kind);
+						}
+					}}
+				>
+					{equipmentLabel(kind)}
 				</button>
 			))}
 		</fieldset>

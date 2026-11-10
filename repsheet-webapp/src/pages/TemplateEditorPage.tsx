@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import {
 	ConfirmButton,
+	EquipmentSwitch,
 	ErrorText,
 	KindTag,
 	ModeSwitch,
@@ -101,6 +102,21 @@ function BlockEditor({
 									...block,
 									exercises: block.exercises.map((x, j) =>
 										j === i ? { ...x, mode } : x,
+									),
+								})
+							}
+						/>
+					) : null}
+					{entry.exercise.equipment.length > 1 ? (
+						<EquipmentSwitch
+							equipment={entry.exercise.equipment}
+							value={entry.equipment}
+							label={t("block.equipmentOf", { name: entry.exercise.name })}
+							onChange={(equipment) =>
+								onChange({
+									...block,
+									exercises: block.exercises.map((x, j) =>
+										j === i ? { ...x, equipment } : x,
 									),
 								})
 							}
@@ -270,7 +286,12 @@ export function TemplateEditorPage({
 	}
 
 	function pick(exercise: ExerciseSummary) {
-		const entry = { exercise, mode: exercise.defaultMode, target: "" };
+		const entry = {
+			exercise,
+			mode: exercise.defaultMode,
+			equipment: exercise.defaultEquipment,
+			target: "",
+		};
 		const target = pickTarget;
 		setPickTarget(null);
 		setDraft((d) => {

@@ -1,6 +1,11 @@
 import { type FormEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ErrorText, ModeSwitch, Segmented } from "@/components/ui";
+import {
+	EquipmentSwitch,
+	ErrorText,
+	ModeSwitch,
+	Segmented,
+} from "@/components/ui";
 import { currentLocale } from "@/i18n";
 import type { ErrorKey } from "@/lib/api/errors";
 import {
@@ -20,7 +25,8 @@ export interface ExerciseFormValues {
 	modes: Mode[];
 	defaultMode: Mode;
 	load: Load;
-	equipment: Equipment;
+	equipment: Equipment[];
+	defaultEquipment: Equipment;
 	unilateral: boolean;
 	builtIn: boolean;
 }
@@ -30,7 +36,8 @@ export interface ExerciseFormOutput {
 	modes: Mode[];
 	defaultMode: Mode;
 	load: Load;
-	equipment: Equipment;
+	equipment: Equipment[];
+	defaultEquipment: Equipment;
 	unilateral: boolean;
 	builtIn: boolean;
 }
@@ -131,6 +138,21 @@ export function ExerciseForm({
 		setValues({ ...values, modes, defaultMode });
 	}
 
+	/** Adds or removes an equipment, keeping at least one and a default among them. */
+	function toggleEquipment(kind: Equipment) {
+		const selected = values.equipment.includes(kind);
+		if (selected && values.equipment.length === 1) {
+			return;
+		}
+		const equipment = EquipmentSchema.options.filter((e) =>
+			e === kind ? !selected : values.equipment.includes(e),
+		);
+		const defaultEquipment = equipment.includes(values.defaultEquipment)
+			? values.defaultEquipment
+			: (equipment[0] ?? kind);
+		setValues({ ...values, equipment, defaultEquipment });
+	}
+
 	function submit(event: FormEvent) {
 		event.preventDefault();
 		const checked = checkNames(values.names, bothRequired);
@@ -208,22 +230,40 @@ export function ExerciseForm({
 					}))}
 				/>
 			</div>
-			<div>
-				<span className="label">{t("exerciseForm.equipment")}</span>
+			<fieldset className="field-group">
+				<legend className="label">{t("exerciseForm.equipment")}</legend>
 				<div className="chips">
-					{EquipmentSchema.options.map((e) => (
-						<button
-							key={e}
-							type="button"
-							className={e === values.equipment ? "chip on" : "chip"}
-							aria-pressed={e === values.equipment}
-							onClick={() => setValues({ ...values, equipment: e })}
-						>
-							{equipmentLabel(e)}
-						</button>
-					))}
+					{EquipmentSchema.options.map((e) => {
+						const on = values.equipment.includes(e);
+						return (
+							<button
+								key={e}
+								type="button"
+								className={on ? "chip on" : "chip"}
+								aria-pressed={on}
+								onClick={() => toggleEquipment(e)}
+							>
+								{on ? <span aria-hidden="true">✓ </span> : null}
+								{equipmentLabel(e)}
+							</button>
+						);
+					})}
 				</div>
-			</div>
+			</fieldset>
+			{values.equipment.length > 1 ? (
+				<div className="row small">
+					<span className="muted">{t("exerciseForm.defaultEquipment")}</span>
+					<span className="grow" />
+					<EquipmentSwitch
+						equipment={values.equipment}
+						value={values.defaultEquipment}
+						label={t("exerciseForm.defaultEquipment")}
+						onChange={(defaultEquipment) =>
+							setValues({ ...values, defaultEquipment })
+						}
+					/>
+				</div>
+			) : null}
 			<label className="row small">
 				<input
 					type="checkbox"

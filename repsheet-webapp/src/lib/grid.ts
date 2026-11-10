@@ -2,6 +2,7 @@ import i18n from "@/i18n";
 import type {
 	Block,
 	BlockInput,
+	Equipment,
 	ExerciseSummary,
 	Load,
 	Mode,
@@ -33,8 +34,14 @@ function nextRowId(): number {
 	return lastRowId;
 }
 
-/** An exercise of the block, with the mode it is counted in for every round. */
-export type GridExercise = ExerciseSummary & { mode: Mode };
+/**
+ * An exercise of the block, with the mode it is counted in and the equipment
+ * it is done with, for every round.
+ */
+export type GridExercise = ExerciseSummary & {
+	mode: Mode;
+	chosenEquipment: Equipment;
+};
 
 export interface Grid {
 	exercises: GridExercise[];
@@ -69,14 +76,25 @@ export function weightRequired(load: Load): boolean {
 	return load === "required";
 }
 
-/** The exercise counted in `mode` when it has that mode, in its default mode otherwise. */
-export function withMode(exercise: ExerciseSummary, mode?: Mode): GridExercise {
+/**
+ * The exercise counted in `mode` and done with `equipment` when it offers
+ * them, in its default mode and with its default equipment otherwise.
+ */
+export function withChoices(
+	exercise: ExerciseSummary,
+	mode?: Mode,
+	equipment?: Equipment,
+): GridExercise {
 	return {
 		...exercise,
 		mode:
 			mode !== undefined && exercise.modes.includes(mode)
 				? mode
 				: exercise.defaultMode,
+		chosenEquipment:
+			equipment !== undefined && exercise.equipment.includes(equipment)
+				? equipment
+				: exercise.defaultEquipment,
 	};
 }
 
@@ -215,7 +233,11 @@ export function gridFromBlock(block: Block, unit: WeightUnit): Grid {
 		});
 	}
 	return {
-		exercises: block.exercises.map((e) => ({ ...e.exercise, mode: e.mode })),
+		exercises: block.exercises.map((e) => ({
+			...e.exercise,
+			mode: e.mode,
+			chosenEquipment: e.equipment,
+		})),
 		rows,
 	};
 }
@@ -293,13 +315,21 @@ export function addExercise(
 	};
 }
 
-/** Whether counting a column in another mode would clear values already entered. */
-export function switchDiscards(grid: Grid, col: number): boolean {
+/**
+ * Whether counting a column in another mode, or doing it with other
+ * equipment, would clear values already entered: the counts for a mode, the
+ * loads for equipment.
+ */
+export function switchDiscards(
+	grid: Grid,
+	col: number,
+	change: "mode" | "equipment",
+): boolean {
 	const exercise = grid.exercises[col];
 	if (!exercise) {
 		return false;
 	}
-	const field = primaryField(exercise.mode);
+	const field = change === "mode" ? primaryField(exercise.mode) : "weight";
 	return grid.rows.some((row) => (row.cells[col]?.[field] ?? null) !== null);
 }
 
@@ -338,6 +368,49 @@ export function switchMode(
 				...emptyCell(),
 				[field]: prefilled[field],
 				weight: row.cells[col]?.weight ?? null,
+			};
+			previous = cell;
+			return {
+				...row,
+				cells: row.cells.map((c, i) => (i === col ? cell : c)),
+			};
+		}),
+	};
+}
+
+/**
+ * Does a column with other equipment, for every round: each cell drops its
+ * load and takes the one of the last performance with that equipment; the
+ * counts stay, since the movement is the same.
+ */
+export function switchEquipment(
+	grid: Grid,
+	col: number,
+	equipment: Equipment,
+	lastSets: WorkoutSet[] | undefined,
+	unit: WeightUnit,
+): Grid {
+	const current = grid.exercises[col];
+	if (!current || current.chosenEquipment === equipment) {
+		return grid;
+	}
+	const exercise: GridExercise = { ...current, chosenEquipment: equipment };
+	const last = workingSets(lastSets);
+	let previous: Cell | undefined;
+	return {
+		exercises: grid.exercises.map((e, i) => (i === col ? exercise : e)),
+		rows: grid.rows.map((row, r) => {
+			const prefilled = prefillCell(
+				exercise,
+				r + 1,
+				previous,
+				null,
+				last,
+				unit,
+			);
+			const cell: Cell = {
+				...(row.cells[col] ?? emptyCell()),
+				weight: prefilled.weight,
 			};
 			previous = cell;
 			return {
@@ -436,7 +509,12 @@ export function toBlockExercises(grid: Grid, unit: WeightUnit): BuildResult {
 				error: i18n.t("grid.noSet", { name: exercise.name }),
 			};
 		}
-		exercises.push({ exerciseId: exercise.id, mode: exercise.mode, sets });
+		exercises.push({
+			exerciseId: exercise.id,
+			mode: exercise.mode,
+			equipment: exercise.chosenEquipment,
+			sets,
+		});
 	}
 	return { ok: true, exercises };
 }
