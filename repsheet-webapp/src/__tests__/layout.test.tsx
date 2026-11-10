@@ -1,12 +1,26 @@
-import { render, screen } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Stepper } from "@/components/Stepper";
 import { Sidebar } from "@/components/TabBar";
 import { Sheet } from "@/components/ui";
-import { admin, mockApi, renderRoute, user } from "./helpers";
+import { tokenStore } from "@/lib/auth";
+import { APP_SCROLLER } from "@/lib/scroll";
+import { createAppRouter } from "@/router";
+import { admin, mockApi, newClient, page, renderRoute, user } from "./helpers";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	tokenStore.clear();
+});
 
 describe("Sheet", () => {
 	it("takes focus, closes on Escape and gives focus back", async () => {
@@ -90,5 +104,74 @@ describe("Sidebar", () => {
 
 		expect(await screen.findByText(user.email)).toBeInTheDocument();
 		expect(screen.queryByRole("link", { name: "Comptes" })).toBeNull();
+	});
+});
+
+describe("AppLayout", () => {
+	const elementScrollTo = Element.prototype.scrollTo;
+
+	afterEach(() => {
+		Element.prototype.scrollTo = elementScrollTo;
+	});
+
+	async function renderApp() {
+		mockApi({
+			"GET /v1/users/me": () => ({ status: 200, body: user }),
+			"GET /v1/workouts": () => ({ status: 200, body: page([]) }),
+			"GET /v1/templates": () => ({ status: 200, body: page([]) }),
+		});
+		tokenStore.set({ token: "t", expiresAt: "2099-01-01T00:00:00Z" });
+		vi.stubGlobal("scrollTo", vi.fn());
+		// jsdom has no Element.scrollTo, which the router calls to reset the scroller.
+		Element.prototype.scrollTo = function (this: Element) {
+			this.scrollTop = 0;
+		};
+		const router = createAppRouter(
+			createMemoryHistory({ initialEntries: ["/"] }),
+		);
+		render(
+			<QueryClientProvider client={newClient()}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>,
+		);
+		await screen.findByRole("heading", { name: /Guillaume/ });
+		const scroller = document.querySelector<HTMLElement>(APP_SCROLLER);
+		if (!scroller) {
+			throw new Error("no app scroller");
+		}
+		return { router, scroller };
+	}
+
+	it("lays the tab bar out after the scrolling content, not over it", async () => {
+		const { scroller } = await renderApp();
+
+		const tabbar = screen.getByRole("navigation", {
+			name: "Navigation principale",
+		});
+		expect(scroller).toContainElement(
+			screen.getByRole("heading", { name: /Guillaume/ }),
+		);
+		expect(scroller).not.toContainElement(tabbar);
+		expect(tabbar.parentElement).toBe(scroller.parentElement);
+		expect(scroller.nextElementSibling).toBe(tabbar);
+	});
+
+	it("opens a tab at the top and restores the position on back", async () => {
+		const { router, scroller } = await renderApp();
+		const ui = userEvent.setup();
+
+		scroller.scrollTop = 400;
+		fireEvent.scroll(scroller);
+		await ui.click(
+			within(
+				screen.getByRole("navigation", { name: "Navigation principale" }),
+			).getByRole("link", { name: "Historique" }),
+		);
+		await screen.findByRole("heading", { name: "Historique" });
+		expect(scroller.scrollTop).toBe(0);
+
+		router.history.back();
+		await screen.findByRole("heading", { name: /Guillaume/ });
+		await waitFor(() => expect(scroller.scrollTop).toBe(400));
 	});
 });
