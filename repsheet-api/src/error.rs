@@ -76,6 +76,10 @@ pub enum Conflict {
     OwnRole,
     OwnAccount,
     CoachAlreadyAdded,
+    /// A planned session its athlete was sent cannot be taken back.
+    PlannedSessionSent,
+    /// A planned session with no block cannot be sent.
+    PlannedSessionEmpty,
 }
 
 impl Conflict {
@@ -90,6 +94,8 @@ impl Conflict {
             Self::OwnRole => "urn:repsheet:problem:own-role",
             Self::OwnAccount => "urn:repsheet:problem:own-account",
             Self::CoachAlreadyAdded => "urn:repsheet:problem:coach-already-added",
+            Self::PlannedSessionSent => "urn:repsheet:problem:planned-session-sent",
+            Self::PlannedSessionEmpty => "urn:repsheet:problem:planned-session-empty",
         }
     }
 
@@ -104,6 +110,8 @@ impl Conflict {
             Self::OwnRole => "a super admin cannot change their own role",
             Self::OwnAccount => "a super admin cannot delete their own account",
             Self::CoachAlreadyAdded => "this account is already your coach",
+            Self::PlannedSessionSent => "the session was sent to the athlete and stays sent",
+            Self::PlannedSessionEmpty => "a session needs at least one block to be sent",
         }
     }
 }

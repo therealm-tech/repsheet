@@ -19,18 +19,20 @@ can change from one set to the next, never within a set.
 It is built for someone who trains with a coach: a session can follow a **template** written from the
 coach's plan, or be logged freely when the coach improvises. A workout is dated with the day it took
 place on and is usually filled in after the session, though nothing prevents completing it block by
-block during it. Each set is pre-filled from the template's target, the previous round or the
-performance of the workout before, so that logging a session takes a few minutes. A template gives
-each exercise the coach's instructions, shown while logging it, and each logged exercise carries a
-thread of comments, yours and your coaches', kept in its history.
+block during it. Each set is pre-filled from the sets your coach planned, the template's target,
+the previous round or the performance of the workout before, so that logging a session takes a few
+minutes. A template gives each exercise your instructions, shown while logging it, and each logged
+exercise carries a thread of comments, yours and your coaches', kept in its history; a coach's note
+on a planned exercise starts that thread.
 
 - Built-in catalog of common exercises, plus your own
 - Progression per exercise, mode, equipment and grip: max weight, most reps or longest set over
   time, records, full history (warm-up sets excluded)
 - Templates built by hand or from a workout you already logged
-- Coaching: add your coaches' accounts; each plans sessions for you on given days and sees how each
-  one went, plus the other workouts you choose to share with them, and comments on their exercises;
-  remove a coach and their access ends at once, while the sessions and comments stay yours
+- Coaching: add your coaches' accounts; each plans sessions for you on given days, set by set and
+  load by load, from your last time, and sends them once ready; they see how each one went, plus the
+  other workouts you choose to share with them, and comment on their exercises; remove a coach and
+  their access ends at once, while the sessions and comments stay yours
 - Multi-user: anyone can sign up; each account only sees its own data, plus, as a coach, the
   sessions it planned and the workouts shared with it
 - A super admin, configured on the server, manages the accounts and the built-in catalog

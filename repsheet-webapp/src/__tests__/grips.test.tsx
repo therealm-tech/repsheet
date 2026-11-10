@@ -269,6 +269,7 @@ describe("BlockSheet", () => {
 					note: null,
 					grip: "neutral",
 					target: "10",
+					sets: [],
 				},
 				{
 					id: "ex2",
@@ -278,6 +279,7 @@ describe("BlockSheet", () => {
 					note: null,
 					grip: null,
 					target: "10",
+					sets: [],
 				},
 			],
 		};
@@ -441,6 +443,7 @@ describe("template editor", () => {
 			id: "t1",
 			name: "Dos",
 			note: null,
+			author: null,
 			updatedAt: "2026-10-20T10:00:00Z",
 			blocks: [
 				{
@@ -458,6 +461,7 @@ describe("template editor", () => {
 							note: null,
 							grip: null,
 							target: "10",
+							sets: [],
 						},
 					],
 				},

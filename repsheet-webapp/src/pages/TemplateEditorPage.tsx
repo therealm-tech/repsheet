@@ -149,7 +149,6 @@ export function TemplateEditorPage({
 			<BlocksEditor
 				blocks={draft.blocks}
 				onChange={(blocks) => setDraft({ ...draft, blocks })}
-				withRest
 			/>
 			{error ? <ErrorText>{error}</ErrorText> : null}
 			<button

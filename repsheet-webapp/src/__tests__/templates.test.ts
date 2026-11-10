@@ -162,6 +162,7 @@ describe("template drafts", () => {
 			id: "t1",
 			name: "Jambes",
 			note: null,
+			author: null,
 			updatedAt: "2026-11-10T10:00:00Z",
 			blocks: [
 				{
@@ -179,6 +180,7 @@ describe("template drafts", () => {
 							grip: null,
 							target: "5",
 							note: "Tempo 3-1-1",
+							sets: [],
 						},
 						{
 							id: "tbe2",
@@ -188,6 +190,7 @@ describe("template drafts", () => {
 							grip: null,
 							target: null,
 							note: null,
+							sets: [],
 						},
 					],
 				},

@@ -12,10 +12,16 @@ import { plannedStatus } from "@/lib/planned";
 import { AthletePage } from "@/pages/AthletePage";
 import { CoachingPage } from "@/pages/CoachingPage";
 import { HomePage } from "@/pages/HomePage";
-import { PlannedSessionEditorPage } from "@/pages/PlannedSessionEditorPage";
 import { PlannedSessionPage } from "@/pages/PlannedSessionPage";
 import { WorkoutPage } from "@/pages/WorkoutPage";
-import { exercise, mockApi, page, renderRoute, user } from "./helpers";
+import {
+	exercise,
+	mockApi,
+	page,
+	performance,
+	renderRoute,
+	user,
+} from "./helpers";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -44,6 +50,7 @@ function summary(
 		author: { id: marie.id, name: marie.name },
 		plannedOn: "2026-11-12",
 		name: "Upper push",
+		status: "sent",
 		blockCount: 1,
 		workoutCount: 0,
 		updatedAt: "2026-11-10T10:00:00Z",
@@ -58,6 +65,7 @@ const session: PlannedSession = {
 	plannedOn: "2026-11-06",
 	name: "Upper push",
 	note: null,
+	status: "sent",
 	updatedAt: "2026-11-01T10:00:00Z",
 	blocks: [
 		{
@@ -75,6 +83,7 @@ const session: PlannedSession = {
 					note: null,
 					grip: null,
 					target: "5×5",
+					sets: [],
 				},
 			],
 		},
@@ -93,6 +102,7 @@ const session: PlannedSession = {
 					note: null,
 					grip: null,
 					target: "max",
+					sets: [],
 				},
 			],
 		},
@@ -138,17 +148,30 @@ const logged: Workout = {
 };
 
 describe("plannedStatus", () => {
-	it("tells logged, missed and upcoming sessions apart", () => {
+	it("tells drafts, logged, missed and upcoming sessions apart", () => {
 		const day = "2026-11-10";
+		const sent = "sent" as const;
 		expect(
-			plannedStatus({ plannedOn: "2026-11-01", workoutCount: 1 }, day),
+			plannedStatus(
+				{ plannedOn: "2026-11-01", workoutCount: 0, status: "draft" },
+				day,
+			),
+		).toBe("draft");
+		expect(
+			plannedStatus(
+				{ plannedOn: "2026-11-01", workoutCount: 1, status: sent },
+				day,
+			),
 		).toBe("logged");
 		expect(
-			plannedStatus({ plannedOn: "2026-11-09", workoutCount: 0 }, day),
+			plannedStatus(
+				{ plannedOn: "2026-11-09", workoutCount: 0, status: sent },
+				day,
+			),
 		).toBe("missed");
-		expect(plannedStatus({ plannedOn: day, workoutCount: 0 }, day)).toBe(
-			"planned",
-		);
+		expect(
+			plannedStatus({ plannedOn: day, workoutCount: 0, status: sent }, day),
+		).toBe("planned");
 	});
 });
 
@@ -338,6 +361,61 @@ describe("logging a planned session", () => {
 			await screen.findByRole("button", { name: "Bloc prévu 1" }),
 		).toHaveTextContent("5×5");
 		expect(screen.getByRole("button", { name: "Bloc prévu 2" })).toBeVisible();
+	});
+
+	it("shows a block planned set by set with its loads and the coach's note", async () => {
+		const set = (round: number, weightKg: number) => ({
+			round,
+			reps: 12,
+			weightKg,
+			durationSeconds: null,
+			distanceMeters: null,
+			warmup: false,
+		});
+		const bySet: PlannedSession = {
+			...session,
+			note: "Échauffement 10 min de rameur avant.",
+			blocks: [
+				{
+					id: "tb1",
+					position: 1,
+					kind: "simple",
+					rounds: 3,
+					restSeconds: null,
+					exercises: [
+						{
+							id: "tbe1",
+							exercise: bench,
+							mode: "reps",
+							equipment: "barbell",
+							grip: null,
+							target: null,
+							note: "Talons surélevés",
+							sets: [set(1, 14), set(2, 16), set(3, 18)],
+						},
+					],
+				},
+			],
+		};
+		mockApi({
+			"GET /v1/users/me": () => ({ status: 200, body: user }),
+			"GET /v1/workouts/w1": () => ({
+				status: 200,
+				body: { ...logged, blocks: [] },
+			}),
+			"GET /v1/templates/p1": () => ({ status: 200, body: bySet }),
+			"GET /v1/users/me/coaches": () => ({ status: 200, body: page([]) }),
+		});
+		await renderRoute(() => <WorkoutPage workoutId="w1" />, "/workouts/w1");
+
+		const card = await screen.findByRole("button", { name: "Bloc prévu 1" });
+		expect(card).toHaveTextContent("3×12 · 14→18 kg");
+		expect(card).toHaveTextContent("« Talons surélevés »");
+		expect(card).toHaveTextContent("Marie · coach");
+		expect(await screen.findByText(/prévue par Marie/)).toBeVisible();
+		expect(
+			screen.getByText("Échauffement 10 min de rameur avant."),
+		).toBeVisible();
 	});
 });
 
@@ -532,97 +610,203 @@ describe("coaching an athlete", () => {
 		expect(screen.getByText(/Notée le/)).toBeInTheDocument();
 	});
 
-	it("plans a session with targets and grips, without rest, from the catalog only", async () => {
-		const pullUp = exercise({
-			id: "e3",
-			name: "Tractions",
-			load: "optional",
-			equipment: ["bodyweight"],
-			defaultEquipment: "bodyweight",
-			grips: ["pronation", "supination"],
-			defaultGrip: "pronation",
+	it("plans a session block by block from the athlete's last time, then sends it", async () => {
+		const set = (
+			round: number,
+			reps: number,
+			weightKg: number,
+			warmup = false,
+		) => ({
+			round,
+			reps,
+			weightKg,
+			durationSeconds: null,
+			distanceMeters: null,
+			warmup,
 		});
+		let current: PlannedSession = { ...session, status: "draft", blocks: [] };
+		const planned = {
+			id: "tb9",
+			position: 1,
+			kind: "simple" as const,
+			rounds: 2,
+			restSeconds: null,
+			exercises: [
+				{
+					id: "tbe9",
+					exercise: bench,
+					mode: "reps" as const,
+					equipment: "barbell" as const,
+					grip: null,
+					target: null,
+					note: "Coudes serrés",
+					sets: [set(1, 10, 40, true), set(2, 8, 60)],
+				},
+			],
+		};
 		const calls = mockApi({
 			"GET /v1/users/me": () => ({ status: 200, body: user }),
 			"GET /v1/users/me/athletes/a1": () => ({ status: 200, body: paul }),
+			"GET /v1/planned-sessions/p1": () => ({ status: 200, body: current }),
+			"GET /v1/planned-sessions/p1/workouts": () => ({
+				status: 200,
+				body: page([]),
+			}),
 			"GET /v1/exercises": () => ({
 				status: 200,
 				body: page([
 					bench,
-					pullUp,
 					exercise({ id: "mine", name: "Pompes lestées", custom: true }),
 				]),
 			}),
-			"POST /v1/planned-sessions": () => ({ status: 201, body: session }),
+			"GET /v1/exercises/e1/performances": () => ({
+				status: 200,
+				body: page([
+					performance([set(1, 10, 40, true), set(2, 8, 57.5)], "2026-11-03"),
+				]),
+			}),
+			"POST /v1/planned-sessions/p1/blocks": () => {
+				current = { ...current, blocks: [planned] };
+				return { status: 201, body: planned };
+			},
+			"PUT /v1/planned-sessions/p1/status": () => {
+				current = { ...current, status: "sent" };
+				return { status: 200, body: current };
+			},
 		});
 		await renderRoute(
-			() => <PlannedSessionEditorPage athleteId="a1" />,
-			"/coaching/athletes/a1/sessions/new",
+			() => <PlannedSessionPage athleteId="a1" sessionId="p1" />,
+			"/coaching/athletes/a1/sessions/p1",
 		);
 		const ui = userEvent.setup();
 
+		expect(await screen.findByText("Brouillon")).toBeVisible();
+		expect(await screen.findByText("Paul ne la voit pas encore")).toBeVisible();
+		expect(screen.getByRole("button", { name: "Envoyer" })).toBeDisabled();
+		expect(screen.getByText(/pour Paul/)).toBeVisible();
+
+		const [add] = screen.getAllByRole("button", { name: "＋ Ajouter un bloc" });
+		await ui.click(add as HTMLElement);
+		const sheet = await screen.findByRole("dialog", { name: "Nouveau bloc" });
+		await within(sheet).findByText("Développé couché");
 		expect(
-			await screen.findByRole("heading", { name: "Prévoir pour Paul" }),
-		).toBeVisible();
-		const date = screen.getByLabelText("Date");
-		await ui.clear(date);
-		await ui.type(date, "2026-11-12");
-		await ui.type(screen.getByLabelText("Nom"), "Upper push");
-		await ui.click(screen.getByRole("button", { name: "＋ Bloc" }));
-		const picker = await screen.findByRole("dialog", {
-			name: "Ajouter un exercice",
-		});
-		await within(picker).findByText("Développé couché");
-		expect(
-			within(picker).queryByText("Pompes lestées"),
+			within(sheet).queryByText("Pompes lestées"),
+			"the athlete cannot see the coach's exercises",
 		).not.toBeInTheDocument();
-		expect(within(picker).queryByText(/Créer/)).not.toBeInTheDocument();
-		await ui.click(within(picker).getByText("Développé couché"));
+		await ui.click(within(sheet).getByText("Développé couché"));
 
-		expect(screen.queryByLabelText("Repos (s)")).not.toBeInTheDocument();
-		await ui.type(screen.getByLabelText("Cible pour Développé couché"), "5×5");
-		await ui.type(screen.getByLabelText("Tours"), "3");
-
-		await ui.click(screen.getByRole("button", { name: "＋ Exercice" }));
-		const second = await screen.findByRole("dialog", {
-			name: "Ajouter un exercice",
-		});
-		await ui.click(await within(second).findByText("Tractions"));
-		const grip = screen.getByRole("group", { name: "Prise de Tractions" });
-		await ui.click(within(grip).getByRole("button", { name: "Supination" }));
-		await ui.type(screen.getByLabelText("Cible pour Tractions"), "max");
-
+		expect(
+			await within(sheet).findByText("Dernière fois de Paul"),
+		).toBeVisible();
+		expect(within(sheet).getByText("10 × 40 kg · Échauf.")).toBeVisible();
+		expect(within(sheet).getByText("8 × 57,5 kg")).toBeVisible();
+		expect(
+			within(sheet).getByRole("button", {
+				name: "Tour 1, A Développé couché : 8 reps 57,5 kg",
+			}),
+			"prefilled with Paul's last time",
+		).toBeVisible();
 		await ui.click(
-			screen.getByRole("button", { name: "Enregistrer la séance" }),
+			within(sheet).getByRole("button", { name: "＋ Tour (copie du tour 1)" }),
+		);
+		await ui.type(
+			within(sheet).getByLabelText("Note pour Paul sur Développé couché"),
+			" Coudes serrés ",
+		);
+		await ui.click(
+			within(sheet).getByRole("button", { name: "Enregistrer le bloc" }),
+		);
+
+		await waitFor(() =>
+			expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+				exercises: [
+					{
+						exerciseId: "e1",
+						mode: "reps",
+						equipment: "barbell",
+						grip: null,
+						note: "Coudes serrés",
+						sets: [
+							{ round: 1, warmup: false, reps: 8, weightKg: 57.5 },
+							{ round: 2, warmup: false, reps: 8, weightKg: 57.5 },
+						],
+					},
+				],
+			}),
+		);
+		expect(
+			calls.some(
+				(c) =>
+					c.path.startsWith("/v1/exercises/e1/performances") &&
+					c.path.includes("athleteId=a1"),
+			),
+		).toBe(true);
+		const card = await screen.findByRole("button", { name: "Bloc 1" });
+		expect(card).toHaveTextContent("1×8 · 60 kg");
+		expect(card).toHaveTextContent("↺ 3 nov. : 1×8 · 57,5 kg");
+
+		await ui.click(screen.getByRole("button", { name: "Envoyer" }));
+		await waitFor(() =>
+			expect(calls.find((c) => c.method === "PUT")?.body).toEqual({
+				status: "sent",
+			}),
+		);
+		await waitFor(() =>
+			expect(screen.queryByText("Brouillon")).not.toBeInTheDocument(),
+		);
+	});
+
+	it("starts a draft from the athlete's page", async () => {
+		const calls = mockApi({
+			"GET /v1/users/me": () => ({ status: 200, body: user }),
+			"GET /v1/users/me/athletes/a1": () => ({ status: 200, body: paul }),
+			"GET /v1/planned-sessions": () => ({
+				status: 200,
+				body: page([summary({ status: "draft", name: "Brouillon du jour" })]),
+			}),
+			"GET /v1/workouts": () => ({ status: 200, body: page([]) }),
+			"POST /v1/planned-sessions": () => ({
+				status: 201,
+				body: { ...session, status: "draft", blocks: [] },
+			}),
+		});
+		const { router } = await renderRoute(
+			() => <AthletePage athleteId="a1" />,
+			"/coaching/athletes/a1",
+		);
+		const ui = userEvent.setup();
+
+		const planned = await screen.findByRole("region", {
+			name: "Séances prévues",
+		});
+		expect(
+			await within(planned).findByRole("link", { name: /Brouillon du jour/ }),
+		).toHaveTextContent("Brouillon");
+		await ui.click(
+			screen.getByRole("button", { name: "＋ Prévoir une séance" }),
+		);
+		const form = await screen.findByRole("form", { name: "Prévoir pour Paul" });
+		expect(within(form).queryByLabelText(/Durée/)).not.toBeInTheDocument();
+		const date = within(form).getByLabelText("Date");
+		await ui.clear(date);
+		await ui.type(date, "2026-11-13");
+		await ui.type(within(form).getByLabelText("Nom"), "Bas du corps");
+		await ui.click(
+			within(form).getByRole("button", { name: "Créer le brouillon" }),
 		);
 
 		await waitFor(() =>
 			expect(calls.find((c) => c.method === "POST")?.body).toEqual({
 				athleteId: "a1",
-				plannedOn: "2026-11-12",
-				name: "Upper push",
-				blocks: [
-					{
-						rounds: 3,
-						exercises: [
-							{
-								exerciseId: "e1",
-								mode: "reps",
-								equipment: "barbell",
-								grip: null,
-								target: "5×5",
-							},
-							{
-								exerciseId: "e3",
-								mode: "reps",
-								equipment: "bodyweight",
-								grip: "supination",
-								target: "max",
-							},
-						],
-					},
-				],
+				plannedOn: "2026-11-13",
+				name: "Bas du corps",
+				note: null,
 			}),
+		);
+		await waitFor(() =>
+			expect(router.state.location.pathname).toBe(
+				"/coaching/athletes/a1/sessions/p1",
+			),
 		);
 	});
 });

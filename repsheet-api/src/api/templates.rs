@@ -14,7 +14,8 @@ use crate::{
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{PageQuery, PageResponse},
-        workouts::BlockKindDto,
+        users::{AuthorResponse, author},
+        workouts::{BlockKindDto, SetResponse},
     },
     auth::AuthUser,
     db::{
@@ -105,6 +106,9 @@ pub struct TemplateResponse {
     pub id: Uuid,
     pub name: String,
     pub note: Option<String>,
+    /// The coach who planned it, for a planned session; null for a template
+    /// of the library, or once the coach's account is deleted.
+    pub author: Option<AuthorResponse>,
     pub updated_at: DateTime<Utc>,
     pub blocks: Vec<TemplateBlockResponse>,
 }
@@ -115,6 +119,7 @@ impl TemplateResponse {
             id: row.id,
             name: row.name,
             note: row.note,
+            author: author(row.author_id, row.author_name),
             updated_at: row.updated_at,
             blocks: blocks.into_iter().map(Into::into).collect(),
         }
@@ -140,6 +145,7 @@ impl From<LoadedTemplateBlock> for TemplateBlockResponse {
                     grip: e.grip.map(Into::into),
                     target: e.target,
                     note: e.note,
+                    sets: e.sets.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
         }
@@ -174,6 +180,9 @@ pub struct TemplateExerciseResponse {
     pub target: Option<String>,
     /// The coach's instructions for the exercise, e.g. `tempo 3-1-1`.
     pub note: Option<String>,
+    /// The sets a coach planned round by round, in the shape of logged sets;
+    /// empty when the exercise is planned with a `target` instead.
+    pub sets: Vec<SetResponse>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Validate)]
@@ -322,6 +331,7 @@ pub(super) async fn resolve_blocks<'a>(
                 grip: chosen.grip,
                 target: trimmed(request.target.as_deref()),
                 note: trimmed(request.note.as_deref()),
+                sets: &[],
             });
         }
         resolved.push(TemplateBlockInput {

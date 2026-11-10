@@ -277,6 +277,7 @@ describe("comments on an exercise", () => {
 					grip: null,
 					target: "6",
 					note: "Pause 1 s en bas",
+					sets: [],
 				},
 			],
 		};
@@ -373,6 +374,7 @@ describe("instructions of a planned exercise", () => {
 					grip: null,
 					target: "12–15",
 					note: "Pause 1 s en haut",
+					sets: [],
 				},
 			],
 		};

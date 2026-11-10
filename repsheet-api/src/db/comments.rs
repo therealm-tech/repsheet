@@ -61,6 +61,23 @@ pub async fn insert(
         .await
 }
 
+/// Starts the threads of block `block_id`, logged from the planned block
+/// `template_block_id`, with the notes its coach wrote for its exercises.
+pub async fn insert_planned_notes(
+    exec: impl PgExecutor<'_>,
+    block_id: Uuid,
+    template_block_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query(include_str!(
+        "../../queries/comments/insert_planned_notes.sql"
+    ))
+    .bind(block_id)
+    .bind(template_block_id)
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
 pub async fn update(exec: impl PgExecutor<'_>, id: Uuid, text: &str) -> sqlx::Result<CommentRow> {
     sqlx::query_as(include_str!("../../queries/comments/update.sql"))
         .bind(id)

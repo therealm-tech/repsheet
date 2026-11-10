@@ -253,6 +253,7 @@ describe("template editor", () => {
 			id: "t1",
 			name: "Épaules",
 			note: null,
+			author: null,
 			updatedAt: "2026-10-20T10:00:00Z",
 			blocks: [
 				{
@@ -270,6 +271,7 @@ describe("template editor", () => {
 							note: null,
 							grip: null,
 							target: "8",
+							sets: [],
 						},
 					],
 				},

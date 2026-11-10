@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { CommentThread } from "@/components/CommentThread";
 import { KindTag } from "@/components/ui";
+import i18n from "@/i18n";
 import { previousPerformanceQuery } from "@/lib/api/endpoints";
 import type {
+	Author,
 	Block,
 	ExerciseSummary,
 	TemplateBlock,
@@ -18,6 +20,7 @@ import {
 } from "@/lib/blocks";
 import type { Choices } from "@/lib/choices";
 import { formatShortDay } from "@/lib/dates";
+import { useUnit } from "@/lib/hooks";
 import { formatNumber, kgToUnit } from "@/lib/units";
 
 /** The exercise's name, followed by the equipment and grip chosen where it offers a choice. */
@@ -173,20 +176,50 @@ export function BlockCard({
 	);
 }
 
-/** A block planned and not logged yet. Without `onOpen` it is read-only. */
+/** What a planned exercise asks: its sets summarised like logged ones, or the coach's target. */
+export function plannedSummary(
+	block: TemplateBlock,
+	index: number,
+	unit: WeightUnit,
+): string {
+	const entry = block.exercises[index];
+	if (!entry) {
+		return "";
+	}
+	if (entry.sets.length > 0) {
+		return summarizeSets(entry.mode, entry.exercise.load, entry.sets, unit);
+	}
+	return [
+		block.rounds && index === 0
+			? i18n.t("block.rounds", { count: block.rounds })
+			: null,
+		entry.target,
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
+
+/**
+ * A block planned and not logged yet. Without `onOpen` it is read-only. The
+ * notes of a session a coach planned show as theirs, those of one of the
+ * user's templates as instructions.
+ */
 export function PlannedBlockCard({
 	block,
 	index,
 	onOpen,
 	status,
+	coach,
 }: {
 	block: TemplateBlock;
 	index: number;
 	onOpen?: () => void;
 	/** What the corner says; "planned" by default. */
 	status?: string;
+	coach?: Author | null;
 }) {
 	const { t } = useTranslation();
+	const unit = useUnit();
 	const label = t("block.plannedLabel", { position: index });
 	const content = (
 		<>
@@ -201,18 +234,25 @@ export function PlannedBlockCard({
 					<span className="ex muted">
 						<span className="ex-letter">{letter(i)}</span>
 						<ExerciseName exercise={entry.exercise} chosen={entry} />
-						<span className="ex-value">
-							{[
-								block.rounds && i === 0
-									? t("block.rounds", { count: block.rounds })
-									: null,
-								entry.target,
-							]
-								.filter(Boolean)
-								.join(" · ")}
+						<span
+							className={
+								entry.sets.length > 0 ? "ex-value planned-value" : "ex-value"
+							}
+						>
+							{plannedSummary(block, i, unit)}
 						</span>
 					</span>
-					{entry.note ? (
+					{entry.note && coach ? (
+						<span className="plan-note">
+							<span className="avatar avatar-coach" aria-hidden="true">
+								{coach.name.charAt(0).toUpperCase()}
+							</span>
+							<span className="sr-only">
+								{coach.name} · {t("comments.coach")} :
+							</span>
+							« {entry.note} »
+						</span>
+					) : entry.note ? (
 						<span className="instruction-planned">
 							<InstructionIcon />
 							<span className="sr-only">{t("comments.instructions")}</span>

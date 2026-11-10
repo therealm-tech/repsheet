@@ -52,9 +52,10 @@ The React and TypeScript client in [repsheet-webapp/](repsheet-webapp/), served 
 nginx ([repsheet-webapp/nginx/](repsheet-webapp/nginx/)). Every API response is parsed with `zod`
 before use, so a contract mismatch fails loudly at the boundary. It keeps the bearer token in
 `localStorage` and derives everything else from the API: the logging sheet's pre-filled values, the
-planned blocks of a workout, the progression charts. A coach reads an athlete's planned sessions and
-shared workouts on pages of their own, read-only apart from the comments on their exercises, and
-without the "last time" comparisons, which would come from the coach's history, not the athlete's.
+planned blocks of a workout, the progression charts. A coach plans a session for an athlete on a
+page laid out like a workout, with the same block sheet: there, "last time" is the athlete's, read
+with `athleteId`, never the coach's own history. The workouts an athlete shares are read-only apart
+from the comments on their exercises, and show no "last time" comparison.
 It is an installable Progressive Web App: a web app manifest and a Workbox service worker are
 generated at build time ([repsheet-webapp/pwa.config.ts](repsheet-webapp/pwa.config.ts)), and its
 PNG icons are rendered from `public/logo.svg` during the same build.
@@ -92,6 +93,11 @@ whether or not the resource still exists. A comment written while logging a new 
 through `/v1/comments` once the block exists, as two requests: a failed comment leaves the block
 saved, and the client sends it again against the block it now holds.
 
+Planning a block takes the same path for a coach: `GET /v1/exercises/{id}/performances?athleteId=…`
+prefills the grid with the athlete's last time, then `POST /v1/planned-sessions/{id}/blocks` checks
+the exercises against those the athlete can use and the sets against the same rules, in one
+transaction. The session stays a draft until `PUT /v1/planned-sessions/{id}/status` sends it.
+
 ## State and persistence
 
 ```mermaid
@@ -107,6 +113,7 @@ erDiagram
     users ||--o{ workouts : logs
     templates ||--o{ template_blocks : "plans"
     template_blocks ||--o{ template_block_exercises : contains
+    template_block_exercises ||--o{ template_block_sets : "plans"
     workouts ||--o{ blocks : contains
     blocks }o--o| template_blocks : "logged from"
     blocks ||--o{ block_exercises : contains
@@ -130,6 +137,9 @@ erDiagram
   each list a set and its default one of it. A block exercise records the `mode`, the `equipment`
   and the `grip` chosen for it, the grip null when it is not known; a template exercise records all
   three too, next to its target and an optional `note`, the instructions of the template's author.
+- A **planned set** (`template_block_sets`) has the shape of a set and belongs to an exercise of a
+  planned session. It is never a `workout_sets` row: the history, the progression, "last time" and
+  the last-used dates read only what was logged.
 - **Exercises** with no owner form the built-in catalog, seeded by the migrations and visible to
   everyone; the others belong to the user who created them. Names are unique per user, built-ins
   included, compared through the SQL function `fold()` (lowercase, accents stripped), which also
@@ -148,7 +158,9 @@ erDiagram
   workout deletes its shares.
 - A **planned session** is a template with a `planned_on` day and an `author_id`, the coach who wrote
   it; it belongs to the athlete (`user_id`). Templates without a day form the template library.
-  Deleting the author's account sets `author_id` to null and keeps the session.
+  Deleting the author's account sets `author_id` to null and keeps the session. Its `sent_at` is null
+  while it is a draft, and set once its author sends it; a table check keeps it null on a template
+  of the library.
 - A **comment** (`block_exercise_comments`) belongs to one block exercise and has an `author_id`
   and creation and update times; a block exercise's comments, ordered by creation, form its thread.
   Deleting the block exercise deletes its thread; deleting the author's account sets `author_id` to
@@ -205,20 +217,30 @@ grip. The history still lists every performance, each with its mode, its equipme
 **Weights are stored in kilograms.** The user's unit (`kg` or `lb`) is a display preference applied
 by the client; history stays consistent if the preference changes.
 
-**Templates hold targets, not weights.** A target is free text written from the coach's plan
-(`6–8`, `max`, `1 min`), kept with the mode, the equipment and the grip it is done in, so a block
-logged from it opens that way; a template exercise that plans no grip opens a block with none. The
-weight comes from the user's history, which is what moves from one week
-to the next. A workout block keeps a link to the template block it was logged from, which is how the
+**Templates hold targets; planned sessions hold sets.** A template of the library is reused week
+after week, so it holds a target, free text (`6–8`, `max`, `1 min`), kept with the mode, the
+equipment and the grip it is done in, so a block logged from it opens that way; a template exercise
+that plans no grip opens a block with none. The weight comes from the user's history, which is what
+moves from one week to the next. A planned session is one day for one athlete, and its coach
+decides the loads: each exercise holds its sets round by round, in the shape of logged sets and
+checked by the same rules, and the block logged from it opens on exactly those cells. Planned sets
+live in a table of their own rather than in `workout_sets` with a flag, so that no query on what was
+performed can count one by mistake. A planned session written with targets only, before sets
+existed, still opens from its targets. A workout block keeps a link to the template block it was logged from, which is how the
 client knows which planned blocks remain; updating a template keeps a block's identity when the
 request carries its `id`, so that link survives edits. A logged block keeps its exercises' identity
 the same way, which is what keeps their comments when the athlete corrects a set.
 
 **A plan gives instructions; a workout holds a conversation.** A template exercise carries one
 `note`, the instructions of whoever wrote the plan (`tempo 3-1-1`, `close grip`), as part of the
-plan like its target: there is one author, so one field. The client shows it while the block is
-logged and never copies it into the workout: the same instruction would repeat in the history every
-week and bury what actually happened. A logged exercise carries a thread instead, because two
+plan like its target: there is one author, so one field. In a template of the library, the client
+shows it while the block is logged and never copies it into the workout: the same instruction would
+repeat in the history every week and bury what actually happened. A coach's note in a planned
+session is addressed to the athlete for that one day, so it starts the conversation instead: when
+the athlete logs the block, the API copies it as the first comment of the matching exercise, written
+by the coach, and the athlete answers in that thread. Exercises match by their rank among those of
+the same exercise, so an exercise added or removed around them leaves the others matched. The copy
+is made once: editing the note afterwards changes the plan, not a thread already started. A logged exercise carries a thread instead, because two
 people write about it: the athlete says how it went (`shoulder twinge`), a coach answers (`drop to
 75 next week`). Each comment keeps its author, so the client tells the athlete from their coaches
 and shows a comment whose author's account is gone without a name. A comment hangs off the block
@@ -237,11 +259,16 @@ coach makes checks the link. Adding by email tells the caller whether an account
 sign-up already does, so this reveals nothing new.
 
 **A planned session is a dated template.** A coach's plan has the shape of a template, blocks of
-exercises with modes, equipment, grips and targets, plus a day. Storing it as a template with
-`planned_on` and `author_id` reuses all of it: the editor, the validation, and the links a workout
-already keeps to its template and template blocks, which is what tells whether the session was
-logged and which planned blocks remain. A separate table would duplicate the block structure and
-the logging path. The session belongs to the athlete, who logs from it like from any template and
+exercises with modes, equipment and grips, plus a day. Storing it as a template with `planned_on`
+and `author_id` reuses the block structure, the validation, and the links a workout already keeps to
+its template and template blocks, which is what tells whether the session was logged and which
+planned blocks remain. A separate table would duplicate the block structure and the logging path.
+The coach writes it the way a workout is logged, block by block
+(`/v1/planned-sessions/{id}/blocks`), so the session is a draft while it is written: its athlete
+does not see it, in the list, by id, as a template or through its blocks, until the coach sends it
+(`PUT /v1/planned-sessions/{id}/status`). Sending is a state of the session rather than an action
+endpoint, and it is one way: once the athlete may have seen or logged it, it stays sent, and the
+coach keeps editing it in place. The session belongs to the athlete, who logs from it like from any template and
 may edit or delete it; it stays theirs when the coach is removed. Planned sessions are listed apart
 (`/v1/planned-sessions`) and kept out of the template library, which is for reusable plans. A coach
 plans with the exercises the athlete can use, the catalog and the athlete's own, since the athlete
@@ -252,7 +279,9 @@ lists, reads, edits and deletes the planned sessions they wrote for the athlete,
 workouts logged from them, sets included: planning a session is what grants that read. Any other
 workout is private until the athlete shares it with that coach, one workout and one coach at a time,
 and the coach then reads it as they read an outcome, without editing it, though they comment on its
-exercises. The athlete's templates and
+exercises. The "last time" a coach plans from is read from those same workouts
+(`coach_reads_workout()` in SQL), so it can be older than the athlete's real last time: seeing more
+would be a grant the athlete never gave. The athlete's templates and
 exercises, the sessions another coach planned and the workouts logged from them stay private. Every
 read checks both the grant and the link, so removing a coach cuts both at once, and their shares are
 deleted with the link rather than kept dormant: adding the same coach back later shares nothing the
@@ -319,7 +348,7 @@ carries its own version, and its `appVersion` names the release of the images it
 ## Invariants and constraints
 
 - Every query on user data filters by the authenticated user, or for a planned session by its
-  athlete or by its author while the coaching link exists, and for reading a workout by its owner or
+  athlete once it is sent or by its author while the coaching link exists, and for reading a workout by its owner or
   by a linked coach who planned its session or was shared it. A resource the caller cannot see answers
   `404`, never `403`, so its existence does not leak. `403` answers a super-admin-only action
   attempted by a user, and a coach action naming an athlete who does not have the caller as a coach
@@ -349,6 +378,9 @@ carries its own version, and its `appVersion` names the release of the images it
 - There is no password reset and no email verification; an account is an email and a password.
 - One weight unit per user, applied to every exercise.
 - A coach's custom exercises cannot be used in a planned session: the athlete could not see them.
+- A coach plans from the athlete's last time among the workouts they read, not from the athlete's
+  whole history.
+- A sent planned session cannot go back to draft.
 - Nothing notifies an athlete of a new planned session or comment, or a coach of a logged session or
   a reply; each sees it the next time they open the app.
 - A thread comes whole with its workout and with each performance of the history, unpaginated.

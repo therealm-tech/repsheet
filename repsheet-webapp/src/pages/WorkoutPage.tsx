@@ -31,6 +31,7 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 		queryFn: () => api.template(templateId ?? ""),
 		enabled: templateId !== null,
 	});
+	const coach = template.data?.author ?? null;
 
 	const update = useMutation({
 		mutationFn: (body: UpdateWorkoutInput) =>
@@ -74,6 +75,7 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 	const meta = [
 		formatDay(w.performedOn),
 		w.durationMinutes === null ? null : formatMinutes(w.durationMinutes),
+		coach ? t("workout.plannedBy", { name: coach.name }) : null,
 	]
 		.filter(Boolean)
 		.join(" · ");
@@ -140,12 +142,16 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 							key={block.id}
 							block={block}
 							index={w.blocks.length + i + 1}
+							coach={coach}
 							onOpen={() => setSheet({ kind: "new", templateBlock: block })}
 						/>
 					))}
 				</div>
 
 				<div className="workout-aside">
+					{coach && template.data?.note ? (
+						<p className="workout-note">{template.data.note}</p>
+					) : null}
 					{w.note ? <p className="workout-note">{w.note}</p> : null}
 					<ShareWithCoaches workoutId={w.id} />
 					<div className="stack-tight workout-actions">
@@ -205,6 +211,7 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 				<BlockSheet
 					workoutId={w.id}
 					mode={sheet}
+					coach={coach}
 					onClose={() => setSheet(null)}
 				/>
 			) : null}
