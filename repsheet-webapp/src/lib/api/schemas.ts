@@ -230,7 +230,7 @@ export const TemplateSchema = z.object({
 });
 export type Template = z.infer<typeof TemplateSchema>;
 
-/** A coach seen by their athlete, or an athlete seen by their coach. */
+/** A coach seen by their athlete. */
 export const LinkedAccountSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -238,6 +238,25 @@ export const LinkedAccountSchema = z.object({
 	linkedAt: z.string(),
 });
 export type LinkedAccount = z.infer<typeof LinkedAccountSchema>;
+
+/**
+ * An athlete seen by their coach: an account, or a profile the coach manages
+ * for someone with no account, which has no email.
+ */
+export const AthleteSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	email: z.string().nullable(),
+	managed: z.boolean(),
+	weightUnit: WeightUnitSchema,
+	linkedAt: z.string(),
+});
+export type Athlete = z.infer<typeof AthleteSchema>;
+
+export interface AthleteInput {
+	name: string;
+	weightUnit: WeightUnit;
+}
 
 /** A draft is seen by its author only, until they send it to the athlete. */
 export const PlannedSessionStatusSchema = z.enum(["draft", "sent"]);
@@ -322,6 +341,8 @@ export interface CreateExerciseInput extends UpdateExerciseInput {
 }
 
 export interface CreateWorkoutInput {
+	/** A profile the caller manages, to log the workout for them. */
+	athleteId?: string;
 	name: string;
 	templateId?: string;
 	performedOn: string;

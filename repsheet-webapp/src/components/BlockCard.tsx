@@ -46,18 +46,20 @@ function Progress({
 	chosen,
 	sets,
 	workoutId,
+	athleteId,
 	unit,
 }: {
 	exercise: ExerciseSummary;
 	chosen: Choices;
 	sets: WorkoutSet[];
 	workoutId: string;
+	athleteId: string | undefined;
 	unit: WeightUnit;
 }) {
 	const { t } = useTranslation();
 	const current = maxWorkingWeight(sets);
 	const performances = useQuery({
-		...previousPerformanceQuery(exercise.id, workoutId, chosen),
+		...previousPerformanceQuery(exercise.id, workoutId, chosen, athleteId),
 		enabled:
 			chosen.mode === "reps" &&
 			exercise.load === "required" &&
@@ -98,6 +100,7 @@ export function BlockCard({
 	ownerId,
 	unit,
 	onOpen,
+	managed = false,
 }: {
 	block: Block;
 	workoutId: string;
@@ -105,6 +108,11 @@ export function BlockCard({
 	ownerId: string;
 	unit: WeightUnit;
 	onOpen?: () => void;
+	/**
+	 * The workout is that of a profile the caller manages: "last time" is the
+	 * profile's, and there are no comments, nobody being there to read them.
+	 */
+	managed?: boolean;
 }) {
 	const { t } = useTranslation();
 	const label = t("block.title", { position: block.position });
@@ -134,12 +142,13 @@ export function BlockCard({
 							chosen={entry}
 							sets={entry.sets}
 							workoutId={workoutId}
+							athleteId={managed ? ownerId : undefined}
 							unit={unit}
 						/>
 					) : null}
 				</span>
 			))}
-			{block.exercises.map((entry, i) => (
+			{(managed ? [] : block.exercises).map((entry, i) => (
 				<CommentThread
 					key={entry.id}
 					comments={entry.comments}
@@ -206,6 +215,7 @@ export function PlannedBlockCard({
 	onOpen,
 	status,
 	coach,
+	unit: athleteUnit,
 }: {
 	block: TemplateBlock;
 	index: number;
@@ -213,9 +223,11 @@ export function PlannedBlockCard({
 	/** What the corner says; "planned" by default. */
 	status?: string;
 	coach?: Author | null;
+	/** The athlete's unit, for a profile the caller manages. */
+	unit?: WeightUnit;
 }) {
 	const { t } = useTranslation();
-	const unit = useUnit();
+	const unit = useUnit(athleteUnit);
 	const label = t("block.plannedLabel", { position: index });
 	const content = (
 		<>

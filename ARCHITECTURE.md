@@ -55,7 +55,10 @@ before use, so a contract mismatch fails loudly at the boundary. It keeps the be
 planned blocks of a workout, the progression charts. A coach plans a session for an athlete on a
 page laid out like a workout, with the same block sheet: there, "last time" is the athlete's, read
 with `athleteId`, never the coach's own history. The workouts an athlete shares are read-only apart
-from the comments on their exercises, and show no "last time" comparison.
+from the comments on their exercises, and show no "last time" comparison. A coach logs the workouts
+of a profile they manage on the workout page itself, in the profile's unit, with "last time" read
+from the profile's history and no comments; a planned session goes to such an athlete as text,
+built in the client and handed to the Web Share API or the clipboard, with nothing on the server.
 It is an installable Progressive Web App: a web app manifest and a Workbox service worker are
 generated at build time ([repsheet-webapp/pwa.config.ts](repsheet-webapp/pwa.config.ts)), and its
 PNG icons are rendered from `public/logo.svg` during the same build.
@@ -103,6 +106,7 @@ transaction. The session stays a draft until `PUT /v1/planned-sessions/{id}/stat
 ```mermaid
 erDiagram
     users ||--o{ access_tokens : "logs in with"
+    users ||--o{ users : "manages (profiles)"
     users ||--o{ exercises : "creates (custom)"
     users ||--o{ templates : owns
     users ||--o{ templates : "plans (as coach)"
@@ -151,8 +155,14 @@ erDiagram
   `exercise_name()` picks the name in the caller's locale and falls back on the other.
 - An account has a **role**: `user`, or `super_admin` for the accounts that manage the others and the
   built-in catalog.
+- A **profile** is a `users` row with no email and no password and a `managed_by`, the coach who
+  created it for an athlete with no account, linked to that coach by a coaching link like any
+  athlete. Table checks keep the email and the password both set or both null, and a row with no
+  email managed. Deleting the coach deletes their profiles and all they hold. A profile cannot log
+  in, is not listed with the accounts, and its sessions are sent as they are planned.
 - A **coaching link** (`coaching_links`) says that an athlete has an account as a coach. It is
-  written and removed by the athlete alone, and every coach check reads it at request time.
+  written and removed by the athlete alone, or written with the profile by the coach who manages
+  it, and every coach check reads it at request time.
 - A **workout share** (`workout_shares`) lets one of the athlete's coaches read one workout. Removing
   the coach deletes their shares, so adding them again starts with nothing shared; deleting the
   workout deletes its shares.
@@ -258,6 +268,20 @@ The athlete removes it alone and the coach loses access at once: nothing is cach
 coach makes checks the link. Adding by email tells the caller whether an account uses that email;
 sign-up already does, so this reveals nothing new.
 
+**An athlete without an account is a profile, not a separate kind of record.** A coach also coaches
+people who never install the app. Storing them as `users` rows, with no credentials and the coach as
+manager, lets everything that hangs off an athlete work unchanged: planned sessions, workouts,
+"last time", the coaching link that every coach check reads. The coach then writes for the profile
+through the same endpoints as for themselves: a workout is created for it with `athleteId`, and each
+write on an existing one is allowed to its owner or to the coach managing it (`acts_for()` in
+SQL), with the exercises the profile may use, the built-in catalog, since it owns none. A generic
+"act as" header was ruled out: it would open every route, tokens and coaching included, to the
+coach by default, where an explicit parameter opens only what a coach must do for the athlete.
+Nobody else sees a profile, so its sessions skip the draft state, and the coach reads all its
+workouts, not only those shared. There is nobody to read comments either: the client shows none on
+a profile's workouts. Sending a session to such an athlete is a text message the client composes,
+not a public page: there is no unauthenticated route to secure and no link to revoke.
+
 **A planned session is a dated template.** A coach's plan has the shape of a template, blocks of
 exercises with modes, equipment and grips, plus a day. Storing it as a template with `planned_on`
 and `author_id` reuses the block structure, the validation, and the links a workout already keeps to
@@ -349,10 +373,12 @@ carries its own version, and its `appVersion` names the release of the images it
 
 - Every query on user data filters by the authenticated user, or for a planned session by its
   athlete once it is sent or by its author while the coaching link exists, and for reading a workout by its owner or
-  by a linked coach who planned its session or was shared it. A resource the caller cannot see answers
+  by a linked coach who planned its session or was shared it. The coach managing a profile reads and
+  writes its workouts as its owner would. A resource the caller cannot see answers
   `404`, never `403`, so its existence does not leak. `403` answers a super-admin-only action
-  attempted by a user, and a coach action naming an athlete who does not have the caller as a coach
-  (`not-coach`), with the same answer whether that account exists or not.
+  attempted by a user, a coach action naming an athlete who does not have the caller as a coach
+  (`not-coach`), with the same answer whether that account exists or not, and an action reserved to
+  the manager of a profile naming an athlete who has an account (`not-manager`).
 - A comment is read and written by whoever reads its workout, under the rule above, and goes with
   that access: a removed coach no longer sees their comments, which stay on the athlete's record.
   Only its author edits it, and only its author or the workout's owner deletes it; anyone else who

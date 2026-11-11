@@ -14,7 +14,7 @@ use validator::{Validate, ValidationErrors};
 use crate::{
     api::{
         AppState, authenticated,
-        coaching::require_coach,
+        coaching::{Coached, require_coach, require_manager},
         comments::CommentResponse,
         exercises::{Chosen, EquipmentDto, ExerciseSummaryResponse, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
@@ -44,7 +44,7 @@ pub fn routes() -> ApiRouter<AppState> {
                     .description(
                         "Without `athleteId`, the caller's workouts. With it, the workouts \
                          that athlete shared with the caller, who must be their coach (403 \
-                         otherwise).",
+                         otherwise), or all of them for a profile the caller manages.",
                     )
             })
             .post_with(create, |op| {
@@ -55,7 +55,8 @@ pub fn routes() -> ApiRouter<AppState> {
                     .description(
                         "Usually logged after the session, possibly following a template \
                          or a planned session. Blocks are added afterwards, all at once or \
-                         one by one.",
+                         one by one. With `athleteId`, it is logged for a profile the caller \
+                         manages, who then writes it as their own.",
                     )
             }),
         )
@@ -67,8 +68,9 @@ pub fn routes() -> ApiRouter<AppState> {
                     .id("getWorkout")
                     .summary("Get a workout with its blocks")
                     .description(
-                        "Readable by its owner, and by a coach the owner has while the workout \
-                         is shared with them or was logged from a session they planned.",
+                        "Readable by its owner and by the coach who manages the owner's \
+                         profile, and by a coach the owner has while the workout is shared \
+                         with them or was logged from a session they planned.",
                     )
             })
             .put_with(update, |op| {
@@ -271,6 +273,9 @@ pub struct BlockExerciseResponse {
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkoutRequest {
+    /// A profile the caller manages, to log the workout for them; the
+    /// caller's own workout when omitted. 403 for an athlete with an account.
+    pub athlete_id: Option<Uuid>,
     #[validate(length(min = 1, max = 100), custom(function = not_blank))]
     pub name: String,
     pub template_id: Option<Uuid>,
@@ -383,7 +388,8 @@ impl Validate for UpdateBlockRequest {
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ListWorkoutsQuery {
-    /// An athlete who has the caller as a coach, to list what they shared.
+    /// An athlete who has the caller as a coach, to list what they shared,
+    /// or every workout of a profile the caller manages.
     pub athlete_id: Option<Uuid>,
     /// 1-based page number (default 1)
     #[validate(range(min = 1))]
@@ -416,8 +422,14 @@ async fn list(
         per_page: query.per_page,
     };
     let mut conn = state.pool.acquire().await?;
-    let (rows, total) = if let Some(athlete_id) = query.athlete_id {
-        require_coach(&mut conn, &user, athlete_id).await?;
+    let athlete = match query.athlete_id {
+        Some(athlete_id) => Some((
+            athlete_id,
+            require_coach(&mut conn, &user, athlete_id).await?,
+        )),
+        None => None,
+    };
+    let (rows, total) = if let Some((athlete_id, Coached::Account)) = athlete {
         let rows = db::workouts::list_shared(
             &mut *conn,
             athlete_id,
@@ -431,8 +443,10 @@ async fn list(
             db::workouts::count_shared(&mut *conn, athlete_id, user.id).await?,
         )
     } else {
-        let rows = db::workouts::list(&mut *conn, user.id, paging.limit(), paging.offset()).await?;
-        (rows, db::workouts::count(&mut *conn, user.id).await?)
+        let owner_id = athlete.map_or(user.id, |(athlete_id, _)| athlete_id);
+        let rows =
+            db::workouts::list(&mut *conn, owner_id, paging.limit(), paging.offset()).await?;
+        (rows, db::workouts::count(&mut *conn, owner_id).await?)
     };
     Ok(Json(paging.respond(
         rows.into_iter().map(Into::into).collect(),
@@ -445,8 +459,16 @@ async fn create(
     user: AuthUser,
     ValidJson(request): ValidJson<CreateWorkoutRequest>,
 ) -> AppResult<Created<WorkoutResponse>> {
+    let mut conn = state.pool.acquire().await?;
+    let owner_id = match request.athlete_id {
+        Some(athlete_id) => {
+            require_manager(&mut conn, &user, athlete_id).await?;
+            athlete_id
+        }
+        None => user.id,
+    };
     if let Some(template_id) = request.template_id
-        && db::templates::find(&state.pool, template_id, user.id)
+        && db::templates::find(&mut *conn, template_id, owner_id)
             .await?
             .is_none()
     {
@@ -461,7 +483,7 @@ async fn create(
         performed_on: request.performed_on,
         duration_minutes: request.duration_minutes,
     };
-    let row = db::workouts::insert(&state.pool, user.id, &workout).await?;
+    let row = db::workouts::insert(&mut *conn, owner_id, &workout).await?;
     tracing::debug!(workout_id = %row.id, template_id = ?row.template_id, "workout created");
     Ok(Created {
         location: format!("/v1/workouts/{}", row.id),
@@ -521,10 +543,11 @@ async fn create_block(
 ) -> AppResult<Created<BlockResponse>> {
     let body = request.block;
     let mut tx = state.pool.begin().await?;
-    let workout = db::workouts::find(&mut *tx, path.workout_id, user.id)
+    let found = db::workouts::find_writable(&mut *tx, path.workout_id, user.id)
         .await?
         .ok_or(AppError::NotFound)?;
-    let sets = check_block(&mut tx, &user, &body, &HashMap::new()).await?;
+    let workout = found.workout;
+    let sets = check_block(&mut tx, found.owner_id, user.locale, &body, &HashMap::new()).await?;
     let exercises = new_block_exercises(&body, &sets);
     let block = db::workouts::insert_block(
         &mut tx,
@@ -555,13 +578,13 @@ async fn update_block(
 ) -> AppResult<Json<BlockResponse>> {
     let body = request.block;
     let mut tx = state.pool.begin().await?;
-    db::workouts::find(&mut *tx, path.workout_id, user.id)
+    let found = db::workouts::find_writable(&mut *tx, path.workout_id, user.id)
         .await?
         .ok_or(AppError::NotFound)?;
     let existing = db::workouts::block_exercise_ids(&mut *tx, path.block_id, path.workout_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    let sets = check_block(&mut tx, &user, &body, &existing).await?;
+    let sets = check_block(&mut tx, found.owner_id, user.locale, &body, &existing).await?;
     let exercises = new_block_exercises(&body, &sets);
     let block = db::workouts::update_block(
         &mut tx,
@@ -584,7 +607,7 @@ async fn delete_block(
     PathParams(path): PathParams<BlockPath>,
 ) -> AppResult<NoContent> {
     let mut conn = state.pool.acquire().await?;
-    if db::workouts::find(&mut *conn, path.workout_id, user.id)
+    if db::workouts::find_writable(&mut *conn, path.workout_id, user.id)
         .await?
         .is_some()
     {
@@ -609,13 +632,14 @@ pub(super) struct ExerciseSets<'a> {
 }
 
 /// Checks what field-level validation cannot: that the exercises and the
-/// template block are the user's, that each `id` names one of the block's
+/// template block are ones the workout's owner may use, that each `id` names one of the block's
 /// `existing` exercises (by block exercise id) for the same exercise, at most
 /// once, and the exercises' sets as [`check_sets`] does.
 /// Returns the checked exercises, in request order.
 async fn check_block(
     conn: &mut sqlx::PgConnection,
-    user: &AuthUser,
+    owner_id: Uuid,
+    locale: Locale,
     body: &BlockBody,
     existing: &HashMap<Uuid, Uuid>,
 ) -> AppResult<Vec<CheckedExercise>> {
@@ -632,7 +656,7 @@ async fn check_block(
         }
     }
     if let Some(template_block_id) = body.template_block_id
-        && !db::templates::owns_block(&mut *conn, template_block_id, user.id).await?
+        && !db::templates::owns_block(&mut *conn, template_block_id, owner_id).await?
     {
         errors.push(FieldError::new("templateBlockId", "unknown template block"));
     }
@@ -647,7 +671,7 @@ async fn check_block(
             sets: &e.sets,
         })
         .collect();
-    let checked = check_sets(conn, user.id, user.locale, &exercises, &mut errors).await?;
+    let checked = check_sets(conn, owner_id, locale, &exercises, &mut errors).await?;
     if errors.is_empty() {
         Ok(checked)
     } else {

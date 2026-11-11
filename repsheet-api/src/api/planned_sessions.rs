@@ -12,7 +12,7 @@ use validator::{Validate, ValidationErrors};
 use crate::{
     api::{
         AppState, authenticated,
-        coaching::require_coach,
+        coaching::{Coached, require_coach},
         exercises::{EquipmentDto, GripDto, ModeDto},
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
@@ -54,7 +54,8 @@ pub fn routes() -> ApiRouter<AppState> {
                     .description(
                         "The athlete must have the caller as a coach (403 otherwise). The \
                          session belongs to the athlete, and starts as a draft they do not \
-                         see: its blocks are added one by one, then it is sent.",
+                         see: its blocks are added one by one, then it is sent. For a profile \
+                         the caller manages, it is sent as it is created.",
                     )
             }),
         )
@@ -388,7 +389,7 @@ async fn create(
     ValidJson(request): ValidJson<CreatePlannedSessionRequest>,
 ) -> AppResult<Created<PlannedSessionResponse>> {
     let mut tx = state.pool.begin().await?;
-    require_coach(&mut tx, &user, request.athlete_id).await?;
+    let coached = require_coach(&mut tx, &user, request.athlete_id).await?;
     let template = db::templates::insert(
         &mut tx,
         request.athlete_id,
@@ -401,6 +402,11 @@ async fn create(
         &[],
     )
     .await?;
+    // Nobody but the coach sees a profile, so it has nothing to keep a draft
+    // from: its sessions are sent as they are planned.
+    if coached == Coached::Managed {
+        db::planned_sessions::send(&mut *tx, template.id).await?;
+    }
     let row = db::planned_sessions::find(&mut *tx, template.id, user.id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("a planned session just created is not visible"))?;

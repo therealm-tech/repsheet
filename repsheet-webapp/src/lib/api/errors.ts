@@ -65,6 +65,8 @@ function byType(error: ApiError): ErrorKey | null {
 			return "coachAlreadyAdded";
 		case `${PROBLEM}not-coach`:
 			return "notCoach";
+		case `${PROBLEM}not-manager`:
+			return "notManager";
 		case `${PROBLEM}not-author`:
 			return "notAuthor";
 		case `${PROBLEM}planned-session-empty`:

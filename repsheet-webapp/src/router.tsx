@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
 	createBrowserHistory,
 	createRootRoute,
@@ -8,6 +9,7 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { z } from "zod";
+import { api, keys } from "@/lib/api/endpoints";
 import { tokenStore } from "@/lib/auth";
 import { APP_SCROLLER } from "@/lib/scroll";
 import { AccountsPage } from "@/pages/AccountsPage";
@@ -161,12 +163,23 @@ const plannedSessionRoute = createRoute({
 	},
 });
 
-const sharedWorkoutRoute = createRoute({
+/** A workout of one of the caller's athletes: logged for them when the caller manages their profile, read-only otherwise. */
+const athleteWorkoutRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: "/athletes/$athleteId/workouts/$workoutId",
-	component: function SharedWorkoutRouteView() {
-		const { athleteId, workoutId } = sharedWorkoutRoute.useParams();
-		return (
+	component: function AthleteWorkoutRouteView() {
+		const { athleteId, workoutId } = athleteWorkoutRoute.useParams();
+		const athlete = useQuery({
+			queryKey: keys.athlete(athleteId),
+			queryFn: () => api.athlete(athleteId),
+		});
+		return athlete.data?.managed ? (
+			<WorkoutPage
+				key={workoutId}
+				workoutId={workoutId}
+				athlete={athlete.data}
+			/>
+		) : (
 			<SharedWorkoutPage
 				key={workoutId}
 				athleteId={athleteId}
@@ -202,7 +215,7 @@ export const routeTree = rootRoute.addChildren([
 		athletesRoute,
 		athleteRoute,
 		plannedSessionRoute,
-		sharedWorkoutRoute,
+		athleteWorkoutRoute,
 	]),
 ]);
 

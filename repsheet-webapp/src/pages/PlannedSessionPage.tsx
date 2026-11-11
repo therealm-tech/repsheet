@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ExerciseName, plannedSummary } from "@/components/BlockCard";
 import { BlockSheet, type PlanSheetMode } from "@/components/BlockSheet";
 import { lostAccess, NoLongerCoach } from "@/components/NoLongerCoach";
+import { SendSessionSheet } from "@/components/SendSessionSheet";
 import { ConfirmButton, ErrorText, KindTag, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
 import { WorkoutReadOnly } from "@/components/WorkoutReadOnly";
@@ -16,8 +17,8 @@ import type {
 	WeightUnit,
 } from "@/lib/api/schemas";
 import { letter, summarizeSets } from "@/lib/blocks";
-import { formatDay, formatShortDay } from "@/lib/dates";
-import { useUnit } from "@/lib/hooks";
+import { formatDay, formatShortDay, today } from "@/lib/dates";
+import { useMe, useUnit } from "@/lib/hooks";
 
 /** "↺ 10 nov. : 2×12 · 14→16 kg": the athlete's last time at the exercise, as their coach reads it. */
 function LastSince({
@@ -56,15 +57,16 @@ function PlanBlockCard({
 	block,
 	index,
 	athleteId,
+	unit,
 	onOpen,
 }: {
 	block: TemplateBlock;
 	index: number;
 	athleteId: string;
+	unit: WeightUnit;
 	onOpen: () => void;
 }) {
 	const { t } = useTranslation();
-	const unit = useUnit();
 	return (
 		<button
 			type="button"
@@ -95,7 +97,9 @@ function PlanBlockCard({
 /**
  * A session the caller plans for an athlete, laid out as a workout: its
  * blocks, saved one by one, stay a draft the athlete does not see until it is
- * sent. Below, what the athlete logged from it.
+ * sent. Below, what the athlete logged from it. For a profile the caller
+ * manages, the coach starts the session with the athlete, logging it for
+ * them, or sends it to them as text.
  */
 export function PlannedSessionPage({
 	athleteId,
@@ -109,6 +113,8 @@ export function PlannedSessionPage({
 	const queryClient = useQueryClient();
 	const [sheet, setSheet] = useState<PlanSheetMode | null>(null);
 	const [editing, setEditing] = useState(false);
+	const [sending, setSending] = useState(false);
+	const me = useMe().data;
 	const athlete = useQuery({
 		queryKey: keys.athlete(athleteId),
 		queryFn: () => api.athlete(athleteId),
@@ -137,6 +143,24 @@ export function PlannedSessionPage({
 			void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
 		},
 	});
+	const start = useMutation({
+		mutationFn: api.createWorkout,
+		onSuccess: (workout) => {
+			void queryClient.invalidateQueries({
+				queryKey: keys.plannedSessionWorkouts(sessionId),
+			});
+			void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
+			void queryClient.invalidateQueries({
+				queryKey: keys.sharedWorkouts(athleteId),
+			});
+			void navigate({
+				to: "/athletes/$athleteId/workouts/$workoutId",
+				params: { athleteId, workoutId: workout.id },
+			});
+		},
+	});
+	const managed = athlete.data?.managed ?? false;
+	const unit = useUnit(managed ? athlete.data?.weightUnit : undefined);
 	const remove = useMutation({
 		mutationFn: () => api.deletePlannedSession(sessionId),
 		onSuccess: () => {
@@ -165,6 +189,48 @@ export function PlannedSessionPage({
 	const name = athlete.data?.name ?? "";
 	const workouts = outcome.data?.items ?? [];
 	const first = workouts[0];
+	const sessionActions = managed ? (
+		<div className="session-actions">
+			{first ? (
+				<Link
+					to="/athletes/$athleteId/workouts/$workoutId"
+					params={{ athleteId, workoutId: first.id }}
+					className="btn btn-primary"
+				>
+					{t("plannedSession.resume", { name })}
+				</Link>
+			) : (
+				<button
+					type="button"
+					className="btn btn-primary"
+					disabled={s.blocks.length === 0 || start.isPending}
+					onClick={() =>
+						start.mutate({
+							athleteId,
+							templateId: sessionId,
+							name: s.name,
+							performedOn: today(),
+						})
+					}
+				>
+					{t("plannedSession.start", { name })}
+				</button>
+			)}
+			<button
+				type="button"
+				className="btn btn-ghost"
+				disabled={s.blocks.length === 0}
+				onClick={() => setSending(true)}
+			>
+				{t("plannedSession.sendTo", { name })}
+			</button>
+			{start.isError ? (
+				<ErrorText>
+					{errorMessage(start.error, { fallback: "createWorkoutFailed" })}
+				</ErrorText>
+			) : null}
+		</div>
+	) : null;
 	const meta = [
 		formatDay(s.plannedOn),
 		name ? t("plannedSession.forAthlete", { name }) : null,
@@ -173,7 +239,9 @@ export function PlannedSessionPage({
 		.join(" · ");
 
 	return (
-		<main className="screen with-fab">
+		<main
+			className={managed ? "screen with-fab with-fab-pair" : "screen with-fab"}
+		>
 			<header className="bar">
 				<Link
 					to="/athletes/$athleteId"
@@ -209,7 +277,7 @@ export function PlannedSessionPage({
 				</button>
 			</header>
 
-			{s.status === "draft" ? (
+			{s.status === "draft" && !managed ? (
 				<div className="row draft-banner">
 					<span className="tag">{t("plannedSession.draft")}</span>
 					<span className="muted small grow">
@@ -242,12 +310,25 @@ export function PlannedSessionPage({
 							block={block}
 							index={i + 1}
 							athleteId={athleteId}
+							unit={unit}
 							onOpen={() => setSheet({ kind: "edit", block })}
 						/>
 					))}
+					{managed ? (
+						<button
+							type="button"
+							className="btn btn-ghost mobile-only"
+							onClick={() => setSheet({ kind: "new" })}
+						>
+							{t("workout.addBlock")}
+						</button>
+					) : null}
 				</div>
 
 				<div className="workout-aside">
+					{sessionActions ? (
+						<div className="desktop-only">{sessionActions}</div>
+					) : null}
 					{s.note ? <p className="workout-note">{s.note}</p> : null}
 					{workouts.length > 0 ? (
 						<section className="stack-tight" aria-labelledby="logged-title">
@@ -269,6 +350,7 @@ export function PlannedSessionPage({
 									workout={workout}
 									athleteId={athleteId}
 									plannedBlocks={s.blocks}
+									managedAthlete={managed ? athlete.data : undefined}
 								/>
 							))}
 						</section>
@@ -290,13 +372,15 @@ export function PlannedSessionPage({
 			</div>
 
 			<div className="fab mobile-only">
-				<button
-					type="button"
-					className="btn btn-primary btn-fab"
-					onClick={() => setSheet({ kind: "new" })}
-				>
-					{t("workout.addBlock")}
-				</button>
+				{sessionActions ?? (
+					<button
+						type="button"
+						className="btn btn-primary btn-fab"
+						onClick={() => setSheet({ kind: "new" })}
+					>
+						{t("workout.addBlock")}
+					</button>
+				)}
 			</div>
 
 			{editing ? (
@@ -340,9 +424,28 @@ export function PlannedSessionPage({
 				</Sheet>
 			) : null}
 
+			{sending ? (
+				<SendSessionSheet
+					session={s}
+					athleteName={name}
+					coachName={me?.name ?? ""}
+					unit={unit}
+					onClose={() => setSending(false)}
+				/>
+			) : null}
+
 			{sheet ? (
 				<BlockSheet
-					plan={{ sessionId, athlete: { id: athleteId, name } }}
+					plan={{
+						sessionId,
+						athlete: {
+							id: athleteId,
+							name,
+							...(managed && athlete.data
+								? { weightUnit: athlete.data.weightUnit }
+								: {}),
+						},
+					}}
 					mode={sheet}
 					onClose={() => setSheet(null)}
 				/>

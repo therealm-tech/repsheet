@@ -92,6 +92,9 @@ export const en: Catalog = {
 			"No blocks yet. Add the blocks of your session in the order you did them.",
 		notFound: "Session not found.",
 		plannedBy: "planned by {{name}}",
+		loggedFor:
+			"{{name}}'s session, logged by you: it goes into their history, not yours.",
+		emptyFor: "No block yet. Add the blocks {{name}} did, in order.",
 	},
 	workoutForm: {
 		create: "Create the session",
@@ -130,6 +133,7 @@ export const en: Catalog = {
 		planned: "planned",
 		plannedBy: "planned by {{name}} · tap a cell to adjust",
 		plannedByCoach: "planned by your coach · tap a cell to adjust",
+		plannedByYou: "planned by you · tap a cell to adjust",
 		plannedLabel: "Planned block {{position}}",
 		preparing: "Preparing the block…",
 		removeExercise: "Remove {{name}}",
@@ -367,6 +371,8 @@ export const en: Catalog = {
 		back: "Back",
 		coachEmail: "Add a coach by email",
 		coachesEmpty: "You have no coach.",
+		athletesIntro:
+			"Coaching someone who isn't on RepSheet? Create their profile: you plan their sessions and log them on their behalf.",
 		coachesIntro:
 			"A coach plans sessions for you and sees the workouts you log from them, plus the ones you choose to share. They get access as soon as you add them, and lose it as soon as you remove them.",
 		confirmRemove: "Confirm removal",
@@ -380,6 +386,14 @@ export const en: Catalog = {
 	},
 	athlete: {
 		backToAthletes: "Back to my athletes",
+		deleteMessage:
+			"{{name}}'s profile and all their sessions, done and planned, will be deleted.",
+		deleteProfile: "Delete the profile",
+		done: "Sessions done",
+		doneEmpty: "No session done yet.",
+		manage: "Manage {{name}}'s profile",
+		managed: "No account · profile managed by you",
+		profileTitle: "{{name}}'s profile",
 		loadFailed: "Couldn't load the sessions.",
 		noLongerCoach: "This person no longer has you as a coach.",
 		noLongerCoachDetail:
@@ -398,9 +412,20 @@ export const en: Catalog = {
 		},
 	},
 	athletes: {
+		add: "＋ Add an athlete",
+		addIntro:
+			"A profile for someone with no account: you plan their sessions and log them on their behalf.",
+		addTitle: "Add an athlete",
+		create: "Create the profile",
 		empty: "Nobody has added you as their coach.",
+		hasAccount: "already has an account?",
+		hasAccountHint:
+			"Give them your email: they add you as their coach from their profile, and show up here at once.",
 		intro:
-			"People who added you as their coach. You can plan sessions for them and see how they went.",
+			"An athlete with an account adds you as their coach from their profile. For someone who isn't on RepSheet, create their profile.",
+		managedTag: "No account",
+		name: "Name",
+		unit: "Weight unit",
 		last: "Last: {{day}} · {{status}}",
 		loadFailed: "Couldn't load your athletes.",
 		next: "Next: {{day}} · {{name}}",
@@ -426,6 +451,15 @@ export const en: Catalog = {
 		notePlaceholder: "For the whole session: warm-up, goal…",
 		send: "Send",
 		whatWasLogged: "What was logged",
+		copied: "Copied ✓",
+		copy: "Copy",
+		messageOutro: "Send me your loads and how it felt!",
+		resume: "▶ Resume the session with {{name}}",
+		share: "Share…",
+		shareFailed: "Couldn't copy the message: select it to copy it.",
+		shareHint: "“Share…” opens the phone's share sheet: WhatsApp, text, email…",
+		start: "▶ Start the session with {{name}}",
+		sendTo: "Send to {{name}}",
 	},
 	share: {
 		intro:
@@ -510,6 +544,8 @@ export const en: Catalog = {
 		network: "The server isn't answering. Check your connection.",
 		notAuthor: "Only the author of a comment can change it.",
 		notCoach: "This person doesn't have you as a coach.",
+		notManager:
+			"This athlete has an account of their own, which only they manage.",
 		notFound: "Not found: it may have been deleted.",
 		ownCoach: "You can't be your own coach.",
 		ownAccount: "You can't delete your own account.",

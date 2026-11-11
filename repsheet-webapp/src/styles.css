@@ -127,6 +127,10 @@ ol {
 	padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
+.screen.with-fab-pair {
+	padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+}
+
 .bar {
 	display: flex;
 	align-items: center;
@@ -348,6 +352,13 @@ ol {
 	z-index: 5;
 }
 
+/* The tab bar sits in the page flow under the scrolling area: a fixed button
+   row anchored at the bottom would cover it. */
+.app:has(> .tabbar) .fab {
+	bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+	padding-bottom: 12px;
+}
+
 .icon-button {
 	width: 36px;
 	height: 36px;
@@ -460,7 +471,14 @@ ol {
 	color: var(--coach);
 }
 
-.draft-banner {
+.tag-ghost {
+	background: transparent;
+	border: 1px dashed var(--line);
+	color: var(--muted);
+}
+
+.draft-banner,
+.logging-for {
 	padding: 10px 12px;
 	border-radius: var(--radius-small);
 	background: var(--coach-soft);
@@ -1982,4 +2000,52 @@ ol {
 	top: calc(16px + env(safe-area-inset-top, 0px));
 	right: max(16px, env(safe-area-inset-right, 0px));
 	width: 112px;
+}
+
+.center-self {
+	align-self: center;
+}
+
+.or-divider {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.or-divider::before,
+.or-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--line);
+}
+
+.share-message {
+	margin: 0;
+	white-space: pre-wrap;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12.5px;
+	line-height: 1.45;
+	padding: 12px;
+	border-radius: var(--radius-small);
+	background: var(--surface-2);
+	color: var(--ink);
+	user-select: text;
+}
+
+.share-actions .btn {
+	flex: 1;
+}
+
+.session-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.fab:has(.session-actions) {
+	padding-top: 12px;
+	background: linear-gradient(to top, var(--bg) 75%, transparent);
 }

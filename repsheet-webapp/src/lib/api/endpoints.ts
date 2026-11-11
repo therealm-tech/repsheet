@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import { request, requestVoid } from "@/lib/api/client";
 import {
+	type AthleteInput,
+	AthleteSchema,
 	type BlockInput,
 	BlockSchema,
 	CommentSchema,
@@ -41,6 +43,7 @@ export const PerformancePageSchema = pageOf(PerformanceSchema);
 export const WorkoutPageSchema = pageOf(WorkoutSummarySchema);
 export const TemplatePageSchema = pageOf(TemplateSummarySchema);
 export const LinkedAccountPageSchema = pageOf(LinkedAccountSchema);
+export const AthletePageSchema = pageOf(AthleteSchema);
 export const PlannedSessionPageSchema = pageOf(PlannedSessionSummarySchema);
 export const WorkoutDetailPageSchema = pageOf(WorkoutSchema);
 export const WorkoutSharePageSchema = pageOf(WorkoutShareSchema);
@@ -83,6 +86,8 @@ export const api = {
 	performances: (
 		id: string,
 		params: PageParams & {
+			/** A profile the caller manages, whose history to read instead of theirs. */
+			athleteId?: string;
 			beforeWorkoutId?: string;
 			mode?: Mode;
 			equipment?: Equipment;
@@ -142,11 +147,17 @@ export const api = {
 		}),
 	removeCoach: (id: string) => requestVoid("DELETE", `/users/me/coaches/${id}`),
 	athletes: (params: PageParams = {}) =>
-		request("GET", "/users/me/athletes", LinkedAccountPageSchema, {
+		request("GET", "/users/me/athletes", AthletePageSchema, {
 			query: { ...params },
 		}),
 	athlete: (id: string) =>
-		request("GET", `/users/me/athletes/${id}`, LinkedAccountSchema),
+		request("GET", `/users/me/athletes/${id}`, AthleteSchema),
+	createAthlete: (body: AthleteInput) =>
+		request("POST", "/users/me/athletes", AthleteSchema, { body }),
+	updateAthlete: (id: string, body: AthleteInput) =>
+		request("PUT", `/users/me/athletes/${id}`, AthleteSchema, { body }),
+	deleteAthlete: (id: string) =>
+		requestVoid("DELETE", `/users/me/athletes/${id}`),
 
 	plannedSessions: (params: { athleteId?: string } & PageParams = {}) =>
 		request("GET", "/planned-sessions", PlannedSessionPageSchema, {
@@ -256,25 +267,30 @@ export const keys = {
 
 /**
  * The latest performance of an exercise done the way `chosen` says, logged
- * before the given workout. A block with no grip recorded compares with the
- * history that has none either.
+ * before the given workout, by the caller or by the profile `athleteId` they
+ * manage. A block with no grip recorded compares with the history that has
+ * none either.
  */
 export function previousPerformanceQuery(
 	exerciseId: string,
 	beforeWorkoutId: string,
 	chosen: Choices,
+	athleteId?: string,
 ) {
 	const { mode, equipment } = chosen;
 	const grip = gripFilter(chosen.grip);
 	return {
-		queryKey: keys.performances(
-			exerciseId,
-			1,
-			beforeWorkoutId,
-			mode,
-			equipment,
-			grip,
-		),
+		queryKey: [
+			...keys.performances(
+				exerciseId,
+				1,
+				beforeWorkoutId,
+				mode,
+				equipment,
+				grip,
+			),
+			athleteId ?? null,
+		],
 		queryFn: () =>
 			api.performances(exerciseId, {
 				perPage: 1,
@@ -282,6 +298,7 @@ export function previousPerformanceQuery(
 				mode,
 				equipment,
 				grip,
+				...(athleteId ? { athleteId } : {}),
 			}),
 		staleTime: 60_000,
 	};

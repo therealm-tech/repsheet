@@ -9,16 +9,32 @@ import { ConfirmButton, ErrorText, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
-import type { UpdateWorkoutInput } from "@/lib/api/schemas";
+import type {
+	Athlete,
+	Author,
+	TemplateBlock,
+	UpdateWorkoutInput,
+} from "@/lib/api/schemas";
 import { formatDay, formatMinutes } from "@/lib/dates";
 import { useMe, useUnit } from "@/lib/hooks";
 
-export function WorkoutPage({ workoutId }: { workoutId: string }) {
+/**
+ * A workout the caller logs: their own, or, with `athlete`, one of a profile
+ * they manage, logged on its behalf with its unit and history.
+ */
+export function WorkoutPage({
+	workoutId,
+	athlete,
+}: {
+	workoutId: string;
+	athlete?: Athlete;
+}) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const unit = useUnit();
+	const unit = useUnit(athlete?.weightUnit);
 	const meId = useMe().data?.id ?? "";
+	const ownerId = athlete?.id ?? meId;
 	const [sheet, setSheet] = useState<BlockSheetMode | null>(null);
 	const [editing, setEditing] = useState(false);
 	const workout = useQuery({
@@ -26,9 +42,20 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 		queryFn: () => api.workout(workoutId),
 	});
 	const templateId = workout.data?.templateId ?? null;
-	const template = useQuery({
-		queryKey: keys.template(templateId ?? ""),
-		queryFn: () => api.template(templateId ?? ""),
+	// A profile's sessions are its manager's to read as planned sessions, not
+	// as templates of their own.
+	const template = useQuery<{
+		author: Author | null;
+		note: string | null;
+		blocks: TemplateBlock[];
+	}>({
+		queryKey: athlete
+			? keys.plannedSession(templateId ?? "")
+			: keys.template(templateId ?? ""),
+		queryFn: () =>
+			athlete
+				? api.plannedSession(templateId ?? "")
+				: api.template(templateId ?? ""),
 		enabled: templateId !== null,
 	});
 	const coach = template.data?.author ?? null;
@@ -49,7 +76,17 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 		mutationFn: () => api.deleteWorkout(workoutId),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: keys.workouts });
-			void navigate({ to: "/" });
+			if (athlete) {
+				void queryClient.invalidateQueries({
+					queryKey: keys.plannedSessionWorkouts(templateId ?? ""),
+				});
+				void navigate({
+					to: "/athletes/$athleteId",
+					params: { athleteId: athlete.id },
+				});
+			} else {
+				void navigate({ to: "/" });
+			}
 		},
 	});
 
@@ -75,7 +112,11 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 	const meta = [
 		formatDay(w.performedOn),
 		w.durationMinutes === null ? null : formatMinutes(w.durationMinutes),
-		coach ? t("workout.plannedBy", { name: coach.name }) : null,
+		athlete
+			? athlete.name
+			: coach
+				? t("workout.plannedBy", { name: coach.name })
+				: null,
 	]
 		.filter(Boolean)
 		.join(" · ");
@@ -83,9 +124,24 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 	return (
 		<main className="screen with-fab">
 			<header className="bar">
-				<Link to="/" className="icon-button" aria-label={t("common.backHome")}>
-					✕
-				</Link>
+				{athlete ? (
+					<Link
+						to="/athletes/$athleteId"
+						params={{ athleteId: athlete.id }}
+						className="icon-button"
+						aria-label={t("coaching.back")}
+					>
+						✕
+					</Link>
+				) : (
+					<Link
+						to="/"
+						className="icon-button"
+						aria-label={t("common.backHome")}
+					>
+						✕
+					</Link>
+				)}
 				<button
 					type="button"
 					className="workout-title"
@@ -112,10 +168,20 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 				</button>
 			</header>
 
+			{athlete ? (
+				<p className="logging-for small">
+					{t("workout.loggedFor", { name: athlete.name })}
+				</p>
+			) : null}
+
 			<div className="workout-layout">
 				<div className="workout-blocks">
 					{w.blocks.length === 0 && planned.length === 0 ? (
-						<p className="empty">{t("workout.empty")}</p>
+						<p className="empty">
+							{athlete
+								? t("workout.emptyFor", { name: athlete.name })
+								: t("workout.empty")}
+						</p>
 					) : null}
 
 					{w.blocks.map((block) => (
@@ -123,8 +189,9 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 							key={block.id}
 							block={block}
 							workoutId={w.id}
-							ownerId={meId}
+							ownerId={ownerId}
 							unit={unit}
+							managed={athlete !== undefined}
 							onOpen={() => {
 								const templateBlock = template.data?.blocks.find(
 									(b) => b.id === block.templateBlockId,
@@ -143,6 +210,7 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 							block={block}
 							index={w.blocks.length + i + 1}
 							coach={coach}
+							unit={unit}
 							onOpen={() => setSheet({ kind: "new", templateBlock: block })}
 						/>
 					))}
@@ -153,15 +221,17 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 						<p className="workout-note">{template.data.note}</p>
 					) : null}
 					{w.note ? <p className="workout-note">{w.note}</p> : null}
-					<ShareWithCoaches workoutId={w.id} />
+					{athlete ? null : <ShareWithCoaches workoutId={w.id} />}
 					<div className="stack-tight workout-actions">
-						<Link
-							to="/templates/new"
-							search={{ fromWorkout: w.id }}
-							className="btn"
-						>
-							{t("workout.createTemplate")}
-						</Link>
+						{athlete ? null : (
+							<Link
+								to="/templates/new"
+								search={{ fromWorkout: w.id }}
+								className="btn"
+							>
+								{t("workout.createTemplate")}
+							</Link>
+						)}
 						<ConfirmButton
 							label={t("workout.delete")}
 							confirmLabel={t("common.confirmDelete")}
@@ -211,7 +281,8 @@ export function WorkoutPage({ workoutId }: { workoutId: string }) {
 				<BlockSheet
 					workoutId={w.id}
 					mode={sheet}
-					coach={coach}
+					coach={athlete ? null : coach}
+					athlete={athlete ?? null}
 					onClose={() => setSheet(null)}
 				/>
 			) : null}

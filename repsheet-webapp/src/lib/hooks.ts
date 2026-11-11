@@ -23,8 +23,10 @@ export function useIsSuperAdmin(): boolean {
 	return useMe().data?.role === "superAdmin";
 }
 
-export function useUnit(): WeightUnit {
-	return useMe().data?.weightUnit ?? "kg";
+/** The caller's unit, unless the weights shown are those of an athlete with a unit of their own. */
+export function useUnit(athleteUnit?: WeightUnit): WeightUnit {
+	const mine = useMe().data?.weightUnit ?? "kg";
+	return athleteUnit ?? mine;
 }
 
 export function useDebounced<T>(value: T, delayMs: number): T {

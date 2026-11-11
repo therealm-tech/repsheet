@@ -1,5 +1,6 @@
--- Workout $1 as account $2 may read it: its owner, or a coach the owner still
--- has who planned the session it was logged from or was shared it.
+-- Workout $1 as account $2 may read it: its owner or the coach managing the
+-- owner's profile, or a coach the owner still has who planned the session it
+-- was logged from or was shared it.
 SELECT
     w.id,
     w.template_id,
@@ -11,7 +12,7 @@ FROM workouts AS w
 WHERE
     w.id = $1
     AND (
-        w.user_id = $2
+        acts_for(w.user_id, $2)
         OR (
             EXISTS (
                 SELECT 1 FROM coaching_links AS cl

@@ -90,6 +90,10 @@ export const fr = {
 			"Aucun bloc pour l'instant. Ajoute les blocs de ta séance, dans l'ordre où tu les as faits.",
 		notFound: "Séance introuvable.",
 		plannedBy: "prévue par {{name}}",
+		loggedFor:
+			"Séance de {{name}}, saisie par toi : elle va dans son historique, pas dans le tien.",
+		emptyFor:
+			"Aucun bloc pour l'instant. Ajoute les blocs que {{name}} a faits, dans l'ordre.",
 	},
 	workoutForm: {
 		create: "Créer la séance",
@@ -128,6 +132,7 @@ export const fr = {
 		planned: "prévu",
 		plannedBy: "prévu par {{name}} · touche une case pour ajuster",
 		plannedByCoach: "prévu par ton coach · touche une case pour ajuster",
+		plannedByYou: "prévu par toi · touche une case pour ajuster",
 		plannedLabel: "Bloc prévu {{position}}",
 		preparing: "Préparation du bloc…",
 		removeExercise: "Retirer {{name}}",
@@ -365,6 +370,8 @@ export const fr = {
 		back: "Retour",
 		coachEmail: "Ajouter un coach par email",
 		coachesEmpty: "Tu n'as pas de coach.",
+		athletesIntro:
+			"Tu coaches quelqu'un qui n'est pas sur RepSheet ? Crée sa fiche : tu prépares ses séances et tu les saisis pour lui.",
 		coachesIntro:
 			"Un coach te prévoit des séances et voit celles que tu notes à partir d'elles, ainsi que celles que tu choisis de partager. Il a accès dès que tu l'ajoutes, et le perd dès que tu le retires.",
 		confirmRemove: "Confirmer le retrait",
@@ -378,6 +385,14 @@ export const fr = {
 	},
 	athlete: {
 		backToAthletes: "Retour à mes athlètes",
+		deleteMessage:
+			"La fiche de {{name}} et toutes ses séances, faites et prévues, seront supprimées.",
+		deleteProfile: "Supprimer la fiche",
+		done: "Séances faites",
+		doneEmpty: "Aucune séance faite pour l'instant.",
+		manage: "Gérer la fiche de {{name}}",
+		managed: "Sans compte · fiche gérée par toi",
+		profileTitle: "Fiche de {{name}}",
 		loadFailed: "Impossible de charger les séances.",
 		noLongerCoach: "Cette personne ne t'a plus comme coach.",
 		noLongerCoachDetail:
@@ -396,9 +411,20 @@ export const fr = {
 		},
 	},
 	athletes: {
+		add: "＋ Ajouter un athlète",
+		addIntro:
+			"Une fiche pour quelqu'un qui n'a pas de compte : tu prépares ses séances et tu les saisis pour lui.",
+		addTitle: "Ajouter un athlète",
+		create: "Créer la fiche",
 		empty: "Personne ne t'a encore ajouté comme coach.",
+		hasAccount: "il a déjà un compte ?",
+		hasAccountHint:
+			"Donne-lui ton e-mail : il t'ajoute comme coach depuis son profil, et il apparaît ici aussitôt.",
 		intro:
-			"Les personnes qui t'ont ajouté comme coach. Tu peux leur prévoir des séances et voir comment elles se sont passées.",
+			"Un athlète qui a un compte t'ajoute lui-même comme coach depuis son profil. Pour quelqu'un qui n'est pas sur RepSheet, crée sa fiche.",
+		managedTag: "Sans compte",
+		name: "Nom",
+		unit: "Unité de charge",
 		last: "Dernière : {{day}} · {{status}}",
 		loadFailed: "Impossible de charger tes athlètes.",
 		next: "Prochaine : {{day}} · {{name}}",
@@ -425,6 +451,17 @@ export const fr = {
 		notePlaceholder: "Pour toute la séance : échauffement, objectif…",
 		send: "Envoyer",
 		whatWasLogged: "Ce qui a été noté",
+		copied: "Copié ✓",
+		copy: "Copier",
+		messageOutro: "Dis-moi tes charges et ton ressenti en retour !",
+		resume: "▶ Reprendre la séance avec {{name}}",
+		share: "Partager…",
+		shareFailed:
+			"Impossible de copier le message : sélectionne-le pour le copier.",
+		shareHint:
+			"« Partager… » ouvre la feuille de partage du téléphone : WhatsApp, SMS, e-mail…",
+		start: "▶ Démarrer la séance avec {{name}}",
+		sendTo: "Envoyer à {{name}}",
 	},
 	share: {
 		intro:
@@ -514,6 +551,7 @@ export const fr = {
 		network: "Le serveur ne répond pas. Vérifie ta connexion.",
 		notAuthor: "Seul l'auteur d'un commentaire peut le modifier.",
 		notCoach: "Cette personne ne t'a pas comme coach.",
+		notManager: "Cet athlète a son propre compte : lui seul le gère.",
 		notFound: "Introuvable : cet élément a peut-être été supprimé.",
 		ownCoach: "Tu ne peux pas être ton propre coach.",
 		ownAccount: "Tu ne peux pas supprimer ton propre compte.",

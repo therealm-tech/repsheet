@@ -42,6 +42,43 @@ pub async fn insert(
         .await
 }
 
+/// Creates a profile managed by `coach_id`, with no credentials.
+pub async fn insert_profile(
+    exec: impl PgExecutor<'_>,
+    coach_id: Uuid,
+    name: &str,
+    weight_unit: WeightUnit,
+    locale: Locale,
+) -> sqlx::Result<Uuid> {
+    sqlx::query_scalar(include_str!("../../queries/users/insert_profile.sql"))
+        .bind(coach_id)
+        .bind(name)
+        .bind(weight_unit.as_str())
+        .bind(locale.as_str())
+        .fetch_one(exec)
+        .await
+}
+
+/// Renames the profile and sets its unit; `false` when `coach_id` does not
+/// manage it.
+pub async fn update_profile(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    coach_id: Uuid,
+    name: &str,
+    weight_unit: WeightUnit,
+) -> sqlx::Result<bool> {
+    let updated: Option<Uuid> =
+        sqlx::query_scalar(include_str!("../../queries/users/update_profile.sql"))
+            .bind(id)
+            .bind(coach_id)
+            .bind(name)
+            .bind(weight_unit.as_str())
+            .fetch_optional(exec)
+            .await?;
+    Ok(updated.is_some())
+}
+
 pub async fn find(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Option<UserRow>> {
     sqlx::query_as(include_str!("../../queries/users/find.sql"))
         .bind(id)

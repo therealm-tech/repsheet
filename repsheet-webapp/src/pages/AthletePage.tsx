@@ -2,21 +2,87 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AthleteProfileForm, TitledSheet } from "@/components/AthleteProfile";
 import { DateIcon } from "@/components/DateIcon";
 import { lostAccess, NoLongerCoach } from "@/components/NoLongerCoach";
-import { Empty, ErrorText, Sheet } from "@/components/ui";
+import { ConfirmButton, Empty, ErrorText, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
+import type { Athlete } from "@/lib/api/schemas";
 import { formatDay, formatMinutes, today } from "@/lib/dates";
 import { plannedStatus, STATUS_TAG } from "@/lib/planned";
 
-/** One athlete, as their coach sees them: the sessions planned for them and the workouts they shared. */
+/** Renames a profile the caller manages, changes its unit, or deletes it. */
+function ProfileSheet({
+	athlete,
+	onClose,
+}: {
+	athlete: Athlete;
+	onClose: () => void;
+}) {
+	const { t } = useTranslation();
+	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+	const update = useMutation({
+		mutationFn: (body: { name: string; weightUnit: Athlete["weightUnit"] }) =>
+			api.updateAthlete(athlete.id, body),
+		onSuccess: (updated) => {
+			queryClient.setQueryData(keys.athlete(athlete.id), updated);
+			void queryClient.invalidateQueries({ queryKey: keys.athletes });
+			onClose();
+		},
+	});
+	const remove = useMutation({
+		mutationFn: () => api.deleteAthlete(athlete.id),
+		onSuccess: () => {
+			queryClient.removeQueries({ queryKey: keys.athlete(athlete.id) });
+			void queryClient.invalidateQueries({ queryKey: keys.athletes });
+			void navigate({ to: "/athletes" });
+		},
+	});
+	return (
+		<TitledSheet
+			title={t("athlete.profileTitle", { name: athlete.name })}
+			onClose={onClose}
+		>
+			<AthleteProfileForm
+				initial={athlete}
+				submitLabel={t("common.save")}
+				pending={update.isPending}
+				error={
+					update.isError
+						? errorMessage(update.error, { fallback: "saveFailed" })
+						: null
+				}
+				onSubmit={(values) => update.mutate(values)}
+			/>
+			{remove.isError ? (
+				<ErrorText>
+					{errorMessage(remove.error, { fallback: "deleteFailed" })}
+				</ErrorText>
+			) : null}
+			<ConfirmButton
+				label={t("athlete.deleteProfile")}
+				confirmLabel={t("common.confirmDelete")}
+				message={t("athlete.deleteMessage", { name: athlete.name })}
+				onConfirm={() => remove.mutate()}
+				disabled={remove.isPending}
+			/>
+		</TitledSheet>
+	);
+}
+
+/**
+ * One athlete, as their coach sees them: the sessions planned for them, and
+ * the workouts they shared, or all those of a profile the coach manages.
+ */
 export function AthletePage({ athleteId }: { athleteId: string }) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [planning, setPlanning] = useState(false);
+	const [managing, setManaging] = useState(false);
 	const athlete = useQuery({
 		queryKey: keys.athlete(athleteId),
 		queryFn: () => api.athlete(athleteId),
@@ -48,6 +114,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 	const now = today();
 	const planned = sessions.data?.items ?? [];
 	const workouts = shared.data?.items ?? [];
+	const managed = athlete.data?.managed ?? false;
 
 	return (
 		<main className="screen narrow">
@@ -62,8 +129,24 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 				<h1 className="display page-title center grow truncate">
 					{athlete.data?.name ?? ""}
 				</h1>
-				<span className="icon-spacer" />
+				{managed ? (
+					<button
+						type="button"
+						className="icon-button"
+						aria-label={t("athlete.manage", { name: athlete.data?.name })}
+						onClick={() => setManaging(true)}
+					>
+						⋯
+					</button>
+				) : (
+					<span className="icon-spacer" />
+				)}
 			</header>
+			{managed ? (
+				<span className="tag tag-ghost center-self">
+					{t("athlete.managed")}
+				</span>
+			) : null}
 			<button
 				type="button"
 				className="btn btn-primary"
@@ -114,13 +197,15 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 
 			<section className="stack-tight" aria-labelledby="shared-title">
 				<h2 id="shared-title" className="display section-title">
-					{t("athlete.shared")}
+					{managed ? t("athlete.done") : t("athlete.shared")}
 				</h2>
 				{shared.isError ? (
 					<ErrorText>{t("athlete.loadFailed")}</ErrorText>
 				) : null}
 				{shared.isSuccess && workouts.length === 0 ? (
-					<Empty>{t("athlete.sharedEmpty")}</Empty>
+					<Empty>
+						{managed ? t("athlete.doneEmpty") : t("athlete.sharedEmpty")}
+					</Empty>
 				) : null}
 				{workouts.length > 0 ? (
 					<ul className="card list">
@@ -146,13 +231,22 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 												.join(" · ")}
 										</span>
 									</span>
-									<span className="tag">{t("athlete.sharedTag")}</span>
+									{managed ? null : (
+										<span className="tag">{t("athlete.sharedTag")}</span>
+									)}
 								</Link>
 							</li>
 						))}
 					</ul>
 				) : null}
 			</section>
+
+			{managing && athlete.data ? (
+				<ProfileSheet
+					athlete={athlete.data}
+					onClose={() => setManaging(false)}
+				/>
+			) : null}
 
 			{planning ? (
 				<Sheet

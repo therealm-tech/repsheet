@@ -1,15 +1,16 @@
 import { useQueries } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { AddAthleteButton } from "@/components/AthleteProfile";
 import { Empty, ErrorText } from "@/components/ui";
 import { api, keys } from "@/lib/api/endpoints";
-import type { LinkedAccount, PlannedSessionSummary } from "@/lib/api/schemas";
+import type { Athlete, PlannedSessionSummary } from "@/lib/api/schemas";
 import { formatDay, formatShortInstant, today } from "@/lib/dates";
 import { useAthletes } from "@/lib/hooks";
 import { outlook, plannedStatus, STATUS_TAG } from "@/lib/planned";
 
 type AthleteRowProps = {
-	athlete: LinkedAccount;
+	athlete: Athlete;
 	sessions: PlannedSessionSummary[] | undefined;
 	failed: boolean;
 };
@@ -51,7 +52,15 @@ function AthleteRow({ athlete, sessions, failed }: AthleteRowProps) {
 				{athlete.name.charAt(0).toUpperCase()}
 			</span>
 			<span className="grow">
-				<span className="strong">{athlete.name}</span>
+				<span className="strong">
+					{athlete.name}
+					{athlete.managed ? (
+						<>
+							{" "}
+							<span className="tag tag-ghost">{t("athletes.managedTag")}</span>
+						</>
+					) : null}
+				</span>
 				{detail ? (
 					<span className="muted small line-block truncate">{detail}</span>
 				) : null}
@@ -90,21 +99,20 @@ export function AthletesPage() {
 				<Empty>{t("athletes.empty")}</Empty>
 			) : null}
 			{items.length > 0 ? (
-				<>
-					<ul className="card list">
-						{items.map((athlete, index) => (
-							<li key={athlete.id}>
-								<AthleteRow
-									athlete={athlete}
-									sessions={sessions[index]?.data?.items}
-									failed={sessions[index]?.isError ?? false}
-								/>
-							</li>
-						))}
-					</ul>
-					<p className="muted small">{t("athletes.intro")}</p>
-				</>
+				<ul className="card list">
+					{items.map((athlete, index) => (
+						<li key={athlete.id}>
+							<AthleteRow
+								athlete={athlete}
+								sessions={sessions[index]?.data?.items}
+								failed={sessions[index]?.isError ?? false}
+							/>
+						</li>
+					))}
+				</ul>
 			) : null}
+			<AddAthleteButton />
+			<p className="muted small">{t("athletes.intro")}</p>
 		</main>
 	);
 }

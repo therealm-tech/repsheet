@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AddAthleteButton } from "@/components/AthleteProfile";
 import { ConfirmButton, Empty, ErrorText } from "@/components/ui";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
@@ -136,6 +137,10 @@ export function CoachingPage() {
 				<span className="icon-spacer" />
 			</header>
 			<Coaches />
+			<section className="stack-tight" aria-label={t("athletes.addTitle")}>
+				<p className="muted small">{t("coaching.athletesIntro")}</p>
+				<AddAthleteButton />
+			</section>
 		</main>
 	);
 }
