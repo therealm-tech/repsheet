@@ -261,6 +261,21 @@ async fn searches_the_catalog_ignoring_case_and_accents(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn the_catalog_offers_the_zottman_curl(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+
+    let (status, page) = app.get("/v1/exercises?q=zottman", &token).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(page["total"], 1);
+    let curl = &page["items"][0];
+    assert_eq!(curl["name"], "Curl Zottman");
+    assert_eq!(curl["equipment"], json!(["dumbbell"]));
+    assert_eq!(curl["grips"], json!([]));
+    assert_eq!(curl["custom"], false);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
 async fn custom_exercises_are_private_and_unique(pool: PgPool) {
     let app = TestApp::new(pool);
     let alex = app.sign_up("alex@example.com").await;
