@@ -8,6 +8,7 @@ import {
 	exercise,
 	mockApi,
 	newClient,
+	openChoices,
 	page,
 	performance,
 	renderWithClient,
@@ -470,8 +471,16 @@ describe("BlockSheet", () => {
 			"Dernière fois en reps (15 oct.) : 1×20 reps",
 		);
 
-		const modes = within(screen.getByRole("group", { name: "Mode de Crunch" }));
-		await ui.click(modes.getByRole("button", { name: "Temps" }));
+		const pickMode = async (name: string) => {
+			await openChoices(ui, "Crunch");
+			await ui.click(
+				within(screen.getByRole("group", { name: "Mode de Crunch" })).getByRole(
+					"button",
+					{ name },
+				),
+			);
+		};
+		await pickMode("Temps");
 		expect(
 			screen.getByText(
 				"Compter Crunch au temps ? Les valeurs déjà saisies en reps seront effacées.",
@@ -482,13 +491,13 @@ describe("BlockSheet", () => {
 			screen.getByRole("button", { name: "Tour 1, A Crunch : 20 reps" }),
 		).toBeInTheDocument();
 
-		await ui.click(modes.getByRole("button", { name: "Temps" }));
+		await pickMode("Temps");
 		await ui.click(screen.getByRole("button", { name: "Changer" }));
 		expect(
 			await screen.findByRole("button", { name: "Tour 1, A Crunch : 45 s" }),
 		).toBeInTheDocument();
 		expect(
-			modes.getByRole("button", { name: "Temps", pressed: true }),
+			screen.getByRole("button", { name: "Crunch : Temps, changer" }),
 		).toBeInTheDocument();
 		expect(await screen.findByText(/Dernière fois/)).toHaveTextContent(
 			"Dernière fois au temps (8 oct.) : 2 × 45 s",
@@ -508,7 +517,7 @@ describe("BlockSheet", () => {
 			screen.getByRole("button", { name: "Tour 1, A Crunch : 1 min 15" }),
 		).toBeInTheDocument();
 
-		await ui.click(modes.getByRole("button", { name: "Reps" }));
+		await pickMode("Reps");
 		await ui.click(screen.getByRole("button", { name: "Annuler" }));
 		await ui.click(screen.getByRole("button", { name: "Enregistrer le bloc" }));
 
@@ -577,10 +586,7 @@ describe("BlockSheet", () => {
 			await screen.findByRole("button", { name: "Tour 3, A Crunch : 1 min" }),
 		).toBeInTheDocument();
 		expect(
-			within(screen.getByRole("group", { name: "Mode de Crunch" })).getByRole(
-				"button",
-				{ name: "Temps", pressed: true },
-			),
+			screen.getByRole("button", { name: "Crunch : Temps, changer" }),
 		).toBeInTheDocument();
 		expect(calls[0]?.path).toContain("mode=time");
 	});

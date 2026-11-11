@@ -794,6 +794,13 @@ ol {
 	font-weight: 550;
 }
 
+.ex-choices {
+	display: block;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--muted);
+}
+
 .ex-value {
 	color: var(--muted);
 	font-size: 13px;
@@ -1158,14 +1165,49 @@ ol {
 	max-width: 100%;
 }
 
-/* The switch may use the room the padding keeps for the remove button. */
-.grid-head .mini-seg {
-	margin: 3px -16px 0;
+/* The chip may use the room the padding keeps for the remove button. */
+.choice-chip {
+	max-width: calc(100% + 32px);
+	margin: 4px -16px 0;
+	padding: 3px 9px;
+	border-radius: 99px;
+	background: var(--surface-2);
+	color: var(--ink);
+	font-size: 11px;
+	font-weight: 650;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.grid-head .mini-seg button {
-	font-size: 10px;
-	padding: 4px 5px;
+.choice-chip.open {
+	outline: 1.5px solid var(--orange);
+}
+
+.choice-panel {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: var(--radius-small);
+	background: var(--surface);
+}
+
+.choice-caption {
+	font-size: 11px;
+	font-weight: 650;
+	color: var(--muted);
+}
+
+.choice-panel .mini-seg {
+	display: flex;
+	flex-wrap: nowrap;
+}
+
+.choice-panel .mini-seg button {
+	flex: 1;
+	padding: 6px 4px;
 }
 
 .grid-head-remove {

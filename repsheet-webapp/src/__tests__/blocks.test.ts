@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { WorkoutSet } from "@/lib/api/schemas";
-import { kindOf, letter, maxWorkingWeight, summarizeSets } from "@/lib/blocks";
+import {
+	choicesSummary,
+	kindOf,
+	letter,
+	maxWorkingWeight,
+	summarizeSets,
+	unusualChoices,
+} from "@/lib/blocks";
+import { exercise } from "./helpers";
 
 function set(round: number, fields: Partial<WorkoutSet>): WorkoutSet {
 	return {
@@ -155,5 +163,56 @@ describe("helpers", () => {
 			]),
 		).toBe(60);
 		expect(maxWorkingWeight([set(1, { reps: 10 })])).toBeNull();
+	});
+});
+
+describe("choices", () => {
+	const row = exercise({
+		id: "row",
+		name: "Rowing",
+		equipment: ["barbell", "dumbbell"],
+		defaultEquipment: "barbell",
+		grips: ["pronation", "supination", "neutral"],
+		defaultGrip: "pronation",
+	});
+
+	it("names only the equipment and grip that depart from the defaults", () => {
+		expect(
+			unusualChoices(row, {
+				mode: "reps",
+				equipment: "barbell",
+				grip: "pronation",
+			}),
+		).toBeNull();
+		expect(
+			unusualChoices(row, { mode: "reps", equipment: "barbell", grip: null }),
+		).toBeNull();
+		expect(
+			unusualChoices(row, {
+				mode: "reps",
+				equipment: "dumbbell",
+				grip: "supination",
+			}),
+		).toBe("haltères · supination");
+	});
+
+	it("sums up the open choices for the chip, unknown grip included", () => {
+		expect(
+			choicesSummary(row, { mode: "reps", equipment: "dumbbell", grip: null }),
+		).toBe("Haltères · prise ?");
+		expect(
+			choicesSummary(row, {
+				mode: "reps",
+				equipment: "barbell",
+				grip: "neutral",
+			}),
+		).toBe("Barre · neutre");
+		expect(
+			choicesSummary(exercise({ id: "fly", name: "Oiseau" }), {
+				mode: "reps",
+				equipment: "barbell",
+				grip: null,
+			}),
+		).toBeNull();
 	});
 });

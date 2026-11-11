@@ -45,6 +45,7 @@ import type {
 	WorkoutSet,
 } from "@/lib/api/schemas";
 import {
+	choicesSummary,
 	choicesText,
 	kindOf,
 	letter,
@@ -334,6 +335,7 @@ export function BlockSheet(props: BlockSheetProps) {
 	);
 	const [error, setError] = useState<string | null>(null);
 	const [focusExercise, setFocusExercise] = useState<string | null>(null);
+	const [choicesOpen, setChoicesOpen] = useState<number | null>(null);
 	const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch | null>(
 		null,
 	);
@@ -749,31 +751,62 @@ export function BlockSheet(props: BlockSheetProps) {
 								}}
 							>
 								<div />
-								{grid.exercises.map((exercise, col) => (
-									<div key={exercise.columnId} className="grid-head">
-										<b className="accent">{letter(col)}</b>
-										<span className="truncate">{exercise.name}</span>
-										<ChoiceSwitches
-											exercise={exercise}
-											chosen={exercise.chosen}
-											onChange={(change) => requestSwitch(col, change)}
-										/>
-										<button
-											type="button"
-											className="grid-head-remove"
-											aria-label={t("block.removeExercise", {
-												name: exercise.name,
-											})}
-											onClick={() => {
-												setGrid(removeExercise(grid, col));
-												setActive(null);
-												setPendingSwitch(null);
-											}}
-										>
-											✕
-										</button>
-									</div>
-								))}
+								{grid.exercises.map((exercise, col) => {
+									const summary = choicesSummary(exercise, exercise.chosen);
+									const open = choicesOpen === exercise.columnId;
+									return (
+										<div key={exercise.columnId} className="grid-head">
+											<b className="accent">{letter(col)}</b>
+											<span className="truncate">{exercise.name}</span>
+											{summary ? (
+												<button
+													type="button"
+													className={open ? "choice-chip open" : "choice-chip"}
+													aria-expanded={open}
+													aria-label={t("block.choicesOf", {
+														name: exercise.name,
+														choices: summary,
+													})}
+													onClick={() =>
+														setChoicesOpen(open ? null : exercise.columnId)
+													}
+												>
+													{summary} {open ? "▴" : "▾"}
+												</button>
+											) : null}
+											<button
+												type="button"
+												className="grid-head-remove"
+												aria-label={t("block.removeExercise", {
+													name: exercise.name,
+												})}
+												onClick={() => {
+													setGrid(removeExercise(grid, col));
+													setActive(null);
+													setPendingSwitch(null);
+													setChoicesOpen(null);
+												}}
+											>
+												✕
+											</button>
+										</div>
+									);
+								})}
+								{grid.exercises.map((exercise, col) =>
+									choicesOpen === exercise.columnId ? (
+										<div key={exercise.columnId} className="choice-panel">
+											<ChoiceSwitches
+												exercise={exercise}
+												chosen={exercise.chosen}
+												captioned
+												onChange={(change) => {
+													setChoicesOpen(null);
+													requestSwitch(col, change);
+												}}
+											/>
+										</div>
+									) : null,
+								)}
 								{grid.rows.map((row, r) => (
 									<RowView
 										key={row.id}

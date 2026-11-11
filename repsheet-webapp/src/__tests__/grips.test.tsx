@@ -19,6 +19,7 @@ import {
 	exercise,
 	mockApi,
 	newClient,
+	openChoices,
 	page,
 	performance,
 	renderRoute,
@@ -218,6 +219,7 @@ describe("BlockSheet", () => {
 		);
 		expect(calls.some((c) => c.path.includes("grip=pronation"))).toBeTruthy();
 
+		await openChoices(ui, "Tirage vertical");
 		const grip = within(
 			screen.getByRole("group", { name: "Prise de Tirage vertical" }),
 		);
@@ -226,6 +228,14 @@ describe("BlockSheet", () => {
 		).toBeInTheDocument();
 		await ui.click(grip.getByRole("button", { name: "Supination" }));
 		expect(screen.queryByRole("button", { name: "Changer" })).toBeNull();
+		expect(
+			screen.queryByRole("group", { name: "Prise de Tirage vertical" }),
+		).toBeNull();
+		expect(
+			screen.getByRole("button", {
+				name: "Tirage vertical : Supination, changer",
+			}),
+		).toBeInTheDocument();
 		expect(
 			await screen.findByRole("button", {
 				name: "Tour 1, A Tirage vertical : 10 reps 50 kg",
@@ -292,15 +302,16 @@ describe("BlockSheet", () => {
 			client(),
 		);
 
-		const [planned, unplanned] = (
-			await screen.findAllByRole("group", { name: "Prise de Tirage vertical" })
-		).map((group) => within(group));
 		expect(
-			planned?.getByRole("button", { name: "Neutre", pressed: true }),
+			await screen.findByRole("button", {
+				name: "Tirage vertical : Neutre, changer",
+			}),
 		).toBeInTheDocument();
-		expect(unplanned?.getAllByRole("button", { pressed: false })).toHaveLength(
-			3,
-		);
+		expect(
+			screen.getByRole("button", {
+				name: "Tirage vertical : Prise ?, changer",
+			}),
+		).toBeInTheDocument();
 		const paths = calls.map((c) => c.path);
 		expect(paths.some((p) => p.includes("grip=neutral"))).toBeTruthy();
 		expect(paths.some((p) => p.includes("grip=none"))).toBeTruthy();

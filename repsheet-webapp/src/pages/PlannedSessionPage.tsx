@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { plannedSummary } from "@/components/BlockCard";
+import { ExerciseName, plannedSummary } from "@/components/BlockCard";
 import { BlockSheet, type PlanSheetMode } from "@/components/BlockSheet";
 import { lostAccess, NoLongerCoach } from "@/components/NoLongerCoach";
 import { ConfirmButton, ErrorText, KindTag, Sheet } from "@/components/ui";
@@ -15,7 +15,7 @@ import type {
 	UpdatePlannedSessionInput,
 	WeightUnit,
 } from "@/lib/api/schemas";
-import { choiceTags, letter, summarizeSets } from "@/lib/blocks";
+import { letter, summarizeSets } from "@/lib/blocks";
 import { formatDay, formatShortDay } from "@/lib/dates";
 import { useUnit } from "@/lib/hooks";
 
@@ -82,15 +82,7 @@ function PlanBlockCard({
 				<span key={entry.id} className="block-exercise">
 					<span className="ex">
 						<span className="ex-letter">{letter(i)}</span>
-						<span className="ex-name">
-							{entry.exercise.name}
-							{choiceTags(entry.exercise, entry).map((tag) => (
-								<span key={tag} className="muted">
-									{" "}
-									· {tag}
-								</span>
-							))}
-						</span>
+						<ExerciseName exercise={entry.exercise} chosen={entry} />
 						<span className="ex-value">{plannedSummary(block, i, unit)}</span>
 					</span>
 					<LastSince athleteId={athleteId} entry={entry} unit={unit} />

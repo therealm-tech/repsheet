@@ -114,22 +114,51 @@ export function choicesText(
 }
 
 /**
- * "Dumbbells", "Neutral grip": the equipment and the grip a block chose where
- * its exercise leaves a choice; an unknown grip goes unsaid. Its sets already
- * tell the mode.
+ * "dumbbells · supinated": the equipment and the grip a block chose where they
+ * depart from the exercise's defaults; null when it is done as usual. An
+ * unknown grip goes unsaid, and its sets already tell the mode.
  */
-export function choiceTags(
+export function unusualChoices(
 	exercise: ExerciseSummary,
 	chosen: Choices,
-): string[] {
-	return [
+): string | null {
+	const parts = [
+		chosen.equipment === exercise.defaultEquipment
+			? null
+			: i18n.t(`equipmentLower.${chosen.equipment}`),
+		chosen.grip === null || chosen.grip === exercise.defaultGrip
+			? null
+			: gripLabel(chosen.grip).toLocaleLowerCase(intlTag()),
+	].filter((part): part is string => part !== null);
+	return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/**
+ * "Dumbbells · grip?": the choices an exercise leaves open to a block, as the
+ * chip that opens them sums them up; null when it leaves none.
+ */
+export function choicesSummary(
+	exercise: ExerciseSummary,
+	chosen: Choices,
+): string | null {
+	const parts = [
+		hasChoice(exercise.modes, chosen.mode)
+			? i18n.t(`modesShort.${chosen.mode}`)
+			: null,
 		hasChoice(exercise.equipment, chosen.equipment)
 			? equipmentLabel(chosen.equipment)
 			: null,
-		chosen.grip !== null && hasChoice(exercise.grips, chosen.grip)
-			? gripTag(chosen.grip)
+		hasChoice(exercise.grips, chosen.grip)
+			? chosen.grip === null
+				? i18n.t("block.gripUnknown")
+				: gripLabel(chosen.grip)
 			: null,
-	].filter((tag): tag is string => tag !== null);
+	].filter((part): part is string => part !== null);
+	if (parts.length === 0) {
+		return null;
+	}
+	const text = parts.join(" · ").toLocaleLowerCase(intlTag());
+	return text.charAt(0).toLocaleUpperCase(intlTag()) + text.slice(1);
 }
 
 function allEqual(values: number[]): boolean {
