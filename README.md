@@ -138,7 +138,7 @@ kubectl create secret generic repsheet --namespace repsheet \
 ```
 
 ```sh
-helm install repsheet oci://ghcr.io/therealm-tech/charts/repsheet --version 0.2.0 \
+helm install repsheet oci://ghcr.io/therealm-tech/charts/repsheet --version 0.3.0 \
   --namespace repsheet \
   --set api.database.existingSecret.name=repsheet \
   --set api.superAdmin.existingSecret.name=repsheet \
