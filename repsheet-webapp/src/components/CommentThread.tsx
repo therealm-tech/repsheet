@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ErrorText } from "@/components/ui";
 import { api, keys } from "@/lib/api/endpoints";
@@ -27,8 +27,11 @@ export interface CommentDraft {
 export interface ThreadTarget {
 	workoutId: string;
 	blockExerciseId: string;
-	/** "open" shows the composer, "collapsed" a button that opens it. */
-	composer: "open" | "collapsed";
+	/**
+	 * "open" shows the composer, "focused" shows it with the cursor in it, and
+	 * "collapsed" a button that opens it.
+	 */
+	composer: "open" | "focused" | "collapsed";
 	/** The composer's text; it keeps its own when omitted. */
 	draft?: CommentDraft;
 }
@@ -306,10 +309,12 @@ export function FirstCommentDraft({
 	subject,
 	draft,
 	coachNote,
+	autoFocus = false,
 }: {
 	subject: ThreadSubject;
 	draft: CommentDraft;
 	coachNote?: { author: Author; text: string };
+	autoFocus?: boolean;
 }) {
 	const { t } = useTranslation();
 	return (
@@ -332,8 +337,75 @@ export function FirstCommentDraft({
 				subject={subject}
 				draft={draft}
 				hasComments={coachNote !== undefined}
+				autoFocus={autoFocus}
 			/>
 		</span>
+	);
+}
+
+/** What a folded thread shows on its line: the last message, or the draft not sent yet. */
+export interface ThreadPreview {
+	who: string;
+	text: string;
+}
+
+/**
+ * One exercise's comments folded to a line: its name, then either a button to
+ * start the thread or the number of messages over the last one, tinted when a
+ * coach wrote. Tapping the line unfolds `children`, the thread itself.
+ */
+export function FoldedThread({
+	subject,
+	count,
+	byCoach,
+	preview,
+	open,
+	onToggle,
+	children,
+}: {
+	subject: ThreadSubject;
+	count: number;
+	byCoach: boolean;
+	preview: ThreadPreview | null;
+	open: boolean;
+	onToggle: () => void;
+	children: ReactNode;
+}) {
+	const { t } = useTranslation();
+	let status: ReactNode;
+	if (open) {
+		status = <span className="folded-action">{t("comments.fold")}</span>;
+	} else if (count > 0) {
+		status = (
+			<span className={byCoach ? "folded-count coach" : "folded-count"}>
+				<span aria-hidden="true">💬 {count}</span>
+				<span className="sr-only">{t("comments.count", { count })}</span>
+			</span>
+		);
+	} else {
+		status = <span className="folded-action">＋ {t("comments.add")}</span>;
+	}
+	return (
+		<div className="folded">
+			<button
+				type="button"
+				className="folded-head"
+				aria-expanded={open}
+				onClick={onToggle}
+			>
+				{subject.letter ? (
+					<span className="ex-letter">{subject.letter}</span>
+				) : null}
+				<span className="folded-name">{subject.name}</span>
+				{status}
+			</button>
+			{!open && preview ? (
+				<span className="folded-preview">
+					<b>{preview.who}</b> : {preview.text}
+				</span>
+			) : null}
+			{open ? <div className="folded-body">{children}</div> : null}
+		</div>
 	);
 }
 
@@ -358,7 +430,8 @@ export function CommentThread({
 	if (!target && comments.length === 0) {
 		return null;
 	}
-	const showComposer = target?.composer === "open" || open;
+	const showComposer =
+		(target !== undefined && target.composer !== "collapsed") || open;
 	const opener = (
 		<button
 			type="button"
@@ -387,7 +460,7 @@ export function CommentThread({
 				<Composer
 					subject={subject}
 					target={target}
-					autoFocus={open}
+					autoFocus={open || target.composer === "focused"}
 					hasComments={comments.length > 0}
 				/>
 			) : null}

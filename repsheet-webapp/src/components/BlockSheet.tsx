@@ -11,7 +11,8 @@ import {
 	COMMENT_MAX_LENGTH,
 	CommentThread,
 	FirstCommentDraft,
-	type ThreadSubject,
+	FoldedThread,
+	type ThreadPreview,
 } from "@/components/CommentThread";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import { Stepper } from "@/components/Stepper";
@@ -300,6 +301,7 @@ export function BlockSheet(props: BlockSheetProps) {
 		logMode?.kind === "edit" ? logMode.block : null,
 	);
 	const [drafts, setDrafts] = useState<Record<number, string>>({});
+	const [openThreads, setOpenThreads] = useState<number[]>([]);
 	const workout = useQuery({
 		queryKey: keys.workout(workoutId),
 		queryFn: () => api.workout(workoutId),
@@ -937,53 +939,92 @@ export function BlockSheet(props: BlockSheetProps) {
 
 						{grid.exercises.length > 0 && !plan ? (
 							<section
-								className="stack-tight"
+								className="folded-threads"
 								aria-labelledby="block-comments-title"
 							>
-								<h3 id="block-comments-title" className="comments-title">
+								<h3 id="block-comments-title" className="sr-only">
 									{t("comments.title")}
 								</h3>
 								{grid.exercises.map((exercise, col) => {
-									const subject: ThreadSubject = {
-										name: exercise.name,
-										...(grid.exercises.length > 1
-											? { letter: letter(col) }
-											: {}),
-									};
+									const columnId = exercise.columnId;
+									const name = exercise.name;
+									const letterOf =
+										grid.exercises.length > 1 ? { letter: letter(col) } : {};
 									const draft = {
-										value: drafts[exercise.columnId] ?? "",
+										value: drafts[columnId] ?? "",
 										onChange: (value: string) =>
 											setDrafts((current) => ({
 												...current,
-												[exercise.columnId]: value,
+												[columnId]: value,
 											})),
 									};
 									const coachNote =
 										coach && templateBlock
 											? plannedExerciseOf(grid, col, templateBlock)?.note
 											: null;
-									return exercise.blockExerciseId ? (
-										<CommentThread
-											key={exercise.columnId}
-											comments={commentsOf(exercise.blockExerciseId)}
-											ownerId={meId}
-											subject={subject}
-											target={{
-												workoutId,
-												blockExerciseId: exercise.blockExerciseId,
-												composer: "open",
-												draft,
-											}}
-										/>
-									) : (
-										<FirstCommentDraft
-											key={exercise.columnId}
-											subject={subject}
-											draft={draft}
-											{...(coach && coachNote
-												? { coachNote: { author: coach, text: coachNote } }
-												: {})}
-										/>
+									const messages: ThreadPreview[] = exercise.blockExerciseId
+										? commentsOf(exercise.blockExerciseId).map((c) => ({
+												who:
+													c.author === null
+														? "—"
+														: c.author.id === meId
+															? t("comments.me")
+															: c.author.name,
+												text: c.text,
+											}))
+										: coach && coachNote
+											? [{ who: coach.name, text: coachNote }]
+											: [];
+									const byCoach = exercise.blockExerciseId
+										? commentsOf(exercise.blockExerciseId).some(
+												(c) => c.author !== null && c.author.id !== meId,
+											)
+										: messages.length > 0;
+									const open = openThreads.includes(columnId);
+									const focus = messages.length === 0;
+									return (
+										<FoldedThread
+											key={columnId}
+											subject={{ name, ...letterOf }}
+											count={messages.length}
+											byCoach={byCoach}
+											preview={
+												draft.value.trim()
+													? { who: t("comments.draft"), text: draft.value }
+													: (messages[messages.length - 1] ?? null)
+											}
+											open={open}
+											onToggle={() =>
+												setOpenThreads((current) =>
+													open
+														? current.filter((id) => id !== columnId)
+														: [...current, columnId],
+												)
+											}
+										>
+											{exercise.blockExerciseId ? (
+												<CommentThread
+													comments={commentsOf(exercise.blockExerciseId)}
+													ownerId={meId}
+													subject={{ name }}
+													target={{
+														workoutId,
+														blockExerciseId: exercise.blockExerciseId,
+														composer: focus ? "focused" : "open",
+														draft,
+													}}
+												/>
+											) : (
+												<FirstCommentDraft
+													subject={{ name }}
+													draft={draft}
+													autoFocus={focus}
+													{...(coach && coachNote
+														? { coachNote: { author: coach, text: coachNote } }
+														: {})}
+												/>
+											)}
+										</FoldedThread>
 									);
 								})}
 							</section>
