@@ -294,6 +294,14 @@ coach like any other, so the workouts they logged for the profile are shared wit
 they keep reading what they wrote, and the athlete may unshare it. The token is used up in the same
 transaction as the claim, so a failed sign-up (an email already taken) leaves it valid.
 
+**A coach merges a profile into an account without the athlete's step.** When the athlete already
+has an account and added the coach, the coach sees them twice: the profile and the account. The coach
+merges the profile into that account themselves, the same merge as logging in with an invitation,
+with its invitation deleted along with it. Having added the coach is the athlete's consent: a coach
+can only merge into an account that has them as a coach, and only a profile they manage; any other
+pairing answers `404`, so the call tells nothing about a profile or an account the caller does not
+see.
+
 **A planned session is a dated template.** A coach's plan has the shape of a template, blocks of
 exercises with modes, equipment and grips, plus a day. Storing it as a template with `planned_on`
 and `author_id` reuses the block structure, the validation, and the links a workout already keeps to
@@ -390,7 +398,8 @@ carries its own version, and its `appVersion` names the release of the images it
   `404`, never `403`, so its existence does not leak. `403` answers a super-admin-only action
   attempted by a user, a coach action naming an athlete who does not have the caller as a coach
   (`not-coach`), with the same answer whether that account exists or not, and an action reserved to
-  the manager of a profile naming an athlete who has an account (`not-manager`).
+  the manager of a profile naming an athlete who has an account (`not-manager`). Merging a profile
+  into an account is the exception: it answers `404` to any pairing it refuses.
 - A comment is read and written by whoever reads its workout, under the rule above, and goes with
   that access: a removed coach no longer sees their comments, which stay on the athlete's record.
   Only its author edits it, and only its author or the workout's owner deletes it; anyone else who

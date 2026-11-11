@@ -181,6 +181,11 @@ export const api = {
 		request("PUT", `/users/me/athletes/${id}`, AthleteSchema, { body }),
 	deleteAthlete: (id: string) =>
 		requestVoid("DELETE", `/users/me/athletes/${id}`),
+	/** Merges the profile `id` into the account `accountId`; returns that account. */
+	mergeAthlete: (id: string, accountId: string) =>
+		request("POST", `/users/me/athletes/${id}/merges`, AthleteSchema, {
+			body: { accountId },
+		}),
 
 	plannedSessions: (params: { athleteId?: string } & PageParams = {}) =>
 		request("GET", "/planned-sessions", PlannedSessionPageSchema, {

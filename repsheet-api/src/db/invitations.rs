@@ -3,7 +3,7 @@ use sqlx::{FromRow, PgConnection, PgExecutor};
 use uuid::Uuid;
 
 use crate::{
-    db::users::UserRow,
+    db::{profiles, users::UserRow},
     domain::{Locale, WeightUnit},
 };
 
@@ -54,66 +54,32 @@ pub async fn find(exec: impl PgExecutor<'_>, digest: &[u8]) -> sqlx::Result<Opti
         .await
 }
 
-/// Uses up the live invitation for `digest`, if there is one. The coach keeps
-/// reading the workouts they logged for the profile: they are shared with
-/// them, since they no longer manage it.
-pub async fn take(conn: &mut PgConnection, digest: &[u8]) -> sqlx::Result<Option<TakenInvitation>> {
-    let taken: Option<TakenInvitation> =
-        sqlx::query_as(include_str!("../../queries/invitations/take.sql"))
-            .bind(digest)
-            .fetch_optional(&mut *conn)
-            .await?;
-    if let Some(taken) = &taken {
-        sqlx::query(include_str!(
-            "../../queries/invitations/share_with_coach.sql"
-        ))
-        .bind(taken.athlete_id)
-        .bind(taken.coach_id)
-        .execute(&mut *conn)
-        .await?;
-    }
-    Ok(taken)
+/// Uses up the live invitation for `digest`, if there is one.
+pub async fn take(
+    exec: impl PgExecutor<'_>,
+    digest: &[u8],
+) -> sqlx::Result<Option<TakenInvitation>> {
+    sqlx::query_as(include_str!("../../queries/invitations/take.sql"))
+        .bind(digest)
+        .fetch_optional(exec)
+        .await
 }
 
-/// Turns the profile into an account; a unique violation when the email is
-/// taken.
+/// Turns the invited profile into an account; a unique violation when the
+/// email is taken. The workouts its coach logged stay shared with them.
 pub async fn claim(
-    exec: impl PgExecutor<'_>,
-    athlete_id: Uuid,
+    conn: &mut PgConnection,
+    taken: &TakenInvitation,
     account: &NewAccount<'_>,
 ) -> sqlx::Result<Option<UserRow>> {
+    profiles::share_with_coach(conn, taken.athlete_id, taken.coach_id).await?;
     sqlx::query_as(include_str!("../../queries/users/claim_profile.sql"))
-        .bind(athlete_id)
+        .bind(taken.athlete_id)
         .bind(account.name)
         .bind(account.email)
         .bind(account.password_hash)
         .bind(account.weight_unit.as_str())
         .bind(account.locale.as_str())
-        .fetch_optional(exec)
+        .fetch_optional(conn)
         .await
-}
-
-/// Moves what the profile holds to `account_id`, links its coach to that
-/// account, then deletes the profile.
-pub async fn merge(
-    conn: &mut PgConnection,
-    taken: &TakenInvitation,
-    account_id: Uuid,
-) -> sqlx::Result<()> {
-    for query in [
-        include_str!("../../queries/invitations/move_workouts.sql"),
-        include_str!("../../queries/invitations/move_templates.sql"),
-    ] {
-        sqlx::query(query)
-            .bind(taken.athlete_id)
-            .bind(account_id)
-            .execute(&mut *conn)
-            .await?;
-    }
-    sqlx::query(include_str!("../../queries/coaching/insert_if_missing.sql"))
-        .bind(account_id)
-        .bind(taken.coach_id)
-        .execute(&mut *conn)
-        .await?;
-    crate::db::users::delete(conn, taken.athlete_id).await
 }

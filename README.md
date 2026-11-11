@@ -37,7 +37,8 @@ on a planned exercise starts that thread.
 - Athletes without an account: a coach creates a profile with just a name and a unit, plans its
   sessions, logs them on the athlete's behalf against the athlete's own history, or sends one as
   text through the phone's share sheet; a one-time invitation link later turns the profile into the
-  athlete's account, history included
+  athlete's account, history included, or the coach merges it into the account of an athlete who
+  already added them
 - Multi-user: anyone can sign up; each account only sees its own data, plus, as a coach, the
   sessions it planned and the workouts shared with it
 - A super admin, configured on the server, manages the accounts and the built-in catalog

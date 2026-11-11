@@ -384,6 +384,12 @@ export const en: Catalog = {
 	},
 	athlete: {
 		backToAthletes: "Back to my athletes",
+		confirmMerge: "Confirm the merge",
+		merge: "Merge the profile",
+		mergeChoose: "Choose an athlete",
+		mergeInto: "Same athlete as",
+		mergeMessage:
+			"{{name}}'s sessions, done and planned, join {{account}}'s account, and the profile is deleted. This can't be undone.",
 		deleteMessage:
 			"{{name}}'s profile and all their sessions, done and planned, will be deleted.",
 		deleteProfile: "Delete the profile",
@@ -555,6 +561,7 @@ export const en: Catalog = {
 		invalidEmail: "Invalid email address.",
 		loginFailed: "Couldn't sign in, try again.",
 		malformed: "The request is invalid.",
+		mergeFailed: "Couldn't merge the profile.",
 		modeLocked: "This mode already has logged sets, so it can't be removed.",
 		modesRequired: "Pick at least one way to count the exercise.",
 		nameEnRequired: "The English name is required.",

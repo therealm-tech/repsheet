@@ -6,6 +6,7 @@ pub mod comments;
 pub mod exercises;
 pub mod invitations;
 pub mod planned_sessions;
+pub mod profiles;
 pub mod templates;
 pub mod tokens;
 pub mod users;
