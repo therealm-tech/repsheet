@@ -626,6 +626,11 @@ async fn serves_the_openapi_document_and_the_probe(pool: PgPool) {
     let (status, document) = app.send(Method::GET, "/openapi.json", None, None).await;
     assert_eq!(status, StatusCode::OK);
     assert!(document["paths"]["/v1/workouts/{workoutId}/blocks"]["post"].is_object());
+    assert!(
+        document["paths"]["/v1/comments"]["post"]["responses"]["201"]["content"]
+            ["application/json"]["schema"]
+            .is_object()
+    );
     assert!(document["components"]["securitySchemes"]["BearerAuth"].is_object());
     assert!(document["paths"].get("/healthz").is_none());
     for schema in ["CreateExerciseRequest", "UpdateExerciseRequest"] {

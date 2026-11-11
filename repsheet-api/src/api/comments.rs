@@ -36,7 +36,6 @@ pub fn routes() -> ApiRouter<AppState> {
                         "Open to whoever reads the workout: its owner, and a coach who reads \
                          it. The comment is added at the end of the exercise's thread.",
                     )
-                    .response::<201, Json<CommentResponse>>()
             }),
         )
         .api_route(
