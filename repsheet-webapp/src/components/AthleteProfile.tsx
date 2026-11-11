@@ -140,15 +140,19 @@ export function AddAthleteSheet({ onClose }: { onClose: () => void }) {
 	);
 }
 
+type AddAthleteButtonProps = {
+	primary?: boolean;
+};
+
 /** The "＋ Add an athlete" button and the sheet it opens. */
-export function AddAthleteButton() {
+export function AddAthleteButton({ primary = false }: AddAthleteButtonProps) {
 	const { t } = useTranslation();
 	const [adding, setAdding] = useState(false);
 	return (
 		<>
 			<button
 				type="button"
-				className="btn btn-ghost"
+				className={primary ? "btn btn-primary" : "btn btn-ghost"}
 				onClick={() => setAdding(true)}
 			>
 				{t("athletes.add")}

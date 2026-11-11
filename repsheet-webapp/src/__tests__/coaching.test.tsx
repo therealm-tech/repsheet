@@ -284,6 +284,9 @@ describe("CoachingPage", () => {
 			"Mes coachs",
 		);
 		expect(screen.queryByText("Mes athlètes")).toBeNull();
+		expect(
+			screen.queryByRole("button", { name: /Ajouter un athlète/ }),
+		).toBeNull();
 		expect(calls.some((c) => c.path.startsWith("/v1/users/me/athletes"))).toBe(
 			false,
 		);

@@ -104,37 +104,21 @@ describe("outlook", () => {
 });
 
 describe("athletes tab", () => {
-	it("shows for an account with at least one athlete", async () => {
-		mockApi({
-			"GET /v1/users/me/athletes": () => ({ status: 200, body: page([paul]) }),
-		});
+	it("shows for every account, without asking for its athletes", async () => {
+		const calls = mockApi({});
 		await renderRoute(TabBar, "/tabs");
 
 		const nav = screen.getByRole("navigation", {
 			name: "Navigation principale",
 		});
-		expect(
-			await within(nav).findByRole("link", { name: "Athlètes" }),
-		).toHaveAttribute("href", "/athletes");
-		expect(within(nav).getAllByRole("link")).toHaveLength(5);
-	});
-
-	it("stays hidden for an account nobody coaches with", async () => {
-		const calls = mockApi({
-			"GET /v1/users/me/athletes": () => ({ status: 200, body: page([]) }),
-		});
-		await renderRoute(TabBar, "/tabs");
-
-		await vi.waitFor(() =>
-			expect(
-				calls.some((c) => c.path.startsWith("/v1/users/me/athletes")),
-			).toBe(true),
+		expect(within(nav).getByRole("link", { name: "Athlètes" })).toHaveAttribute(
+			"href",
+			"/athletes",
 		);
-		const nav = screen.getByRole("navigation", {
-			name: "Navigation principale",
-		});
-		expect(within(nav).queryByRole("link", { name: "Athlètes" })).toBeNull();
-		expect(within(nav).getAllByRole("link")).toHaveLength(4);
+		expect(within(nav).getAllByRole("link")).toHaveLength(5);
+		expect(calls.some((c) => c.path.startsWith("/v1/users/me/athletes"))).toBe(
+			false,
+		);
 	});
 });
 
@@ -198,15 +182,34 @@ describe("athletes page", () => {
 		expect(within(row).queryByText("Rien de prévu")).toBeNull();
 	});
 
-	it("says when nobody has added the account as a coach", async () => {
+	it("leads an account with no athlete to adding one", async () => {
 		mockApi({
 			"GET /v1/users/me/athletes": () => ({ status: 200, body: page([]) }),
 		});
 		await renderRoute(AthletesPage, "/athletes");
+		const ui = userEvent.setup();
 
 		expect(
-			await screen.findByText("Personne ne t'a encore ajouté comme coach."),
+			await screen.findByText("Tu ne coaches encore personne."),
 		).toBeVisible();
+		const add = screen.getByRole("button", { name: "＋ Ajouter un athlète" });
+		expect(add).toHaveClass("btn-primary");
+		await ui.click(add);
+		expect(
+			await screen.findByRole("dialog", { name: "Ajouter un athlète" }),
+		).toBeVisible();
+	});
+
+	it("keeps adding an athlete as a secondary action once there are some", async () => {
+		mockApi({
+			"GET /v1/users/me/athletes": () => ({ status: 200, body: page([paul]) }),
+		});
+		await renderRoute(AthletesPage, "/athletes");
+
+		await screen.findByRole("link", { name: /Paul/ });
+		expect(
+			screen.getByRole("button", { name: "＋ Ajouter un athlète" }),
+		).toHaveClass("btn-ghost");
 	});
 });
 

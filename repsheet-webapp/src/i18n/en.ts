@@ -371,8 +371,6 @@ export const en: Catalog = {
 		back: "Back",
 		coachEmail: "Add a coach by email",
 		coachesEmpty: "You have no coach.",
-		athletesIntro:
-			"Coaching someone who isn't on RepSheet? Create their profile: you plan their sessions and log them on their behalf.",
 		coachesIntro:
 			"A coach plans sessions for you and sees the workouts you log from them, plus the ones you choose to share. They get access as soon as you add them, and lose it as soon as you remove them.",
 		confirmRemove: "Confirm removal",
@@ -417,7 +415,7 @@ export const en: Catalog = {
 			"A profile for someone with no account: you plan their sessions and log them on their behalf. You can invite them later, and they'll find everything.",
 		addTitle: "Add an athlete",
 		create: "Create the profile",
-		empty: "Nobody has added you as their coach.",
+		empty: "You don't coach anyone yet.",
 		hasAccount: "already has an account?",
 		hasAccountHint:
 			"Give them your email: they add you as their coach from their profile, and show up here at once.",
