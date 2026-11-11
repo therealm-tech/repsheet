@@ -934,6 +934,94 @@ ol {
 	font-weight: 650;
 }
 
+.folded-threads {
+	display: flex;
+	flex-direction: column;
+	border-top: 1px solid var(--line);
+}
+
+.folded {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0 8px;
+	border-bottom: 1px solid var(--line);
+}
+
+.folded-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	font-size: 14px;
+	font-weight: 600;
+	text-align: left;
+}
+
+.folded-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.folded-action {
+	color: var(--orange);
+	font-size: 13px;
+	font-weight: 650;
+}
+
+.folded-count {
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.folded-count.coach {
+	color: var(--coach);
+}
+
+.folded-preview {
+	padding-left: 28px;
+	font-size: 12.5px;
+	color: var(--muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.folded-preview b {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.folded-body {
+	padding-left: 28px;
+}
+
+.folded-body .thread {
+	margin: 0;
+	padding: 0;
+	background: none;
+}
+
+.folded-body .compose-input {
+	min-height: 38px;
+	padding: 8px 12px;
+	background: var(--surface);
+}
+
+.folded-body .send-button {
+	width: 38px;
+	height: 38px;
+}
+
+.folded-body .send-button:disabled {
+	background: var(--surface-2);
+	color: var(--muted);
+}
+
 .instructions {
 	display: flex;
 	flex-direction: column;

@@ -218,6 +218,9 @@ describe("comments on an exercise", () => {
 		);
 		const ui = userEvent.setup();
 		const thread = await screen.findByRole("region", { name: "Commentaires" });
+		await ui.click(
+			await within(thread).findByRole("button", { name: /Développé couché/ }),
+		);
 		await waitFor(() =>
 			expect(
 				within(thread).getByRole("button", { name: "Supprimer" }),
@@ -234,6 +237,7 @@ describe("comments on an exercise", () => {
 			expect(calls.some((c) => c.path === "/v1/comments/k2")).toBe(true),
 		);
 
+		await ui.click(within(thread).getByRole("button", { name: /Dips/ }));
 		await ui.type(
 			within(thread).getByRole("textbox", {
 				name: "Ajouter un commentaire sur Dips",
@@ -304,9 +308,22 @@ describe("comments on an exercise", () => {
 		expect(await screen.findByText("Consignes du coach")).toBeInTheDocument();
 		expect(screen.getByText("Pause 1 s en bas")).toBeInTheDocument();
 
+		expect(
+			screen.queryByRole("textbox", {
+				name: "Ajouter un commentaire sur Développé couché",
+			}),
+			"the thread stays folded until tapped",
+		).toBeNull();
+		await ui.click(
+			within(screen.getByRole("region", { name: "Commentaires" })).getByRole(
+				"button",
+				{ name: /Développé couché/ },
+			),
+		);
 		const box = screen.getByRole("textbox", {
 			name: "Ajouter un commentaire sur Développé couché",
 		});
+		expect(box).toHaveFocus();
 		expect(box).toHaveValue("");
 		expect(screen.queryByRole("button", { name: "Envoyer" })).toBeNull();
 		await ui.type(box, "Épaule OK ");

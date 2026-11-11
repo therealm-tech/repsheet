@@ -283,8 +283,9 @@ describe("BlockSheet", () => {
 			screen.getByText("prévu par Lou · touche une case pour ajuster"),
 		).toBeVisible();
 		const comments = screen.getByRole("region", { name: "Commentaires" });
-		expect(within(comments).getByText("Talons surélevés")).toBeVisible();
+		expect(within(comments).getByText(/Talons surélevés/)).toBeVisible();
 		expect(within(comments).getByText("Lou")).toBeVisible();
+		expect(within(comments).getByText("1 commentaire")).toBeInTheDocument();
 		expect(
 			container.querySelector(".instructions"),
 			"a coach's note is a comment, not template instructions",
