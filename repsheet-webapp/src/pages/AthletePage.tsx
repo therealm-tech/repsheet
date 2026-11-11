@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AthleteProfileForm, TitledSheet } from "@/components/AthleteProfile";
 import { DateIcon } from "@/components/DateIcon";
@@ -12,7 +12,7 @@ import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import type { Athlete } from "@/lib/api/schemas";
 import { formatDay, formatMinutes, today } from "@/lib/dates";
-import { useMe } from "@/lib/hooks";
+import { useAthletes, useMe } from "@/lib/hooks";
 import { plannedStatus, STATUS_TAG } from "@/lib/planned";
 
 /** Renames a profile the caller manages, changes its unit, or deletes it. */
@@ -59,6 +59,7 @@ function ProfileSheet({
 				}
 				onSubmit={(values) => update.mutate(values)}
 			/>
+			<MergeProfile profile={athlete} onMerged={onClose} />
 			{remove.isError ? (
 				<ErrorText>
 					{errorMessage(remove.error, { fallback: "deleteFailed" })}
@@ -72,6 +73,92 @@ function ProfileSheet({
 				disabled={remove.isPending}
 			/>
 		</TitledSheet>
+	);
+}
+
+/**
+ * Merges the profile into the account of the same athlete, among those who
+ * added the caller as a coach, then opens that account.
+ */
+function MergeProfile({
+	profile,
+	onMerged,
+}: {
+	profile: Athlete;
+	onMerged: () => void;
+}) {
+	const { t } = useTranslation();
+	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+	const selectId = useId();
+	const accounts = (useAthletes().data?.items ?? []).filter(
+		(athlete) => !athlete.managed,
+	);
+	const [accountId, setAccountId] = useState("");
+	const merge = useMutation({
+		mutationFn: (id: string) => api.mergeAthlete(profile.id, id),
+		onSuccess: async (account) => {
+			onMerged();
+			queryClient.setQueryData(keys.athlete(account.id), account);
+			await navigate({
+				to: "/athletes/$athleteId",
+				params: { athleteId: account.id },
+			});
+			queryClient.removeQueries({ queryKey: keys.athlete(profile.id) });
+			for (const queryKey of [
+				keys.athletes,
+				keys.plannedSessions,
+				keys.workouts,
+				["performances"],
+			]) {
+				void queryClient.invalidateQueries({ queryKey });
+			}
+		},
+	});
+	if (accounts.length === 0) {
+		return null;
+	}
+	const target = accounts.find((athlete) => athlete.id === accountId);
+	return (
+		<div className="stack-tight">
+			<div>
+				<label className="label" htmlFor={selectId}>
+					{t("athlete.mergeInto")}
+				</label>
+				<select
+					id={selectId}
+					className="input"
+					value={accountId}
+					onChange={(e) => setAccountId(e.target.value)}
+				>
+					<option value="">{t("athlete.mergeChoose")}</option>
+					{accounts.map((athlete) => (
+						<option key={athlete.id} value={athlete.id}>
+							{athlete.email
+								? `${athlete.name} · ${athlete.email}`
+								: athlete.name}
+						</option>
+					))}
+				</select>
+			</div>
+			{merge.isError ? (
+				<ErrorText>
+					{errorMessage(merge.error, { fallback: "mergeFailed" })}
+				</ErrorText>
+			) : null}
+			{target ? (
+				<ConfirmButton
+					label={t("athlete.merge")}
+					confirmLabel={t("athlete.confirmMerge")}
+					message={t("athlete.mergeMessage", {
+						name: profile.name,
+						account: target.name,
+					})}
+					onConfirm={() => merge.mutate(target.id)}
+					disabled={merge.isPending}
+				/>
+			) : null}
+		</div>
 	);
 }
 

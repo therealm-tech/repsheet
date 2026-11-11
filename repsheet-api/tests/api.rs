@@ -4585,3 +4585,142 @@ async fn an_invited_sign_up_with_a_taken_email_keeps_the_invitation(pool: PgPool
         StatusCode::OK
     );
 }
+
+/// Signs up `email` and adds `coach_email` as their coach; returns the token
+/// and the account's id.
+async fn athlete_of(app: &TestApp, email: &str, coach_email: &str) -> (String, String) {
+    let athlete = app.sign_up(email).await;
+    let (status, _) = app
+        .post(
+            "/v1/users/me/coaches",
+            &athlete,
+            json!({ "email": coach_email }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let athlete_id = app.user_id(&athlete).await;
+    (athlete, athlete_id)
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn coaches_merge_a_profile_into_the_athletes_account(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (coach, profile_id, workout_id) = profile_with_history(&app).await;
+    let token = invite(&app, &coach, &profile_id).await;
+    let (marc, marc_id) = athlete_of(&app, "marc@example.com", "lou@example.com").await;
+    let (status, _) = app
+        .post(
+            "/v1/workouts",
+            &marc,
+            json!({ "name": "Own", "performedOn": "2026-11-01" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, athlete) = app
+        .post(
+            &format!("/v1/users/me/athletes/{profile_id}/merges"),
+            &coach,
+            json!({ "accountId": marc_id }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{athlete}");
+    assert_eq!(athlete["id"], marc_id.as_str());
+    assert_eq!(athlete["managed"], false);
+
+    let (_, workouts) = app.get("/v1/workouts", &marc).await;
+    assert_eq!(workouts["total"], 2, "the profile's history joins theirs");
+    let (_, planned) = app.get("/v1/planned-sessions", &marc).await;
+    assert_eq!(planned["total"], 1, "the sessions planned for the profile");
+
+    let (_, athletes) = app.get("/v1/users/me/athletes", &coach).await;
+    assert_eq!(athletes["total"], 1, "the profile is gone");
+    assert_eq!(athletes["items"][0]["email"], "marc@example.com");
+    assert_eq!(
+        app.get(&format!("/v1/users/me/athletes/{profile_id}"), &coach)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        app.send(Method::GET, &format!("/v1/invitations/{token}"), None, None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND,
+        "the profile's invitation goes with it"
+    );
+
+    let workout_uri = format!("/v1/workouts/{workout_id}");
+    assert_eq!(
+        app.get(&workout_uri, &coach).await.0,
+        StatusCode::OK,
+        "the coach still reads what they logged, now shared"
+    );
+    let (_, shared) = app
+        .get(&format!("/v1/workouts?athleteId={marc_id}"), &coach)
+        .await;
+    assert_eq!(shared["total"], 1, "only what the coach logged is shared");
+    let (status, _) = app
+        .put(
+            &workout_uri,
+            &coach,
+            json!({ "name": "Mine", "performedOn": "2026-11-04" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "but no longer writes it");
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn only_the_manager_merges_a_profile_into_an_athlete_they_coach(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (coach, profile_id) = managed_athlete(&app).await;
+    let coach_id = app.user_id(&coach).await;
+    let other_coach = app.sign_up("zoe@example.com").await;
+    let (marc, marc_id) = athlete_of(&app, "marc@example.com", "lou@example.com").await;
+    let (_, nina_id) = athlete_of(&app, "nina@example.com", "zoe@example.com").await;
+    let (status, other_profile) = app
+        .post(
+            "/v1/users/me/athletes",
+            &coach,
+            json!({ "name": "Léa", "weightUnit": "kg" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let other_profile_id = other_profile["id"].as_str().unwrap();
+    let (status, _) = app
+        .post(
+            "/v1/users/me/coaches",
+            &marc,
+            json!({ "email": "zoe@example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let merges = format!("/v1/users/me/athletes/{profile_id}/merges");
+    for (caller, account_id, why) in [
+        (&other_coach, marc_id.as_str(), "a profile of another coach"),
+        (
+            &coach,
+            nina_id.as_str(),
+            "an account that has not added the coach",
+        ),
+        (&coach, other_profile_id, "another profile"),
+        (&coach, coach_id.as_str(), "the caller themselves"),
+    ] {
+        let (status, problem) = app
+            .post(&merges, caller, json!({ "accountId": account_id }))
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{why}: {problem}");
+    }
+    let (status, _) = app
+        .post(
+            &format!("/v1/users/me/athletes/{marc_id}/merges"),
+            &coach,
+            json!({ "accountId": marc_id }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "an account is not a profile");
+
+    let (_, athletes) = app.get("/v1/users/me/athletes", &coach).await;
+    assert_eq!(athletes["total"], 3, "nothing was merged");
+}

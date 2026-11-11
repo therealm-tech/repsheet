@@ -127,13 +127,13 @@ async fn accept(
     PathParams(path): PathParams<InvitationPath>,
 ) -> AppResult<Created<CoachResponse>> {
     let mut tx = state.pool.begin().await?;
-    let taken = db::invitations::take(&mut tx, &auth::token_digest(&path.token))
+    let taken = db::invitations::take(&mut *tx, &auth::token_digest(&path.token))
         .await?
         .ok_or(AppError::NotFound)?;
     if taken.coach_id == user.id {
         return Err(AppError::OwnCoach);
     }
-    db::invitations::merge(&mut tx, &taken, user.id).await?;
+    db::profiles::merge(&mut tx, taken.athlete_id, taken.coach_id, user.id).await?;
     let coach = db::coaching::find_coach(&mut *tx, user.id, taken.coach_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("a merged profile's coach is not linked"))?;
@@ -156,7 +156,7 @@ pub(super) async fn take_for_sign_up(
     conn: &mut sqlx::PgConnection,
     token: &str,
 ) -> AppResult<db::invitations::TakenInvitation> {
-    db::invitations::take(conn, &auth::token_digest(token))
+    db::invitations::take(&mut *conn, &auth::token_digest(token))
         .await?
         .ok_or_else(|| {
             AppError::Validation(vec![FieldError::new(

@@ -1,4 +1,7 @@
-use aide::axum::{ApiRouter, routing::get_with};
+use aide::axum::{
+    ApiRouter,
+    routing::{get_with, post_with},
+};
 use axum::{Json, extract::State, response::NoContent};
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -22,6 +25,10 @@ use crate::{
 };
 
 pub fn routes() -> ApiRouter<AppState> {
+    coach_routes().merge(athlete_routes())
+}
+
+fn coach_routes() -> ApiRouter<AppState> {
     ApiRouter::new()
         .api_route(
             "/v1/users/me/coaches",
@@ -62,6 +69,10 @@ pub fn routes() -> ApiRouter<AppState> {
                     )
             }),
         )
+}
+
+fn athlete_routes() -> ApiRouter<AppState> {
+    ApiRouter::new()
         .api_route(
             "/v1/users/me/athletes",
             get_with(list_athletes, |op| {
@@ -110,6 +121,25 @@ pub fn routes() -> ApiRouter<AppState> {
                     .summary("Delete a profile the caller manages, and all its data")
                     .description(
                         "403 (`not-manager`) for an athlete who has an account of their own.",
+                    )
+            }),
+        )
+        .api_route(
+            "/v1/users/me/athletes/{athleteId}/merges",
+            post_with(merge_athlete, |op| {
+                authenticated(op)
+                    .tag("Coaching")
+                    .id("mergeAthlete")
+                    .summary(
+                        "Merge a profile the caller manages into one of their athletes' accounts",
+                    )
+                    .description(
+                        "For an athlete who has both a profile and an account that added the \
+                         caller as a coach. The profile's workouts and planned sessions become \
+                         the account's, and the profile is deleted, with its invitation. The \
+                         workouts the caller logged stay shared with them. Returns the \
+                         account. 404 unless the caller manages the profile and coaches the \
+                         account.",
                     )
             }),
         )
@@ -184,6 +214,14 @@ pub struct CreateCoachRequest {
     /// The email of the coach's account.
     #[validate(email)]
     pub email: String,
+}
+
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMergeRequest {
+    /// The account the profile merges into: an athlete of the caller's who
+    /// has an account.
+    pub account_id: Uuid,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -389,4 +427,37 @@ async fn delete_athlete(
     tx.commit().await?;
     tracing::info!(coach_id = %user.id, athlete_id = %path.athlete_id, "athlete profile deleted");
     Ok(NoContent)
+}
+
+async fn merge_athlete(
+    State(state): State<AppState>,
+    user: AuthUser,
+    PathParams(path): PathParams<AthletePath>,
+    ValidJson(request): ValidJson<CreateMergeRequest>,
+) -> AppResult<Created<AthleteResponse>> {
+    let mut tx = state.pool.begin().await?;
+    if !db::profiles::lock_mergeable(&mut tx, path.athlete_id, user.id, request.account_id).await? {
+        tracing::debug!(
+            coach_id = %user.id,
+            athlete_id = %path.athlete_id,
+            account_id = %request.account_id,
+            "rejected a profile merge"
+        );
+        return Err(AppError::NotFound);
+    }
+    db::profiles::merge(&mut tx, path.athlete_id, user.id, request.account_id).await?;
+    let row = db::coaching::find_athlete(&mut *tx, user.id, request.account_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("the account a profile merged into is not linked"))?;
+    tx.commit().await?;
+    tracing::info!(
+        coach_id = %user.id,
+        athlete_id = %path.athlete_id,
+        account_id = %request.account_id,
+        "profile merged into an account"
+    );
+    Ok(Created {
+        location: format!("/v1/users/me/athletes/{}", request.account_id),
+        body: row.into(),
+    })
 }

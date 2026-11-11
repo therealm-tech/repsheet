@@ -1,5 +1,5 @@
 -- Shares every workout of profile $1 with its coach $2, who logged them and
--- keeps reading them once the profile is an account.
+-- keeps reading them once they no longer manage the profile.
 INSERT INTO workout_shares (workout_id, coach_id)
 SELECT
     w.id,

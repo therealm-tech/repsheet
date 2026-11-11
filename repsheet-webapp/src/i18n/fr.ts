@@ -383,6 +383,12 @@ export const fr = {
 	},
 	athlete: {
 		backToAthletes: "Retour à mes athlètes",
+		confirmMerge: "Confirmer la fusion",
+		merge: "Fusionner la fiche",
+		mergeChoose: "Choisir un athlète",
+		mergeInto: "Même athlète que",
+		mergeMessage:
+			"Les séances de {{name}}, faites et prévues, rejoignent le compte de {{account}}, et la fiche est supprimée. C'est irréversible.",
 		deleteMessage:
 			"La fiche de {{name}} et toutes ses séances, faites et prévues, seront supprimées.",
 		deleteProfile: "Supprimer la fiche",
@@ -559,6 +565,7 @@ export const fr = {
 		invalidEmail: "Adresse email invalide.",
 		loginFailed: "Connexion impossible, réessaie.",
 		malformed: "La requête est invalide.",
+		mergeFailed: "Impossible de fusionner la fiche.",
 		modeLocked:
 			"Ce mode a déjà des séries enregistrées : il ne peut pas être retiré.",
 		modesRequired: "Choisis au moins une façon de compter l'exercice.",

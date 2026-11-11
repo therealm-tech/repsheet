@@ -387,3 +387,77 @@ describe("athletes without an account", () => {
 		expect(within(link).queryByText("Partagée")).not.toBeInTheDocument();
 	});
 });
+
+describe("merging a profile into the athlete's account", () => {
+	const account: Athlete = {
+		id: "a1",
+		name: "Marc Dupont",
+		email: "marc@example.com",
+		managed: false,
+		weightUnit: "kg",
+		linkedAt: "2026-11-05T10:00:00Z",
+	};
+
+	it("merges once confirmed, then opens the account", async () => {
+		const { router, calls } = renderApp("/athletes/m1", {
+			"GET /v1/users/me/athletes": () => ({
+				status: 200,
+				body: page([marc, account]),
+			}),
+			"GET /v1/users/me/athletes/a1": () => ({ status: 200, body: account }),
+			"POST /v1/users/me/athletes/m1/merges": () => ({
+				status: 201,
+				body: account,
+			}),
+		});
+		const ui = userEvent.setup();
+
+		await ui.click(
+			await screen.findByRole("button", { name: "Gérer la fiche de Marc" }),
+		);
+		const sheet = await screen.findByRole("dialog", { name: "Fiche de Marc" });
+		await ui.selectOptions(
+			await within(sheet).findByLabelText("Même athlète que"),
+			"Marc Dupont · marc@example.com",
+		);
+		await ui.click(within(sheet).getByText("Fusionner la fiche"));
+		expect(
+			within(sheet).getByText(
+				"Les séances de Marc, faites et prévues, rejoignent le compte de Marc Dupont, et la fiche est supprimée. C'est irréversible.",
+			),
+		).toBeVisible();
+		expect(calls.some((c) => c.method === "POST")).toBe(false);
+		await ui.click(
+			within(sheet).getByRole("button", { name: "Confirmer la fusion" }),
+		);
+
+		await waitFor(() =>
+			expect(router.state.location.pathname).toBe("/athletes/a1"),
+		);
+		expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+			accountId: "a1",
+		});
+		expect(
+			await screen.findByRole("heading", { level: 1, name: "Marc Dupont" }),
+		).toBeVisible();
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+	});
+
+	it("is not offered without an athlete who has an account", async () => {
+		const { calls } = renderApp("/athletes/m1", {});
+		const ui = userEvent.setup();
+
+		await ui.click(
+			await screen.findByRole("button", { name: "Gérer la fiche de Marc" }),
+		);
+		const sheet = await screen.findByRole("dialog", { name: "Fiche de Marc" });
+		await waitFor(() =>
+			expect(
+				calls.some((c) => c.path.startsWith("/v1/users/me/athletes?")),
+			).toBe(true),
+		);
+		expect(
+			within(sheet).queryByLabelText("Même athlète que"),
+		).not.toBeInTheDocument();
+	});
+});

@@ -288,7 +288,7 @@ async fn create(
             weight_unit: request.weight_unit.into(),
             locale: request.locale.into(),
         };
-        db::invitations::claim(&mut *tx, taken.athlete_id, &account)
+        db::invitations::claim(&mut tx, &taken, &account)
             .await
             .map_err(|e| conflict_on_unique(e, Conflict::EmailTaken))?
             .ok_or_else(|| anyhow::anyhow!("an invited profile is no longer managed"))?
