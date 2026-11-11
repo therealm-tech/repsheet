@@ -370,8 +370,6 @@ export const fr = {
 		back: "Retour",
 		coachEmail: "Ajouter un coach par email",
 		coachesEmpty: "Tu n'as pas de coach.",
-		athletesIntro:
-			"Tu coaches quelqu'un qui n'est pas sur RepSheet ? Crée sa fiche : tu prépares ses séances et tu les saisis pour lui.",
 		coachesIntro:
 			"Un coach te prévoit des séances et voit celles que tu notes à partir d'elles, ainsi que celles que tu choisis de partager. Il a accès dès que tu l'ajoutes, et le perd dès que tu le retires.",
 		confirmRemove: "Confirmer le retrait",
@@ -416,7 +414,7 @@ export const fr = {
 			"Une fiche pour quelqu'un qui n'a pas de compte : tu prépares ses séances et tu les saisis pour lui. Tu pourras l'inviter plus tard, il retrouvera tout.",
 		addTitle: "Ajouter un athlète",
 		create: "Créer la fiche",
-		empty: "Personne ne t'a encore ajouté comme coach.",
+		empty: "Tu ne coaches encore personne.",
 		hasAccount: "il a déjà un compte ?",
 		hasAccountHint:
 			"Donne-lui ton e-mail : il t'ajoute comme coach depuis son profil, et il apparaît ici aussitôt.",

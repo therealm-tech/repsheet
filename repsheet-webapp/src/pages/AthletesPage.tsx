@@ -75,6 +75,7 @@ export function AthletesPage() {
 	const { t } = useTranslation();
 	const athletes = useAthletes();
 	const items = athletes.data?.items ?? [];
+	const empty = athletes.isSuccess && items.length === 0;
 	const sessions = useQueries({
 		queries: items.map((athlete) => ({
 			queryKey: [...keys.plannedSessions, athlete.id],
@@ -95,9 +96,7 @@ export function AthletesPage() {
 			{athletes.isError ? (
 				<ErrorText>{t("athletes.loadFailed")}</ErrorText>
 			) : null}
-			{athletes.isSuccess && items.length === 0 ? (
-				<Empty>{t("athletes.empty")}</Empty>
-			) : null}
+			{empty ? <Empty>{t("athletes.empty")}</Empty> : null}
 			{items.length > 0 ? (
 				<ul className="card list">
 					{items.map((athlete, index) => (
@@ -111,7 +110,7 @@ export function AthletesPage() {
 					))}
 				</ul>
 			) : null}
-			<AddAthleteButton />
+			<AddAthleteButton primary={empty} />
 			<p className="muted small">{t("athletes.intro")}</p>
 		</main>
 	);

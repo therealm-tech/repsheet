@@ -86,7 +86,13 @@ describe("Sidebar", () => {
 		await renderRoute(Sidebar, "/side");
 
 		const nav = screen.getByRole("navigation", { name: "Navigation latérale" });
-		for (const label of ["Accueil", "Historique", "Modèles", "Exercices"]) {
+		for (const label of [
+			"Accueil",
+			"Historique",
+			"Modèles",
+			"Exercices",
+			"Athlètes",
+		]) {
 			expect(nav).toHaveTextContent(label);
 		}
 		expect(

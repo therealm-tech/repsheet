@@ -11,7 +11,7 @@ export function useMe() {
 	});
 }
 
-/** The caller's athletes, as the tab bar and the athletes tab both read them. */
+/** The caller's athletes, as the athletes tab lists them. */
 export function useAthletes() {
 	return useQuery({
 		queryKey: [...keys.athletes, 1],
