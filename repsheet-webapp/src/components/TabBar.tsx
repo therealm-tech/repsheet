@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { AccountPanel } from "@/components/AccountPanel";
 import { Logo } from "@/components/Logo";
+import { useAthletes } from "@/lib/hooks";
 
 const NAV = [
 	{ to: "/", label: "nav.home", icon: "⌂", exact: true },
@@ -10,9 +11,22 @@ const NAV = [
 	{ to: "/exercises", label: "nav.exercises", icon: "◎", exact: false },
 ] as const;
 
+const ATHLETES = {
+	to: "/athletes",
+	label: "nav.athletes",
+	icon: "◔",
+	exact: false,
+} as const;
+
+/** The athletes tab only shows for an account someone has added as a coach. */
+function useNav() {
+	const coaching = (useAthletes().data?.total ?? 0) > 0;
+	return coaching ? [...NAV, ATHLETES] : NAV;
+}
+
 function NavLinks() {
 	const { t } = useTranslation();
-	return NAV.map((item) => (
+	return useNav().map((item) => (
 		<Link
 			key={item.to}
 			to={item.to}

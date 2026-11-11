@@ -13,6 +13,7 @@ import { APP_SCROLLER } from "@/lib/scroll";
 import { AccountsPage } from "@/pages/AccountsPage";
 import { AppLayout } from "@/pages/AppLayout";
 import { AthletePage } from "@/pages/AthletePage";
+import { AthletesPage } from "@/pages/AthletesPage";
 import { CoachingPage } from "@/pages/CoachingPage";
 import { ExerciseDetailPage } from "@/pages/ExerciseDetailPage";
 import { ExercisesPage } from "@/pages/ExercisesPage";
@@ -130,9 +131,15 @@ const coachingRoute = createRoute({
 	component: CoachingPage,
 });
 
+const athletesRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/athletes",
+	component: AthletesPage,
+});
+
 const athleteRoute = createRoute({
 	getParentRoute: () => appRoute,
-	path: "/coaching/athletes/$athleteId",
+	path: "/athletes/$athleteId",
 	component: function AthleteRouteView() {
 		const { athleteId } = athleteRoute.useParams();
 		return <AthletePage key={athleteId} athleteId={athleteId} />;
@@ -141,7 +148,7 @@ const athleteRoute = createRoute({
 
 const plannedSessionRoute = createRoute({
 	getParentRoute: () => appRoute,
-	path: "/coaching/athletes/$athleteId/sessions/$sessionId",
+	path: "/athletes/$athleteId/sessions/$sessionId",
 	component: function PlannedSessionRouteView() {
 		const { athleteId, sessionId } = plannedSessionRoute.useParams();
 		return (
@@ -156,7 +163,7 @@ const plannedSessionRoute = createRoute({
 
 const sharedWorkoutRoute = createRoute({
 	getParentRoute: () => appRoute,
-	path: "/coaching/athletes/$athleteId/workouts/$workoutId",
+	path: "/athletes/$athleteId/workouts/$workoutId",
 	component: function SharedWorkoutRouteView() {
 		const { athleteId, workoutId } = sharedWorkoutRoute.useParams();
 		return (
@@ -166,6 +173,15 @@ const sharedWorkoutRoute = createRoute({
 				workoutId={workoutId}
 			/>
 		);
+	},
+});
+
+/** Athletes used to live under the profile's coaching page; old links still land. */
+const legacyAthleteRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/coaching/athletes/$",
+	beforeLoad: ({ params }) => {
+		throw redirect({ href: `/athletes/${params._splat ?? ""}`, replace: true });
 	},
 });
 
@@ -182,6 +198,8 @@ export const routeTree = rootRoute.addChildren([
 		templateRoute,
 		accountsRoute,
 		coachingRoute,
+		legacyAthleteRoute,
+		athletesRoute,
 		athleteRoute,
 		plannedSessionRoute,
 		sharedWorkoutRoute,

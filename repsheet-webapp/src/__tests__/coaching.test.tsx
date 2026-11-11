@@ -267,20 +267,23 @@ describe("CoachingPage", () => {
 		).toBeInTheDocument();
 	});
 
-	it("lists the athletes first for a coach", async () => {
-		mockApi({
+	it("keeps only the coaches, the athletes having a tab of their own", async () => {
+		const calls = mockApi({
 			"GET /v1/users/me": () => ({ status: 200, body: user }),
-			"GET /v1/users/me/athletes": () => ({ status: 200, body: page([paul]) }),
-			"GET /v1/users/me/coaches": () => ({ status: 200, body: page([]) }),
+			"GET /v1/users/me/coaches": () => ({ status: 200, body: page([marie]) }),
 		});
 		await renderRoute(CoachingPage, "/coaching");
 
-		const link = await screen.findByRole("link", { name: /Paul/ });
-		expect(link).toHaveAttribute("href", "/coaching/athletes/a1");
-		const titles = screen
-			.getAllByRole("heading", { level: 2 })
-			.map((h) => h.textContent);
-		expect(titles).toEqual(["Mes athlètes", "Mes coachs"]);
+		expect(
+			await screen.findByRole("listitem", { name: "Marie" }),
+		).toBeVisible();
+		expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+			"Mes coachs",
+		);
+		expect(screen.queryByText("Mes athlètes")).toBeNull();
+		expect(calls.some((c) => c.path.startsWith("/v1/users/me/athletes"))).toBe(
+			false,
+		);
 	});
 });
 
@@ -525,10 +528,7 @@ describe("coaching an athlete", () => {
 				]),
 			}),
 		});
-		await renderRoute(
-			() => <AthletePage athleteId="a1" />,
-			"/coaching/athletes/a1",
-		);
+		await renderRoute(() => <AthletePage athleteId="a1" />, "/athletes/a1");
 
 		expect(await screen.findByRole("heading", { name: "Paul" })).toBeVisible();
 		const planned = await screen.findByRole("region", {
@@ -546,7 +546,7 @@ describe("coaching an athlete", () => {
 		const shared = screen.getByRole("region", { name: "Partagées avec toi" });
 		expect(
 			within(shared).getByRole("link", { name: /Run club/ }),
-		).toHaveAttribute("href", "/coaching/athletes/a1/workouts/w9");
+		).toHaveAttribute("href", "/athletes/a1/workouts/w9");
 		expect(
 			calls.find((c) => c.path.startsWith("/v1/planned-sessions"))?.path,
 		).toContain("athleteId=a1");
@@ -568,10 +568,7 @@ describe("coaching an athlete", () => {
 				body: { title: "Forbidden", status: 403 },
 			}),
 		});
-		await renderRoute(
-			() => <AthletePage athleteId="a1" />,
-			"/coaching/athletes/a1",
-		);
+		await renderRoute(() => <AthletePage athleteId="a1" />, "/athletes/a1");
 
 		expect(
 			await screen.findByText("Cette personne ne t'a plus comme coach."),
@@ -590,7 +587,7 @@ describe("coaching an athlete", () => {
 		});
 		await renderRoute(
 			() => <PlannedSessionPage athleteId="a1" sessionId="p1" />,
-			"/coaching/athletes/a1/sessions/p1",
+			"/athletes/a1/sessions/p1",
 		);
 
 		const outcome = await screen.findByRole("region", {
@@ -676,7 +673,7 @@ describe("coaching an athlete", () => {
 		});
 		await renderRoute(
 			() => <PlannedSessionPage athleteId="a1" sessionId="p1" />,
-			"/coaching/athletes/a1/sessions/p1",
+			"/athletes/a1/sessions/p1",
 		);
 		const ui = userEvent.setup();
 
@@ -772,7 +769,7 @@ describe("coaching an athlete", () => {
 		});
 		const { router } = await renderRoute(
 			() => <AthletePage athleteId="a1" />,
-			"/coaching/athletes/a1",
+			"/athletes/a1",
 		);
 		const ui = userEvent.setup();
 
@@ -804,9 +801,7 @@ describe("coaching an athlete", () => {
 			}),
 		);
 		await waitFor(() =>
-			expect(router.state.location.pathname).toBe(
-				"/coaching/athletes/a1/sessions/p1",
-			),
+			expect(router.state.location.pathname).toBe("/athletes/a1/sessions/p1"),
 		);
 	});
 });

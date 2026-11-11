@@ -17,7 +17,7 @@ export function NoLongerCoach() {
 		<main className="screen narrow">
 			<ErrorText>{t("athlete.noLongerCoach")}</ErrorText>
 			<p className="muted small">{t("athlete.noLongerCoachDetail")}</p>
-			<Link to="/coaching" className="btn">
+			<Link to="/athletes" className="btn">
 				{t("athlete.backToAthletes")}
 			</Link>
 		</main>

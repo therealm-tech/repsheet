@@ -32,7 +32,8 @@ on a planned exercise starts that thread.
 - Coaching: add your coaches' accounts; each plans sessions for you on given days, set by set and
   load by load, from your last time, and sends them once ready; they see how each one went, plus the
   other workouts you choose to share with them, and comment on their exercises; remove a coach and
-  their access ends at once, while the sessions and comments stay yours
+  their access ends at once, while the sessions and comments stay yours; as a coach, an Athletes tab
+  lists the people you coach, each with the next session planned for them
 - Multi-user: anyone can sign up; each account only sees its own data, plus, as a coach, the
   sessions it planned and the workouts shared with it
 - A super admin, configured on the server, manages the accounts and the built-in catalog

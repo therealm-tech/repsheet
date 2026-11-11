@@ -9,14 +9,7 @@ import { WorkoutForm } from "@/components/WorkoutForm";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import { formatDay, formatMinutes, today } from "@/lib/dates";
-import { type PlannedStatus, plannedStatus } from "@/lib/planned";
-
-const STATUS_CLASS: Record<PlannedStatus, string> = {
-	draft: "tag tag-coach",
-	logged: "tag tag-ok",
-	missed: "tag tag-orange",
-	planned: "tag",
-};
+import { plannedStatus, STATUS_TAG } from "@/lib/planned";
 
 /** One athlete, as their coach sees them: the sessions planned for them and the workouts they shared. */
 export function AthletePage({ athleteId }: { athleteId: string }) {
@@ -43,7 +36,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 			queryClient.setQueryData(keys.plannedSession(session.id), session);
 			void queryClient.invalidateQueries({ queryKey: keys.plannedSessions });
 			void navigate({
-				to: "/coaching/athletes/$athleteId/sessions/$sessionId",
+				to: "/athletes/$athleteId/sessions/$sessionId",
 				params: { athleteId, sessionId: session.id },
 			});
 		},
@@ -60,7 +53,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 		<main className="screen narrow">
 			<header className="bar">
 				<Link
-					to="/coaching"
+					to="/athletes"
 					className="icon-button"
 					aria-label={t("athlete.backToAthletes")}
 				>
@@ -96,7 +89,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 							return (
 								<li key={session.id}>
 									<Link
-										to="/coaching/athletes/$athleteId/sessions/$sessionId"
+										to="/athletes/$athleteId/sessions/$sessionId"
 										params={{ athleteId, sessionId: session.id }}
 										className="list-item"
 									>
@@ -108,7 +101,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 												{t("common.blocks", { count: session.blockCount })}
 											</span>
 										</span>
-										<span className={STATUS_CLASS[status]}>
+										<span className={STATUS_TAG[status]}>
 											{t(`athlete.status.${status}`)}
 										</span>
 									</Link>
@@ -134,7 +127,7 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 						{workouts.map((workout) => (
 							<li key={workout.id}>
 								<Link
-									to="/coaching/athletes/$athleteId/workouts/$workoutId"
+									to="/athletes/$athleteId/workouts/$workoutId"
 									params={{ athleteId, workoutId: workout.id }}
 									className="list-item"
 								>
