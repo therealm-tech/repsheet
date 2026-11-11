@@ -1224,6 +1224,9 @@ ol {
 
 .grid-scroll {
 	overflow-x: auto;
+	/* A scroll container may shrink below its content in the sheet's flex column: a full sheet
+	   would squeeze the grid and scroll it inside, hiding its header row and cutting rounds. */
+	flex: none;
 	/* Room for the active cell's ring, which the scroll container would clip. */
 	padding: 3px;
 	/* Vertical only: a horizontal negative margin overflows the sheet body and shows a scrollbar. */
