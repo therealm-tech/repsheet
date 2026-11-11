@@ -21,6 +21,7 @@ import { ExerciseDetailPage } from "@/pages/ExerciseDetailPage";
 import { ExercisesPage } from "@/pages/ExercisesPage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { HomePage } from "@/pages/HomePage";
+import { InvitePage } from "@/pages/InvitePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { PlannedSessionPage } from "@/pages/PlannedSessionPage";
 import { SharedWorkoutPage } from "@/pages/SharedWorkoutPage";
@@ -39,6 +40,15 @@ const loginRoute = createRoute({
 		}
 	},
 	component: LoginPage,
+});
+
+const inviteRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/invite/$token",
+	component: function InviteRouteView() {
+		const { token } = inviteRoute.useParams();
+		return <InvitePage key={token} token={token} />;
+	},
 });
 
 const appRoute = createRoute({
@@ -200,6 +210,7 @@ const legacyAthleteRoute = createRoute({
 
 export const routeTree = rootRoute.addChildren([
 	loginRoute,
+	inviteRoute,
 	appRoute.addChildren([
 		homeRoute,
 		historyRoute,

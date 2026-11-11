@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TitledSheet } from "@/components/AthleteProfile";
 import { plannedSummary } from "@/components/BlockCard";
-import { ErrorText } from "@/components/ui";
+import { ShareActions } from "@/components/ShareActions";
 import i18n from "@/i18n";
 import type { PlannedSession, WeightUnit } from "@/lib/api/schemas";
 import { kindLabel, letter, unusualChoices } from "@/lib/blocks";
@@ -59,52 +58,14 @@ export function SendSessionSheet({
 	onClose: () => void;
 }) {
 	const { t } = useTranslation();
-	const [copied, setCopied] = useState(false);
-	const [failed, setFailed] = useState(false);
 	const text = sessionMessage(session, unit, coachName);
-	const title = t("plannedSession.sendTo", { name: athleteName });
-
-	async function copy() {
-		setFailed(false);
-		try {
-			await navigator.clipboard.writeText(text);
-			setCopied(true);
-		} catch {
-			setFailed(true);
-		}
-	}
-
-	async function share() {
-		if (typeof navigator.share !== "function") {
-			await copy();
-			return;
-		}
-		try {
-			await navigator.share({ text });
-		} catch (error) {
-			if (!(error instanceof DOMException && error.name === "AbortError")) {
-				await copy();
-			}
-		}
-	}
-
 	return (
-		<TitledSheet title={title} onClose={onClose}>
+		<TitledSheet
+			title={t("plannedSession.sendTo", { name: athleteName })}
+			onClose={onClose}
+		>
 			<pre className="share-message">{text}</pre>
-			<div className="row share-actions">
-				<button
-					type="button"
-					className="btn btn-primary grow"
-					onClick={() => void share()}
-				>
-					{t("plannedSession.share")}
-				</button>
-				<button type="button" className="btn grow" onClick={() => void copy()}>
-					{copied ? t("plannedSession.copied") : t("plannedSession.copy")}
-				</button>
-			</div>
-			{failed ? <ErrorText>{t("plannedSession.shareFailed")}</ErrorText> : null}
-			<p className="muted small">{t("plannedSession.shareHint")}</p>
+			<ShareActions text={text} />
 		</TitledSheet>
 	);
 }

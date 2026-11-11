@@ -414,7 +414,7 @@ export const en: Catalog = {
 	athletes: {
 		add: "＋ Add an athlete",
 		addIntro:
-			"A profile for someone with no account: you plan their sessions and log them on their behalf.",
+			"A profile for someone with no account: you plan their sessions and log them on their behalf. You can invite them later, and they'll find everything.",
 		addTitle: "Add an athlete",
 		create: "Create the profile",
 		empty: "Nobody has added you as their coach.",
@@ -451,15 +451,38 @@ export const en: Catalog = {
 		notePlaceholder: "For the whole session: warm-up, goal…",
 		send: "Send",
 		whatWasLogged: "What was logged",
-		copied: "Copied ✓",
-		copy: "Copy",
 		messageOutro: "Send me your loads and how it felt!",
 		resume: "▶ Resume the session with {{name}}",
-		share: "Share…",
-		shareFailed: "Couldn't copy the message: select it to copy it.",
-		shareHint: "“Share…” opens the phone's share sheet: WhatsApp, text, email…",
 		start: "▶ Start the session with {{name}}",
 		sendTo: "Send to {{name}}",
+	},
+	invite: {
+		accept: "Attach to my account",
+		cardIntro:
+			"With an account, they'll see their sessions, log them themselves and keep their whole history.",
+		cardTitle: "Invite {{name}} to RepSheet",
+		create: "Create an invitation link",
+		expired:
+			"This invitation link is no longer valid. Ask your coach for a new one.",
+		hello: "{{coach}} invites you to RepSheet.",
+		loginHint: "Log in: your profile will be attached to your account.",
+		message:
+			"{{coach}} invites you to RepSheet to follow your sessions: {{link}}",
+		sheetIntro:
+			"When {{name}} signs up with this link, their profile becomes their account: the sessions done, the ones you planned, and you as their coach.",
+		sheetTitle: "Invite {{name}}",
+		validity: "Valid for 7 days, once. A new link cancels the previous one.",
+		waiting_one: "Your session and the next ones are already waiting for you.",
+		waiting_other:
+			"Your {{count}} sessions and the next ones are already waiting for you.",
+		waitingNone: "Your next sessions are already waiting for you.",
+	},
+	sending: {
+		copied: "Copied ✓",
+		copy: "Copy",
+		failed: "Couldn't copy the message: select it to copy it.",
+		hint: "“Share…” opens the phone's share sheet: WhatsApp, text, email…",
+		share: "Share…",
 	},
 	share: {
 		intro:

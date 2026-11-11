@@ -5,12 +5,14 @@ import { useTranslation } from "react-i18next";
 import { AthleteProfileForm, TitledSheet } from "@/components/AthleteProfile";
 import { DateIcon } from "@/components/DateIcon";
 import { lostAccess, NoLongerCoach } from "@/components/NoLongerCoach";
+import { ShareActions } from "@/components/ShareActions";
 import { ConfirmButton, Empty, ErrorText, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
 import { api, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import type { Athlete } from "@/lib/api/schemas";
 import { formatDay, formatMinutes, today } from "@/lib/dates";
+import { useMe } from "@/lib/hooks";
 import { plannedStatus, STATUS_TAG } from "@/lib/planned";
 
 /** Renames a profile the caller manages, changes its unit, or deletes it. */
@@ -70,6 +72,54 @@ function ProfileSheet({
 				disabled={remove.isPending}
 			/>
 		</TitledSheet>
+	);
+}
+
+/** Creates a one-time link that turns the profile into the athlete's account, and hands it out. */
+function InviteCard({ athlete }: { athlete: Athlete }) {
+	const { t } = useTranslation();
+	const coachName = useMe().data?.name ?? "";
+	const [link, setLink] = useState<string | null>(null);
+	const create = useMutation({
+		mutationFn: () => api.createInvitation(athlete.id),
+		onSuccess: ({ token }) =>
+			setLink(`${window.location.origin}/invite/${token}`),
+	});
+	return (
+		<section className="invite-card" aria-labelledby="invite-title">
+			<h2 id="invite-title" className="strong">
+				{t("invite.cardTitle", { name: athlete.name })}
+			</h2>
+			<p className="muted small">{t("invite.cardIntro")}</p>
+			{create.isError ? (
+				<ErrorText>
+					{errorMessage(create.error, { fallback: "saveFailed" })}
+				</ErrorText>
+			) : null}
+			<button
+				type="button"
+				className="btn btn-ghost btn-small"
+				disabled={create.isPending}
+				onClick={() => create.mutate()}
+			>
+				{t("invite.create")}
+			</button>
+			{link ? (
+				<TitledSheet
+					title={t("invite.sheetTitle", { name: athlete.name })}
+					onClose={() => setLink(null)}
+				>
+					<p className="muted small">
+						{t("invite.sheetIntro", { name: athlete.name })}
+					</p>
+					<code className="link-box">{link}</code>
+					<ShareActions
+						text={t("invite.message", { coach: coachName, link })}
+					/>
+					<p className="muted small">{t("invite.validity")}</p>
+				</TitledSheet>
+			) : null}
+		</section>
 	);
 }
 
@@ -240,6 +290,8 @@ export function AthletePage({ athleteId }: { athleteId: string }) {
 					</ul>
 				) : null}
 			</section>
+
+			{managed && athlete.data ? <InviteCard athlete={athlete.data} /> : null}
 
 			{managing && athlete.data ? (
 				<ProfileSheet

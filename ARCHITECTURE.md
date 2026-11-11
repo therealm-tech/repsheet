@@ -107,6 +107,7 @@ transaction. The session stays a draft until `PUT /v1/planned-sessions/{id}/stat
 erDiagram
     users ||--o{ access_tokens : "logs in with"
     users ||--o{ users : "manages (profiles)"
+    users ||--o| athlete_invitations : "invited through"
     users ||--o{ exercises : "creates (custom)"
     users ||--o{ templates : owns
     users ||--o{ templates : "plans (as coach)"
@@ -160,6 +161,8 @@ erDiagram
   athlete. Table checks keep the email and the password both set or both null, and a row with no
   email managed. Deleting the coach deletes their profiles and all they hold. A profile cannot log
   in, is not listed with the accounts, and its sessions are sent as they are planned.
+- An **invitation** (`athlete_invitations`) is a one-time token for one profile, kept as its SHA-256
+  like an access token, valid for 7 days; a profile has at most one, and a new one replaces it.
 - A **coaching link** (`coaching_links`) says that an athlete has an account as a coach. It is
   written and removed by the athlete alone, or written with the profile by the coach who manages
   it, and every coach check reads it at request time.
@@ -281,6 +284,15 @@ Nobody else sees a profile, so its sessions skip the draft state, and the coach 
 workouts, not only those shared. There is nobody to read comments either: the client shows none on
 a profile's workouts. Sending a session to such an athlete is a text message the client composes,
 not a public page: there is no unauthenticated route to secure and no link to revoke.
+
+**An invitation turns the profile into the account, rather than copying it.** Signing up with an
+invitation sets the profile's email, password and preferences and drops its manager: the row keeps
+its id, so its workouts, planned sessions and coaching link stay attached with nothing to move.
+Logging in with it instead moves the profile's workouts and sessions to the existing account, links
+its coach, and deletes the profile. Either way the coach stops managing the athlete and becomes a
+coach like any other, so the workouts they logged for the profile are shared with them on the way:
+they keep reading what they wrote, and the athlete may unshare it. The token is used up in the same
+transaction as the claim, so a failed sign-up (an email already taken) leaves it valid.
 
 **A planned session is a dated template.** A coach's plan has the shape of a template, blocks of
 exercises with modes, equipment and grips, plus a day. Storing it as a template with `planned_on`

@@ -253,6 +253,20 @@ export const AthleteSchema = z.object({
 });
 export type Athlete = z.infer<typeof AthleteSchema>;
 
+/** A coach's invitation, as the invited athlete reads it before signing up or logging in. */
+export const InvitationSchema = z.object({
+	athleteName: z.string(),
+	coachName: z.string(),
+	workoutCount: z.number(),
+	expiresAt: z.string(),
+});
+export type Invitation = z.infer<typeof InvitationSchema>;
+
+export const CreatedInvitationSchema = z.object({
+	token: z.string().min(1),
+	expiresAt: z.string(),
+});
+
 export interface AthleteInput {
 	name: string;
 	weightUnit: WeightUnit;
