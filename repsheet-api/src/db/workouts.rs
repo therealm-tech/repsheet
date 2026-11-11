@@ -159,6 +159,29 @@ pub async fn find(
         .await
 }
 
+/// A workout as someone who may write it finds it, with its owner.
+#[derive(FromRow)]
+pub struct WritableWorkoutRow {
+    #[sqlx(rename = "user_id")]
+    pub owner_id: Uuid,
+    #[sqlx(flatten)]
+    pub workout: WorkoutRow,
+}
+
+/// The workout as `user_id` may write it: their own, or one of a profile
+/// they manage.
+pub async fn find_writable(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    user_id: Uuid,
+) -> sqlx::Result<Option<WritableWorkoutRow>> {
+    sqlx::query_as(include_str!("../../queries/workouts/find_writable.sql"))
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(exec)
+        .await
+}
+
 /// The workout as `user_id` may read it: as its owner, or as a coach the
 /// owner still has, who planned the session it was logged from or was shared
 /// it.

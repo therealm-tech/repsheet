@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
+	Athlete,
 	LinkedAccount,
 	PlannedSession,
 	PlannedSessionSummary,
@@ -32,10 +33,12 @@ const marie: LinkedAccount = {
 	linkedAt: "2026-11-03T10:00:00Z",
 };
 
-const paul: LinkedAccount = {
+const paul: Athlete = {
 	id: "a1",
 	name: "Paul",
 	email: "paul@example.com",
+	managed: false,
+	weightUnit: "kg",
 	linkedAt: "2026-11-03T10:00:00Z",
 };
 

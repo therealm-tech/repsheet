@@ -103,10 +103,20 @@ export type PlanSheetMode =
 	| { kind: "new" }
 	| { kind: "edit"; block: TemplateBlock };
 
+/**
+ * An athlete a coach plans or logs for. A profile the coach manages comes
+ * with its own unit; otherwise weights show in the coach's.
+ */
+export interface SheetAthlete {
+	id: string;
+	name: string;
+	weightUnit?: WeightUnit;
+}
+
 /** A session a coach plans for one of their athletes. */
 export interface PlanTarget {
 	sessionId: string;
-	athlete: { id: string; name: string };
+	athlete: SheetAthlete;
 }
 
 /**
@@ -120,6 +130,11 @@ export type BlockSheetProps = { onClose: () => void } & (
 			mode: BlockSheetMode;
 			/** The coach who planned the session the workout is logged from. */
 			coach?: Author | null;
+			/**
+			 * The profile the workout belongs to, when the caller logs it for an
+			 * athlete they manage: their unit and history, and no comments.
+			 */
+			athlete?: SheetAthlete | null;
 			plan?: undefined;
 	  }
 	| {
@@ -127,6 +142,7 @@ export type BlockSheetProps = { onClose: () => void } & (
 			mode: PlanSheetMode;
 			workoutId?: undefined;
 			coach?: undefined;
+			athlete?: undefined;
 	  }
 );
 
@@ -280,10 +296,12 @@ function switchQuestion(name: string, mode: Mode, chosen: Choices): string {
 export function BlockSheet(props: BlockSheetProps) {
 	const { onClose } = props;
 	const { t } = useTranslation();
-	const unit = useUnit();
 	const meId = useMe().data?.id ?? "";
 	const queryClient = useQueryClient();
 	const plan = props.plan ?? null;
+	const loggedFor = props.plan ? null : (props.athlete ?? null);
+	const athlete = plan?.athlete ?? loggedFor;
+	const unit = useUnit(athlete?.weightUnit);
 	const logMode = props.plan ? null : props.mode;
 	const planMode = props.plan ? props.mode : null;
 	const workoutId = props.workoutId ?? "";
@@ -295,7 +313,7 @@ export function BlockSheet(props: BlockSheetProps) {
 	const lastTime = (exerciseId: string, chosen: Choices): LastTimeQuery =>
 		plan
 			? athletePerformanceQuery(plan.athlete.id, exerciseId, chosen)
-			: previousPerformanceQuery(exerciseId, workoutId, chosen);
+			: previousPerformanceQuery(exerciseId, workoutId, chosen, loggedFor?.id);
 
 	const [saved, setSaved] = useState<Block | null>(
 		logMode?.kind === "edit" ? logMode.block : null,
@@ -639,7 +657,7 @@ export function BlockSheet(props: BlockSheetProps) {
 						<ExercisePicker
 							onSelect={(e) => void pick(e)}
 							excludeIds={exerciseIds}
-							builtInOnly={plan !== null}
+							builtInOnly={athlete !== null}
 						/>
 						{grid && grid.exercises.length > 0 ? (
 							<button
@@ -672,9 +690,9 @@ export function BlockSheet(props: BlockSheetProps) {
 							</div>
 						) : null}
 
-						{plan ? (
+						{athlete ? (
 							<AthleteLastTime
-								athlete={plan.athlete.name}
+								athlete={athlete.name}
 								exercises={grid.exercises}
 								performances={lastPerformances.map((q) => q.data?.items[0])}
 								unit={unit}
@@ -711,9 +729,11 @@ export function BlockSheet(props: BlockSheetProps) {
 						{hasPlannedCells ? (
 							<p className="planned-legend">
 								<i aria-hidden="true" />
-								{coach
-									? t("block.plannedBy", { name: coach.name })
-									: t("block.plannedByCoach")}
+								{loggedFor
+									? t("block.plannedByYou")
+									: coach
+										? t("block.plannedBy", { name: coach.name })
+										: t("block.plannedByCoach")}
 							</p>
 						) : null}
 
@@ -937,7 +957,7 @@ export function BlockSheet(props: BlockSheetProps) {
 							</section>
 						) : null}
 
-						{grid.exercises.length > 0 && !plan ? (
+						{grid.exercises.length > 0 && !athlete ? (
 							<section
 								className="folded-threads"
 								aria-labelledby="block-comments-title"

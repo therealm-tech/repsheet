@@ -34,6 +34,9 @@ on a planned exercise starts that thread.
   other workouts you choose to share with them, and comment on their exercises; remove a coach and
   their access ends at once, while the sessions and comments stay yours; as a coach, an Athletes tab
   lists the people you coach, each with the next session planned for them
+- Athletes without an account: a coach creates a profile with just a name and a unit, plans its
+  sessions, logs them on the athlete's behalf against the athlete's own history, or sends one as
+  text through the phone's share sheet
 - Multi-user: anyone can sign up; each account only sees its own data, plus, as a coach, the
   sessions it planned and the workouts shared with it
 - A super admin, configured on the server, manages the accounts and the built-in catalog

@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlannedBlockCard } from "@/components/BlockCard";
 import { BlockSheet } from "@/components/BlockSheet";
 import type {
+	Athlete,
 	Comment,
-	LinkedAccount,
 	TemplateBlock,
 	Workout,
 } from "@/lib/api/schemas";
@@ -25,10 +25,12 @@ import {
 afterEach(() => vi.unstubAllGlobals());
 
 const marie = { id: "c1", name: "Marie" };
-const paul: LinkedAccount = {
+const paul: Athlete = {
 	id: "a1",
 	name: "Paul",
 	email: "paul@example.com",
+	managed: false,
+	weightUnit: "kg",
 	linkedAt: "2026-11-03T10:00:00Z",
 };
 const bench = exercise({ id: "e1", name: "Développé couché" });

@@ -2,12 +2,27 @@ use chrono::{DateTime, Utc};
 use sqlx::{FromRow, PgExecutor};
 use uuid::Uuid;
 
-/// The account at the other end of a coaching link, seen from one end.
+use crate::domain::WeightUnit;
+
+/// A coach at the other end of a coaching link, seen by their athlete.
 #[derive(FromRow)]
 pub struct LinkedAccountRow {
     pub id: Uuid,
     pub name: String,
     pub email: String,
+    pub linked_at: DateTime<Utc>,
+}
+
+/// An athlete at the other end of a coaching link, seen by their coach: an
+/// account, or a profile with no email that the coach manages.
+#[derive(FromRow)]
+pub struct AthleteRow {
+    pub id: Uuid,
+    pub name: String,
+    pub email: Option<String>,
+    #[sqlx(try_from = "String")]
+    pub weight_unit: WeightUnit,
+    pub managed: bool,
     pub linked_at: DateTime<Utc>,
 }
 
@@ -49,6 +64,20 @@ pub async fn is_coach(
         .await
 }
 
+/// Whether `coach_id` manages the profile of `athlete_id`; `None` when they
+/// do not coach them at all.
+pub async fn manages(
+    exec: impl PgExecutor<'_>,
+    athlete_id: Uuid,
+    coach_id: Uuid,
+) -> sqlx::Result<Option<bool>> {
+    sqlx::query_scalar(include_str!("../../queries/coaching/manages.sql"))
+        .bind(athlete_id)
+        .bind(coach_id)
+        .fetch_optional(exec)
+        .await
+}
+
 pub async fn find_coach(
     exec: impl PgExecutor<'_>,
     athlete_id: Uuid,
@@ -65,7 +94,7 @@ pub async fn find_athlete(
     exec: impl PgExecutor<'_>,
     coach_id: Uuid,
     athlete_id: Uuid,
-) -> sqlx::Result<Option<LinkedAccountRow>> {
+) -> sqlx::Result<Option<AthleteRow>> {
     sqlx::query_as(include_str!("../../queries/coaching/find_athlete.sql"))
         .bind(coach_id)
         .bind(athlete_id)
@@ -99,7 +128,7 @@ pub async fn list_athletes(
     coach_id: Uuid,
     limit: i64,
     offset: i64,
-) -> sqlx::Result<Vec<LinkedAccountRow>> {
+) -> sqlx::Result<Vec<AthleteRow>> {
     sqlx::query_as(include_str!("../../queries/coaching/list_athletes.sql"))
         .bind(coach_id)
         .bind(limit)

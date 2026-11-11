@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { BlockCard, PlannedBlockCard } from "@/components/BlockCard";
-import type { TemplateBlock, Workout } from "@/lib/api/schemas";
+import type { Athlete, TemplateBlock, Workout } from "@/lib/api/schemas";
 import { useUnit } from "@/lib/hooks";
 
 /**
@@ -12,13 +12,16 @@ export function WorkoutReadOnly({
 	workout,
 	athleteId,
 	plannedBlocks = [],
+	managedAthlete,
 }: {
 	workout: Workout;
 	athleteId: string;
 	plannedBlocks?: TemplateBlock[];
+	/** Set for a profile the caller manages: their unit, and no comments. */
+	managedAthlete?: Athlete | undefined;
 }) {
 	const { t } = useTranslation();
-	const unit = useUnit();
+	const unit = useUnit(managedAthlete?.weightUnit);
 	const logged = new Set(workout.blocks.map((b) => b.templateBlockId));
 	const skipped = plannedBlocks.filter((b) => !logged.has(b.id));
 	return (
@@ -30,6 +33,7 @@ export function WorkoutReadOnly({
 					workoutId={workout.id}
 					ownerId={athleteId}
 					unit={unit}
+					managed={managedAthlete !== undefined}
 				/>
 			))}
 			{skipped.map((block, i) => (
@@ -38,6 +42,7 @@ export function WorkoutReadOnly({
 					block={block}
 					index={workout.blocks.length + i + 1}
 					status={t("plannedSession.notLoggedBlock")}
+					unit={unit}
 				/>
 			))}
 			{workout.note ? <p className="workout-note">{workout.note}</p> : null}

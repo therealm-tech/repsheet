@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TabBar } from "@/components/TabBar";
-import type { LinkedAccount, PlannedSessionSummary } from "@/lib/api/schemas";
+import type { Athlete, PlannedSessionSummary } from "@/lib/api/schemas";
 import { tokenStore } from "@/lib/auth";
 import { formatDay, toDay } from "@/lib/dates";
 import { outlook } from "@/lib/planned";
@@ -24,17 +24,21 @@ afterEach(() => {
 	tokenStore.clear();
 });
 
-const paul: LinkedAccount = {
+const paul: Athlete = {
 	id: "a1",
 	name: "Paul",
 	email: "paul@example.com",
+	managed: false,
+	weightUnit: "kg",
 	linkedAt: "2026-11-03T10:00:00Z",
 };
 
-const lea: LinkedAccount = {
+const lea: Athlete = {
 	id: "a2",
 	name: "Léa",
 	email: "lea@example.com",
+	managed: false,
+	weightUnit: "kg",
 	linkedAt: "2026-11-03T10:00:00Z",
 };
 

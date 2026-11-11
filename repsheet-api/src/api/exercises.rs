@@ -9,7 +9,7 @@ use validator::{Validate, ValidationError};
 use crate::{
     api::{
         AppState, authenticated,
-        coaching::require_coach,
+        coaching::{Coached, require_coach},
         comments::CommentResponse,
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
@@ -89,7 +89,8 @@ pub fn routes() -> ApiRouter<AppState> {
                         "Newest first, one item per block the exercise was logged in. With \
                          `athleteId`, the times that athlete performed it in the workouts the \
                          caller reads as their coach (403 when the caller is not): shared \
-                         with them, or logged from a session they planned.",
+                         with them, or logged from a session they planned; all of them for a \
+                         profile the caller manages.",
                     )
             }),
         )
@@ -534,8 +535,8 @@ pub struct ListPerformancesQuery {
     /// instead of the caller's.
     pub athlete_id: Option<Uuid>,
     /// Only the workouts that come before this one: by day, then by creation
-    /// for a same day. What "last time" means when logging that workout. Not
-    /// with `athleteId`.
+    /// for a same day. What "last time" means when logging that workout. With
+    /// `athleteId`, only for a profile the caller manages.
     pub before_workout_id: Option<Uuid>,
     /// Only the blocks that counted the exercise in this mode.
     pub mode: Option<ModeDto>,
@@ -787,16 +788,16 @@ async fn list_performances(
 ) -> AppResult<Json<PageResponse<PerformanceResponse>>> {
     let mut conn = state.pool.acquire().await?;
     let (performer_id, coach_id) = match query.athlete_id {
-        Some(athlete_id) => {
-            if query.before_workout_id.is_some() {
+        Some(athlete_id) => match require_coach(&mut conn, &user, athlete_id).await? {
+            Coached::Managed => (athlete_id, None),
+            Coached::Account if query.before_workout_id.is_some() => {
                 return Err(AppError::Validation(vec![FieldError::new(
                     "beforeWorkoutId",
-                    "not allowed with athleteId",
+                    "not allowed with the athleteId of an athlete with an account",
                 )]));
             }
-            require_coach(&mut conn, &user, athlete_id).await?;
-            (athlete_id, Some(user.id))
-        }
+            Coached::Account => (athlete_id, Some(user.id)),
+        },
         None => (user.id, None),
     };
     db::exercises::find(&mut *conn, path.exercise_id, performer_id, user.locale)

@@ -38,6 +38,10 @@ pub enum AppError {
     /// The caller names an account that does not have them as a coach.
     #[error("this account does not have you as a coach")]
     NotCoach,
+    /// The caller coaches the athlete but does not manage their profile:
+    /// the athlete has an account of their own.
+    #[error("this athlete has an account of their own, which only they manage")]
+    NotManager,
     /// The caller may read the comment but not change it.
     #[error(
         "only the author of a comment edits it, and only they or the workout's owner delete it"
@@ -170,6 +174,11 @@ impl AppError {
             Self::NotCoach => (
                 StatusCode::FORBIDDEN,
                 "urn:repsheet:problem:not-coach",
+                "Forbidden",
+            ),
+            Self::NotManager => (
+                StatusCode::FORBIDDEN,
+                "urn:repsheet:problem:not-manager",
                 "Forbidden",
             ),
             Self::NotAuthor => (
