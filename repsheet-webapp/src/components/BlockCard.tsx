@@ -13,33 +13,29 @@ import type {
 	WorkoutSet,
 } from "@/lib/api/schemas";
 import {
-	choiceTags,
 	letter,
 	maxWorkingWeight,
 	summarizeSets,
+	unusualChoices,
 } from "@/lib/blocks";
 import type { Choices } from "@/lib/choices";
 import { formatShortDay } from "@/lib/dates";
 import { useUnit } from "@/lib/hooks";
 import { formatNumber, kgToUnit } from "@/lib/units";
 
-/** The exercise's name, followed by the equipment and grip chosen where it offers a choice. */
-function ExerciseName({
+/** The exercise's name, over the equipment and grip chosen where they depart from its defaults. */
+export function ExerciseName({
 	exercise,
 	chosen,
 }: {
 	exercise: ExerciseSummary;
 	chosen: Choices;
 }) {
+	const unusual = unusualChoices(exercise, chosen);
 	return (
 		<span className="ex-name">
 			{exercise.name}
-			{choiceTags(exercise, chosen).map((tag) => (
-				<span key={tag} className="muted">
-					{" "}
-					· {tag}
-				</span>
-			))}
+			{unusual ? <span className="ex-choices">{unusual}</span> : null}
 		</span>
 	);
 }

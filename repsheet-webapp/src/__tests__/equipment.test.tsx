@@ -12,6 +12,7 @@ import {
 	exercise,
 	mockApi,
 	newClient,
+	openChoices,
 	page,
 	performance,
 	renderRoute,
@@ -170,6 +171,7 @@ describe("BlockSheet", () => {
 			"Dernière fois à la barre (15 oct.) : 1×8 · 60 kg",
 		);
 
+		await openChoices(ui, "Développé militaire");
 		const equipment = within(
 			screen.getByRole("group", { name: "Matériel de Développé militaire" }),
 		);

@@ -90,47 +90,65 @@ export function ChoiceSwitch<T extends string>({
 
 /**
  * The switches of the choices an exercise leaves open to a block or a
- * template: its mode, its equipment and its grip.
+ * template: its mode, its equipment and its grip. `captioned` titles each
+ * one, for a panel wide enough to stack them.
  */
 export function ChoiceSwitches({
 	exercise,
 	chosen,
 	onChange,
+	captioned = false,
 }: {
 	exercise: ExerciseSummary;
 	chosen: Choices;
 	onChange: (change: ChoiceChange) => void;
+	captioned?: boolean;
 }) {
 	const { t } = useTranslation();
 	const name = exercise.name;
+	const caption = (text: string) =>
+		captioned ? (
+			<span className="choice-caption" aria-hidden="true">
+				{text}
+			</span>
+		) : null;
 	return (
 		<>
 			{hasChoice(exercise.modes, chosen.mode) ? (
-				<ChoiceSwitch
-					options={exercise.modes}
-					value={chosen.mode}
-					label={t("block.modeOf", { name })}
-					optionLabel={(mode) => t(`modesShort.${mode}`)}
-					onChange={(mode) => onChange({ mode })}
-				/>
+				<>
+					{caption(t("block.choiceMode"))}
+					<ChoiceSwitch
+						options={exercise.modes}
+						value={chosen.mode}
+						label={t("block.modeOf", { name })}
+						optionLabel={(mode) => t(`modesShort.${mode}`)}
+						onChange={(mode) => onChange({ mode })}
+					/>
+				</>
 			) : null}
 			{hasChoice(exercise.equipment, chosen.equipment) ? (
-				<ChoiceSwitch
-					options={exercise.equipment}
-					value={chosen.equipment}
-					label={t("block.equipmentOf", { name })}
-					optionLabel={equipmentLabel}
-					onChange={(equipment) => onChange({ equipment })}
-				/>
+				<>
+					{caption(t("block.choiceEquipment"))}
+					<ChoiceSwitch
+						options={exercise.equipment}
+						value={chosen.equipment}
+						label={t("block.equipmentOf", { name })}
+						optionLabel={equipmentLabel}
+						onChange={(equipment) => onChange({ equipment })}
+					/>
+				</>
 			) : null}
 			{hasChoice(exercise.grips, chosen.grip) ? (
-				<ChoiceSwitch
-					options={exercise.grips}
-					value={chosen.grip}
-					label={t("block.gripOf", { name })}
-					optionLabel={gripLabel}
-					onChange={(grip) => onChange({ grip })}
-				/>
+				<>
+					{caption(t("block.choiceGrip"))}
+					<ChoiceSwitch
+						options={exercise.grips}
+						value={chosen.grip}
+						label={t("block.gripOf", { name })}
+						optionLabel={gripLabel}
+						onChange={(grip) => onChange({ grip })}
+					/>
+				</>
 			) : null}
 		</>
 	);

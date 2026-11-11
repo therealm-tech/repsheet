@@ -7,7 +7,8 @@ import {
 	Outlet,
 	RouterProvider,
 } from "@tanstack/react-router";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import type { UserEvent } from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { vi } from "vitest";
 import type { Exercise, Performance, User } from "@/lib/api/schemas";
@@ -118,6 +119,13 @@ export function performance(
 		grip,
 		sets,
 	};
+}
+
+/** Opens the choices of a block sheet column from the chip under its name. */
+export async function openChoices(ui: UserEvent, name: string) {
+	await ui.click(
+		screen.getByRole("button", { name: new RegExp(`^${name} : .*, changer$`) }),
+	);
 }
 
 export function newClient(): QueryClient {
