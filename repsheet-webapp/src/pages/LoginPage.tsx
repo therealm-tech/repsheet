@@ -9,6 +9,7 @@ import i18n, { currentLocale, rememberLocale } from "@/i18n";
 import { api } from "@/lib/api/endpoints";
 import { errorMessage, validationMessage } from "@/lib/api/errors";
 import {
+	type Invitation,
 	type Locale,
 	type WeightUnit,
 	WeightUnitSchema,
@@ -29,12 +30,40 @@ const RegisterSchema = z.object({
 	weightUnit: WeightUnitSchema,
 });
 
-export function LoginPage() {
+/** A coach's invitation the page signs up or logs in with. */
+export interface InvitationTarget {
+	token: string;
+	invitation: Invitation;
+}
+
+/** What the coach says when inviting: who invites, and what is already waiting. */
+function InvitationHello({ invitation }: { invitation: Invitation }) {
+	const { t } = useTranslation();
+	return (
+		<p className="invite-hello">
+			<span className="avatar avatar-coach" aria-hidden="true">
+				{invitation.coachName.charAt(0).toUpperCase()}
+			</span>
+			<span>
+				{t("invite.hello", { coach: invitation.coachName })}{" "}
+				{invitation.workoutCount === 0
+					? t("invite.waitingNone")
+					: t("invite.waiting", { count: invitation.workoutCount })}
+			</span>
+		</p>
+	);
+}
+
+/**
+ * Logs in or signs up. With an invitation, it opens on sign-up with the
+ * profile's name, and logging in attaches the profile to the account.
+ */
+export function LoginPage({ invite }: { invite?: InvitationTarget } = {}) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const [mode, setMode] = useState<Mode>("login");
-	const [name, setName] = useState("");
+	const [mode, setMode] = useState<Mode>(invite ? "register" : "login");
+	const [name, setName] = useState(invite?.invitation.athleteName ?? "");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [weightUnit, setWeightUnit] = useState<WeightUnit>("kg");
@@ -50,10 +79,19 @@ export function LoginPage() {
 					password,
 					weightUnit,
 				});
-				await api.register({ ...parsed, locale: currentLocale() });
+				await api.register({
+					...parsed,
+					locale: currentLocale(),
+					...(invite ? { invitation: invite.token } : {}),
+				});
 				return api.login({ email: parsed.email, password: parsed.password });
 			}
-			return api.login(LoginSchema.parse({ email, password }));
+			const token = await api.login(LoginSchema.parse({ email, password }));
+			if (invite) {
+				tokenStore.set(token);
+				await api.acceptInvitation(invite.token);
+			}
+			return token;
 		},
 		onSuccess: (token) => {
 			queryClient.clear();
@@ -102,6 +140,7 @@ export function LoginPage() {
 				<h1 className="display auth-title">RepSheet</h1>
 				<p className="muted small">{t("login.tagline")}</p>
 			</div>
+			{invite ? <InvitationHello invitation={invite.invitation} /> : null}
 			<form className="stack" onSubmit={onSubmit} noValidate>
 				<Segmented
 					label={t("login.mode")}
@@ -170,6 +209,9 @@ export function LoginPage() {
 							]}
 						/>
 					</div>
+				) : null}
+				{invite && mode === "login" ? (
+					<p className="muted small">{t("invite.loginHint")}</p>
 				) : null}
 				{error ? <ErrorText>{error}</ErrorText> : null}
 				<button

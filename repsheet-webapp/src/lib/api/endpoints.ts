@@ -6,12 +6,14 @@ import {
 	type BlockInput,
 	BlockSchema,
 	CommentSchema,
+	CreatedInvitationSchema,
 	type CreateExerciseInput,
 	type CreatePlannedSessionInput,
 	type CreateWorkoutInput,
 	type Equipment,
 	ExerciseSchema,
 	type GripFilter,
+	InvitationSchema,
 	LinkedAccountSchema,
 	type Locale,
 	type Mode,
@@ -60,7 +62,28 @@ export const api = {
 		password: string;
 		weightUnit: WeightUnit;
 		locale: Locale;
+		/** A coach's invitation: the profile they manage becomes this account. */
+		invitation?: string;
 	}) => request("POST", "/users", UserSchema, { body, auth: false }),
+	invitation: (token: string) =>
+		request(
+			"GET",
+			`/invitations/${encodeURIComponent(token)}`,
+			InvitationSchema,
+			{ auth: false },
+		),
+	acceptInvitation: (token: string) =>
+		request(
+			"POST",
+			`/invitations/${encodeURIComponent(token)}/acceptances`,
+			LinkedAccountSchema,
+		),
+	createInvitation: (athleteId: string) =>
+		request(
+			"POST",
+			`/users/me/athletes/${athleteId}/invitations`,
+			CreatedInvitationSchema,
+		),
 	login: (body: { email: string; password: string }) =>
 		request("POST", "/tokens", TokenSchema, { body, auth: false }),
 	logout: () => requestVoid("DELETE", "/tokens/current"),

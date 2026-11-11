@@ -2,6 +2,7 @@ mod coaching;
 mod comments;
 mod exercises;
 mod extract;
+mod invitations;
 mod pagination;
 mod planned_sessions;
 mod search;
@@ -115,6 +116,7 @@ pub fn app(state: AppState) -> Router {
         .merge(workouts::routes())
         .merge(templates::routes())
         .merge(coaching::routes())
+        .merge(invitations::routes())
         .merge(planned_sessions::routes())
         .merge(workout_shares::routes())
         .merge(comments::routes())

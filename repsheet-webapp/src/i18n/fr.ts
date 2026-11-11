@@ -413,7 +413,7 @@ export const fr = {
 	athletes: {
 		add: "＋ Ajouter un athlète",
 		addIntro:
-			"Une fiche pour quelqu'un qui n'a pas de compte : tu prépares ses séances et tu les saisis pour lui.",
+			"Une fiche pour quelqu'un qui n'a pas de compte : tu prépares ses séances et tu les saisis pour lui. Tu pourras l'inviter plus tard, il retrouvera tout.",
 		addTitle: "Ajouter un athlète",
 		create: "Créer la fiche",
 		empty: "Personne ne t'a encore ajouté comme coach.",
@@ -451,17 +451,38 @@ export const fr = {
 		notePlaceholder: "Pour toute la séance : échauffement, objectif…",
 		send: "Envoyer",
 		whatWasLogged: "Ce qui a été noté",
-		copied: "Copié ✓",
-		copy: "Copier",
 		messageOutro: "Dis-moi tes charges et ton ressenti en retour !",
 		resume: "▶ Reprendre la séance avec {{name}}",
-		share: "Partager…",
-		shareFailed:
-			"Impossible de copier le message : sélectionne-le pour le copier.",
-		shareHint:
-			"« Partager… » ouvre la feuille de partage du téléphone : WhatsApp, SMS, e-mail…",
 		start: "▶ Démarrer la séance avec {{name}}",
 		sendTo: "Envoyer à {{name}}",
+	},
+	invite: {
+		accept: "Rattacher à mon compte",
+		cardIntro:
+			"Avec son compte, il verra ses séances, les saisira lui-même et gardera tout son historique.",
+		cardTitle: "Inviter {{name}} sur RepSheet",
+		create: "Créer un lien d'invitation",
+		expired:
+			"Ce lien d'invitation n'est plus valable. Demande un nouveau lien à ton coach.",
+		hello: "{{coach}} t'invite sur RepSheet.",
+		loginHint: "Connecte-toi : ta fiche sera rattachée à ton compte.",
+		message:
+			"{{coach}} t'invite sur RepSheet pour suivre tes séances : {{link}}",
+		sheetIntro:
+			"Quand {{name}} crée son compte avec ce lien, sa fiche devient son compte : ses séances faites, celles que tu as prévues, et toi comme coach.",
+		sheetTitle: "Inviter {{name}}",
+		validity:
+			"Valable 7 jours, une seule fois. Un nouveau lien annule le précédent.",
+		waiting_one: "Ta séance et les prochaines t'attendent déjà.",
+		waiting_other: "Tes {{count}} séances et les prochaines t'attendent déjà.",
+		waitingNone: "Tes prochaines séances t'attendent déjà.",
+	},
+	sending: {
+		copied: "Copié ✓",
+		copy: "Copier",
+		failed: "Impossible de copier le message : sélectionne-le pour le copier.",
+		hint: "« Partager… » ouvre la feuille de partage du téléphone : WhatsApp, SMS, e-mail…",
+		share: "Partager…",
 	},
 	share: {
 		intro:

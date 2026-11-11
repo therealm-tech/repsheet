@@ -13,11 +13,12 @@ use crate::{
     api::{
         AppState, authenticated,
         extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        invitations::take_for_sign_up,
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
         search::search_text,
     },
     auth::{self, AuthUser},
-    db::{self, users::UserRow},
+    db::{self, invitations::NewAccount, users::UserRow},
     domain::{Locale, Role, WeightUnit},
     error::{AppError, AppResult, Conflict, conflict_on_unique},
 };
@@ -30,7 +31,11 @@ pub fn routes() -> ApiRouter<AppState> {
                 op.tag("Authentication")
                     .id("createUser")
                     .summary("Create an account")
-                    .description("Then obtain a token with `POST /v1/tokens`.")
+                    .description(
+                        "Then obtain a token with `POST /v1/tokens`. With an `invitation`, \
+                         the invited profile becomes the account, with its workouts, its \
+                         planned sessions and its coach.",
+                    )
             })
             .get_with(list, |op| {
                 authenticated(op)
@@ -187,6 +192,9 @@ pub struct CreateUserRequest {
     /// exchanged in kilograms.
     pub weight_unit: WeightUnitDto,
     pub locale: LocaleDto,
+    /// A token from a coach's invitation, to turn the profile they manage
+    /// into this account. 422 when it is unknown, used or expired.
+    pub invitation: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema, Validate)]
@@ -270,17 +278,34 @@ async fn create(
     ValidJson(request): ValidJson<CreateUserRequest>,
 ) -> AppResult<Created<UserResponse>> {
     let password_hash = auth::hash_password(request.password).await?;
-    let row = db::users::insert(
-        &state.pool,
-        request.name.trim(),
-        request.email.trim(),
-        &password_hash,
-        request.weight_unit.into(),
-        request.locale.into(),
-    )
-    .await
-    .map_err(|e| conflict_on_unique(e, Conflict::EmailTaken))?;
-    tracing::info!(user_id = %row.id, "account created");
+    let mut tx = state.pool.begin().await?;
+    let row = if let Some(token) = request.invitation.as_deref() {
+        let taken = take_for_sign_up(&mut tx, token).await?;
+        let account = NewAccount {
+            name: request.name.trim(),
+            email: request.email.trim(),
+            password_hash: &password_hash,
+            weight_unit: request.weight_unit.into(),
+            locale: request.locale.into(),
+        };
+        db::invitations::claim(&mut *tx, taken.athlete_id, &account)
+            .await
+            .map_err(|e| conflict_on_unique(e, Conflict::EmailTaken))?
+            .ok_or_else(|| anyhow::anyhow!("an invited profile is no longer managed"))?
+    } else {
+        db::users::insert(
+            &mut *tx,
+            request.name.trim(),
+            request.email.trim(),
+            &password_hash,
+            request.weight_unit.into(),
+            request.locale.into(),
+        )
+        .await
+        .map_err(|e| conflict_on_unique(e, Conflict::EmailTaken))?
+    };
+    tx.commit().await?;
+    tracing::info!(user_id = %row.id, invited = request.invitation.is_some(), "account created");
     Ok(Created {
         location: "/v1/users/me".to_owned(),
         body: row.into(),

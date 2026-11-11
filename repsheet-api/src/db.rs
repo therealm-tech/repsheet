@@ -4,6 +4,7 @@
 pub mod coaching;
 pub mod comments;
 pub mod exercises;
+pub mod invitations;
 pub mod planned_sessions;
 pub mod templates;
 pub mod tokens;

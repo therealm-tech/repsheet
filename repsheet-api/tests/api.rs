@@ -4319,3 +4319,269 @@ async fn profiles_go_with_the_coach_who_manages_them(pool: PgPool) {
         .unwrap();
     assert_eq!(left, 0, "the profile goes with the coach who manages it");
 }
+
+/// Invites the profile `athlete_id` of `coach`; returns the token.
+async fn invite(app: &TestApp, coach: &str, athlete_id: &str) -> String {
+    let (status, invitation) = app
+        .post(
+            &format!("/v1/users/me/athletes/{athlete_id}/invitations"),
+            coach,
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{invitation}");
+    invitation["token"].as_str().unwrap().to_owned()
+}
+
+/// A profile with a workout the coach logged freely and a session they
+/// planned; returns the coach's token, the profile's id and the workout's.
+async fn profile_with_history(app: &TestApp) -> (String, String, String) {
+    let (coach, athlete_id) = managed_athlete(app).await;
+    let (status, workout) = app
+        .post(
+            "/v1/workouts",
+            &coach,
+            json!({ "athleteId": athlete_id, "name": "Legs", "performedOn": "2026-11-04" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = plan_session(app, &coach, &athlete_id).await;
+    assert_eq!(status, StatusCode::CREATED);
+    (
+        coach,
+        athlete_id,
+        workout["id"].as_str().unwrap().to_owned(),
+    )
+}
+
+fn invited_sign_up(email: &str, invitation: &str) -> Value {
+    json!({
+        "name": "Marc Dupont",
+        "email": email,
+        "password": "correct horse",
+        "weightUnit": "kg",
+        "locale": "en",
+        "invitation": invitation
+    })
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn an_invited_athlete_signs_up_into_their_profile(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (coach, athlete_id, workout_id) = profile_with_history(&app).await;
+    let token = invite(&app, &coach, &athlete_id).await;
+
+    let (status, invitation) = app
+        .send(Method::GET, &format!("/v1/invitations/{token}"), None, None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{invitation}");
+    assert_eq!(invitation["athleteName"], "Marc");
+    assert_eq!(invitation["coachName"], "Alex");
+    assert_eq!(invitation["workoutCount"], 1);
+
+    let (status, account) = app
+        .send(
+            Method::POST,
+            "/v1/users",
+            None,
+            Some(invited_sign_up("marc@example.com", &token)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{account}");
+    assert_eq!(
+        account["id"],
+        athlete_id.as_str(),
+        "the profile is the account"
+    );
+    assert_eq!(account["name"], "Marc Dupont");
+    assert_eq!(account["locale"], "en");
+    let (status, login) = app.log_in("marc@example.com", "correct horse").await;
+    assert_eq!(status, StatusCode::CREATED);
+    let marc = login["token"].as_str().unwrap();
+
+    let (_, workouts) = app.get("/v1/workouts", marc).await;
+    assert_eq!(workouts["total"], 1);
+    let (_, planned) = app.get("/v1/planned-sessions", marc).await;
+    assert_eq!(planned["total"], 1, "the sessions planned for the profile");
+    let (_, coaches) = app.get("/v1/users/me/coaches", marc).await;
+    assert_eq!(coaches["items"][0]["name"], "Alex");
+
+    let (_, athlete) = app
+        .get(&format!("/v1/users/me/athletes/{athlete_id}"), &coach)
+        .await;
+    assert_eq!(athlete["managed"], false);
+    assert_eq!(athlete["email"], "marc@example.com");
+    let workout_uri = format!("/v1/workouts/{workout_id}");
+    assert_eq!(
+        app.get(&workout_uri, &coach).await.0,
+        StatusCode::OK,
+        "the coach still reads what they logged, now shared"
+    );
+    let (status, _) = app
+        .put(
+            &workout_uri,
+            &coach,
+            json!({ "name": "Mine", "performedOn": "2026-11-04" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "but no longer writes it");
+    let (status, problem) = app
+        .post(
+            "/v1/workouts",
+            &coach,
+            json!({ "athleteId": athlete_id, "name": "Legs", "performedOn": "2026-11-12" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(problem["type"], "urn:repsheet:problem:not-manager");
+
+    let (status, problem) = app
+        .send(
+            Method::POST,
+            "/v1/users",
+            None,
+            Some(invited_sign_up("other@example.com", &token)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "used once only");
+    assert_eq!(field_paths(&problem), vec!["invitation"]);
+    assert_eq!(
+        app.send(Method::GET, &format!("/v1/invitations/{token}"), None, None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn an_invited_athlete_with_an_account_merges_their_profile(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (coach, athlete_id, workout_id) = profile_with_history(&app).await;
+    let token = invite(&app, &coach, &athlete_id).await;
+    let marc = app.sign_up("marc@example.com").await;
+    let (status, _) = app
+        .post(
+            "/v1/workouts",
+            &marc,
+            json!({ "name": "Own", "performedOn": "2026-11-01" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let acceptances = format!("/v1/invitations/{token}/acceptances");
+    let (status, problem) = app.post(&acceptances, &coach, json!({})).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+    assert_eq!(problem["type"], "urn:repsheet:problem:own-coach");
+
+    let (status, linked) = app.post(&acceptances, &marc, json!({})).await;
+    assert_eq!(status, StatusCode::CREATED, "{linked}");
+    assert_eq!(linked["email"], "lou@example.com");
+    let (_, workouts) = app.get("/v1/workouts", &marc).await;
+    assert_eq!(workouts["total"], 2, "the profile's history joins theirs");
+    let (_, planned) = app.get("/v1/planned-sessions", &marc).await;
+    assert_eq!(planned["total"], 1);
+
+    let (_, athletes) = app.get("/v1/users/me/athletes", &coach).await;
+    assert_eq!(athletes["total"], 1, "the profile is gone");
+    assert_eq!(athletes["items"][0]["email"], "marc@example.com");
+    assert_eq!(
+        app.get(&format!("/v1/workouts/{workout_id}"), &coach)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let (_, shared) = app
+        .get(
+            &format!("/v1/workouts?athleteId={}", app.user_id(&marc).await),
+            &coach,
+        )
+        .await;
+    assert_eq!(shared["total"], 1, "only what the coach logged is shared");
+
+    let (status, _) = app.post(&acceptances, &marc, json!({})).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn invitations_are_the_managers_and_expire(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (coach, athlete_id) = managed_athlete(&app).await;
+    let first = invite(&app, &coach, &athlete_id).await;
+    let second = invite(&app, &coach, &athlete_id).await;
+    assert_ne!(first, second);
+    assert_eq!(
+        app.send(Method::GET, &format!("/v1/invitations/{first}"), None, None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND,
+        "a new link replaces the previous one"
+    );
+
+    let (_, coach_of_account, account_id) = coached_athlete(&app).await;
+    let (status, problem) = app
+        .post(
+            &format!("/v1/users/me/athletes/{account_id}/invitations"),
+            &coach_of_account,
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(problem["type"], "urn:repsheet:problem:not-manager");
+    let (status, problem) = app
+        .post(
+            &format!("/v1/users/me/athletes/{athlete_id}/invitations"),
+            &coach_of_account,
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(problem["type"], "urn:repsheet:problem:not-coach");
+
+    sqlx::query("UPDATE athlete_invitations SET expires_at = now() - INTERVAL '1 second'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        app.send(
+            Method::GET,
+            &format!("/v1/invitations/{second}"),
+            None,
+            None
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    let (status, _) = app
+        .send(
+            Method::POST,
+            "/v1/users",
+            None,
+            Some(invited_sign_up("marc@example.com", &second)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn an_invited_sign_up_with_a_taken_email_keeps_the_invitation(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (coach, athlete_id) = managed_athlete(&app).await;
+    let token = invite(&app, &coach, &athlete_id).await;
+    let (status, problem) = app
+        .send(
+            Method::POST,
+            "/v1/users",
+            None,
+            Some(invited_sign_up("lou@example.com", &token)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(problem["type"], "urn:repsheet:problem:email-taken");
+    assert_eq!(
+        app.send(Method::GET, &format!("/v1/invitations/{token}"), None, None)
+            .await
+            .0,
+        StatusCode::OK
+    );
+}
