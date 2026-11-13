@@ -276,6 +276,42 @@ async fn the_catalog_offers_the_zottman_curl(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn the_catalog_offers_lunge_variants_push_press_and_pullover(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+
+    for (query, name, unilateral) in [
+        ("arrière", "Fentes arrière", true),
+        ("avant", "Fentes avant", true),
+        ("statiques", "Fentes statiques", true),
+        ("push press", "Push press", false),
+        ("pull over", "Pull over", false),
+    ] {
+        let (status, page) = app
+            .get(
+                &format!("/v1/exercises?q={}", query.replace(' ', "%20")),
+                &token,
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(page["total"], 1, "{name}");
+        let exercise = &page["items"][0];
+        assert_eq!(exercise["name"], name);
+        assert_eq!(exercise["unilateral"], unilateral, "{name}");
+        assert_eq!(exercise["custom"], false, "{name}");
+    }
+
+    let (_, page) = app.get("/v1/exercises?q=fentes", &token).await;
+    let names: Vec<&str> = page["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"Fentes"));
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
 async fn custom_exercises_are_private_and_unique(pool: PgPool) {
     let app = TestApp::new(pool);
     let alex = app.sign_up("alex@example.com").await;
