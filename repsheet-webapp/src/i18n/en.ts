@@ -137,6 +137,7 @@ export const en: Catalog = {
 		plannedLabel: "Planned block {{position}}",
 		preparing: "Preparing the block…",
 		removeExercise: "Remove {{name}}",
+		replaceExercise: "Replace {{name}}",
 		round: "Round {{round}}",
 		rounds_one: "{{count}} round",
 		rounds_other: "{{count}} rounds",

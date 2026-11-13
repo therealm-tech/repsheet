@@ -7,7 +7,7 @@ import type {
 	Workout,
 } from "@/lib/api/schemas";
 import { roundCount } from "@/lib/blocks";
-import type { Choices } from "@/lib/choices";
+import { type Choices, startingChoices } from "@/lib/choices";
 import { targetFromSets } from "@/lib/grid";
 
 export interface DraftExercise extends Choices {
@@ -37,6 +37,22 @@ let counter = 0;
 export function newKey(): string {
 	counter += 1;
 	return `draft-${counter}`;
+}
+
+/**
+ * `exercise` in place of the entry's, with its target and instruction, done
+ * the same way where it allows it and its default way otherwise.
+ */
+export function replaceDraftExercise(
+	entry: DraftExercise,
+	exercise: ExerciseSummary,
+): DraftExercise {
+	const { mode, equipment, grip } = entry;
+	return {
+		...entry,
+		exercise,
+		...startingChoices(exercise, { mode, equipment, grip }),
+	};
 }
 
 export function emptyDraft(): Draft {

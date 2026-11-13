@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 use sqlx::{FromRow, PgConnection, PgExecutor};
@@ -387,15 +387,15 @@ pub async fn insert_block(
     Ok(block)
 }
 
-/// The exercises of block `id` of workout `workout_id`, by block exercise id,
-/// with the exercise each one is; `None` when the workout has no such block.
+/// The block exercise ids of block `id` of workout `workout_id`; `None` when
+/// the workout has no such block.
 pub async fn block_exercise_ids(
     exec: impl PgExecutor<'_>,
     id: Uuid,
     workout_id: Uuid,
-) -> sqlx::Result<Option<HashMap<Uuid, Uuid>>> {
-    let rows: Vec<(Option<Uuid>, Option<Uuid>)> =
-        sqlx::query_as(include_str!("../../queries/blocks/exercise_ids.sql"))
+) -> sqlx::Result<Option<HashSet<Uuid>>> {
+    let rows: Vec<Option<Uuid>> =
+        sqlx::query_scalar(include_str!("../../queries/blocks/exercise_ids.sql"))
             .bind(id)
             .bind(workout_id)
             .fetch_all(exec)
@@ -403,15 +403,12 @@ pub async fn block_exercise_ids(
     if rows.is_empty() {
         return Ok(None);
     }
-    Ok(Some(
-        rows.into_iter()
-            .filter_map(|(id, exercise_id)| Some((id?, exercise_id?)))
-            .collect(),
-    ))
+    Ok(Some(rows.into_iter().flatten().collect()))
 }
 
 /// Replaces the block's exercises and sets. An exercise carrying the `id` of
-/// one of the block's keeps its identity, and what hangs off it; the others
+/// one of the block's keeps its identity, and what hangs off it, even when it
+/// is now another exercise; the others
 /// are created, and the block's exercises left out are deleted.
 pub async fn update_block(
     conn: &mut PgConnection,
@@ -468,6 +465,7 @@ async fn write_block_exercises(
                 .bind(id)
                 .bind(block_id)
                 .bind::<i32>(position)
+                .bind(exercise.exercise_id)
                 .bind(exercise.mode.as_str())
                 .bind(exercise.equipment.as_str())
                 .bind(exercise.grip.map(Grip::as_str))

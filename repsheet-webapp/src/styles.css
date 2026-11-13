@@ -1274,7 +1274,7 @@ ol {
 	max-width: 100%;
 }
 
-/* The chip may use the room the padding keeps for the remove button. */
+/* The chip may use the room the padding keeps for the replace and remove buttons. */
 .choice-chip {
 	max-width: calc(100% + 32px);
 	margin: 4px -16px 0;
@@ -1319,7 +1319,8 @@ ol {
 	padding: 6px 4px;
 }
 
-.grid-head-remove {
+.grid-head-remove,
+.grid-head-replace {
 	position: absolute;
 	top: 0;
 	right: 0;
@@ -1331,8 +1332,15 @@ ol {
 	color: var(--muted);
 }
 
+.grid-head-replace {
+	right: auto;
+	left: 0;
+}
+
 .grid-head-remove:hover,
-.grid-head-remove:focus-visible {
+.grid-head-remove:focus-visible,
+.grid-head-replace:hover,
+.grid-head-replace:focus-visible {
 	background: var(--surface-2);
 	color: var(--ink);
 }

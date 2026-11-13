@@ -70,6 +70,8 @@ import {
 	primaryField,
 	removeExercise,
 	removeRound,
+	replaceExercise,
+	replacementFor,
 	setCell,
 	stepFor,
 	stepValue,
@@ -350,6 +352,8 @@ export function BlockSheet(props: BlockSheetProps) {
 	const [picking, setPicking] = useState(
 		(logMode?.kind === "new" && !templateBlock) || planMode?.kind === "new",
 	);
+	/** The column whose exercise the picker replaces, by `columnId`. */
+	const [replacing, setReplacing] = useState<number | null>(null);
 	const [active, setActive] = useState<Active | null>(() =>
 		templateBlock && fromPlannedSets ? { row: 0, col: 0 } : null,
 	);
@@ -489,6 +493,11 @@ export function BlockSheet(props: BlockSheetProps) {
 
 	async function pick(exercise: ExerciseSummary) {
 		setPicking(false);
+		if (replacing !== null) {
+			setReplacing(null);
+			await replace(replacing, exercise);
+			return;
+		}
 		const added = withChoices(exercise);
 		const lastSets = await lastSetsIn(added.id, added.chosen);
 		setGrid((current) =>
@@ -500,6 +509,22 @@ export function BlockSheet(props: BlockSheetProps) {
 			),
 		);
 		setFocusExercise(exercise.id);
+	}
+
+	async function replace(columnId: number, exercise: ExerciseSummary) {
+		const current = grid?.exercises.find((e) => e.columnId === columnId);
+		if (!current) {
+			return;
+		}
+		const replacement = replacementFor(current, exercise);
+		const lastSets = await lastSetsIn(replacement.id, replacement.chosen);
+		setGrid((latest) => {
+			const col =
+				latest?.exercises.findIndex((e) => e.columnId === columnId) ?? -1;
+			return latest && col >= 0
+				? replaceExercise(latest, col, replacement, lastSets, unit)
+				: latest;
+		});
 	}
 
 	async function applySwitch({
@@ -621,6 +646,7 @@ export function BlockSheet(props: BlockSheetProps) {
 	const switching = pendingSwitch
 		? grid?.exercises[pendingSwitch.col]
 		: undefined;
+	const replaced = grid?.exercises.find((e) => e.columnId === replacing);
 	const pending = save.isPending || savePlan.isPending;
 	const editing = logMode?.kind === "edit" || planMode?.kind === "edit";
 
@@ -654,6 +680,11 @@ export function BlockSheet(props: BlockSheetProps) {
 			<div className="sheet-body">
 				{picking ? (
 					<>
+						{replaced ? (
+							<p className="small muted">
+								{t("block.replaceExercise", { name: replaced.name })}
+							</p>
+						) : null}
 						<ExercisePicker
 							onSelect={(e) => void pick(e)}
 							excludeIds={exerciseIds}
@@ -663,7 +694,10 @@ export function BlockSheet(props: BlockSheetProps) {
 							<button
 								type="button"
 								className="btn"
-								onClick={() => setPicking(false)}
+								onClick={() => {
+									setPicking(false);
+									setReplacing(null);
+								}}
 							>
 								{t("block.backToBlock")}
 							</button>
@@ -796,6 +830,22 @@ export function BlockSheet(props: BlockSheetProps) {
 													{summary} {open ? "▴" : "▾"}
 												</button>
 											) : null}
+											<button
+												type="button"
+												className="grid-head-replace"
+												aria-label={t("block.replaceExercise", {
+													name: exercise.name,
+												})}
+												onClick={() => {
+													setReplacing(exercise.columnId);
+													setPicking(true);
+													setActive(null);
+													setPendingSwitch(null);
+													setChoicesOpen(null);
+												}}
+											>
+												⇄
+											</button>
 											<button
 												type="button"
 												className="grid-head-remove"

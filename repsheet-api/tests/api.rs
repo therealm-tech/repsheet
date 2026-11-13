@@ -3646,14 +3646,9 @@ async fn block_exercises_keep_their_identity_across_updates(pool: PgPool) {
     assert_ne!(exercises[1]["id"], incline_id.as_str(), "squat is new");
     assert_eq!(exercises.as_array().unwrap().len(), 2, "incline is gone");
 
-    let squat_id = exercises[1]["id"].as_str().unwrap();
     for (exercises, field) in [
         (
             json!([{ "id": incline_id, "exerciseId": incline, "sets": set(8) }]),
-            "exercises[0].id",
-        ),
-        (
-            json!([{ "id": squat_id, "exerciseId": flyes, "sets": set(8) }]),
             "exercises[0].id",
         ),
         (
@@ -3690,6 +3685,78 @@ async fn block_exercises_keep_their_identity_across_updates(pool: PgPool) {
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn a_replaced_block_exercise_keeps_its_identity_and_comments(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let squat = app.exercise_id(&token, "Squat").await;
+    let crunch = app.exercise_id(&token, "Crunch").await;
+    let plank = app.exercise_id(&token, "Planche").await;
+    let workout = new_workout(&app, &token, "2026-10-22").await;
+    let (status, block) = app
+        .post(
+            &format!("/v1/workouts/{workout}/blocks"),
+            &token,
+            json!({ "exercises": [{
+                "exerciseId": squat,
+                "sets": [{ "round": 1, "reps": 5, "weightKg": 100.0 }]
+            }]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = block["exercises"][0]["id"].clone();
+    comment(&app, &token, &id, "Gêne au genou").await;
+    let block_uri = format!(
+        "/v1/workouts/{workout}/blocks/{}",
+        block["id"].as_str().unwrap()
+    );
+
+    for (exercise, fields) in [
+        (
+            json!({ "exerciseId": plank, "mode": "reps", "sets": [{ "round": 1, "reps": 5 }] }),
+            vec!["exercises[0].mode"],
+        ),
+        (
+            json!({ "exerciseId": crunch, "equipment": "barbell", "sets": [{ "round": 1, "reps": 5 }] }),
+            vec!["exercises[0].equipment"],
+        ),
+        (
+            json!({ "exerciseId": crunch, "sets": [{ "round": 1, "reps": 5, "weightKg": 100.0 }] }),
+            vec!["exercises[0].sets[0].weightKg"],
+        ),
+    ] {
+        let mut exercise = exercise;
+        exercise["id"] = id.clone();
+        let (status, problem) = app
+            .put(&block_uri, &token, json!({ "exercises": [exercise] }))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{exercise}");
+        assert_eq!(field_paths(&problem), fields);
+    }
+
+    let (status, updated) = app
+        .put(
+            &block_uri,
+            &token,
+            json!({ "exercises": [{
+                "id": id, "exerciseId": crunch, "sets": [{ "round": 1, "reps": 5 }]
+            }]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    let replaced = &updated["exercises"][0];
+    assert_eq!(replaced["id"], id);
+    assert_eq!(replaced["exercise"]["id"], crunch.as_str());
+    assert_eq!(replaced["equipment"], "bodyweight");
+    assert_eq!(replaced["sets"][0]["reps"], 5);
+    assert_eq!(replaced["comments"][0]["text"], "Gêne au genou");
+
+    let (_, history) = app
+        .get(&format!("/v1/exercises/{squat}/performances"), &token)
+        .await;
+    assert_eq!(history["total"], 0, "the squat was never performed");
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]

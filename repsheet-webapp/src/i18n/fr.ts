@@ -136,6 +136,7 @@ export const fr = {
 		plannedLabel: "Bloc prévu {{position}}",
 		preparing: "Préparation du bloc…",
 		removeExercise: "Retirer {{name}}",
+		replaceExercise: "Remplacer {{name}}",
 		round: "Tour {{round}}",
 		rounds_one: "{{count}} tour",
 		rounds_other: "{{count}} tours",
