@@ -12,6 +12,7 @@ SELECT
     e.default_grip,
     e.unilateral,
     exercise_name(e.name_fr, e.name_en, $3) AS name,
+    exercise_labels_of(e.id, $2) AS labels,
     (
         SELECT max(w.performed_on)
         FROM block_exercises AS be

@@ -94,6 +94,7 @@ export function exercise(
 		defaultGrip: null,
 		unilateral: false,
 		custom: false,
+		labels: [],
 		lastUsedOn: null,
 		names: { fr: overrides.name, en: null },
 		...overrides,

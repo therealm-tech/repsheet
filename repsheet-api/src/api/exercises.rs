@@ -11,7 +11,8 @@ use crate::{
         AppState, authenticated,
         coaching::{Coached, require_coach},
         comments::CommentResponse,
-        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank},
+        exercise_labels::MAX_LABEL_LENGTH,
+        extract::{Created, PathParams, ValidJson, ValidQuery, not_blank, trimmed},
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
         search::search_text,
         workouts::{BlockKindDto, SetResponse},
@@ -19,7 +20,10 @@ use crate::{
     auth::AuthUser,
     db::{
         self,
-        exercises::{ExerciseRow, ExerciseSummaryRow, GripFilter, NewExercise, PerformanceFilter},
+        exercises::{
+            ExerciseFilter, ExerciseRow, ExerciseSummaryRow, GripFilter, NewExercise,
+            PerformanceFilter,
+        },
     },
     domain::{BlockKind, Choices, Equipment, Grip, Load, Mode, TextEnum},
     error::{AppError, AppResult, Conflict, FieldError, conflict_on_reference, conflict_on_unique},
@@ -288,6 +292,9 @@ pub struct ExerciseResponse {
     pub unilateral: bool,
     /// Created by the user rather than part of the built-in catalog.
     pub custom: bool,
+    /// The user's own labels on the exercise, in alphabetical order; nobody
+    /// else sees them.
+    pub labels: Vec<String>,
     /// Day of the user's latest workout that includes the exercise.
     pub last_used_on: Option<NaiveDate>,
 }
@@ -310,6 +317,7 @@ impl From<ExerciseRow> for ExerciseResponse {
             default_grip: row.default_grip.map(Into::into),
             unilateral: row.unilateral,
             custom: row.owner_id.is_some(),
+            labels: row.labels,
             last_used_on: row.last_used_on,
         }
     }
@@ -365,6 +373,10 @@ pub struct ListExercisesQuery {
     /// Case- and accent-insensitive search in the name
     #[validate(length(max = 100))]
     pub q: Option<String>,
+    /// Only the exercises the user put this label on, compared ignoring case
+    /// and accents
+    #[validate(length(max = MAX_LABEL_LENGTH))]
+    pub label: Option<String>,
     #[serde(default)]
     pub sort: ExerciseSortDto,
     /// 1-based page number (default 1)
@@ -583,18 +595,22 @@ async fn list(
         per_page: query.per_page,
     };
     let search = search_text(query.q.as_deref());
+    let filter = ExerciseFilter {
+        user_id: user.id,
+        search: search.as_deref(),
+        label: trimmed(query.label.as_deref()),
+    };
     let by_last_use = matches!(query.sort, ExerciseSortDto::LastUsedDesc);
     let rows = db::exercises::list(
         &state.pool,
-        user.id,
-        search.as_deref(),
+        &filter,
         by_last_use,
         user.locale,
         paging.limit(),
         paging.offset(),
     )
     .await?;
-    let total = db::exercises::count(&state.pool, user.id, search.as_deref()).await?;
+    let total = db::exercises::count(&state.pool, &filter).await?;
     Ok(Json(paging.respond(
         rows.into_iter().map(Into::into).collect(),
         total,

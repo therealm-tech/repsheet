@@ -4827,3 +4827,187 @@ async fn only_the_manager_merges_a_profile_into_an_athlete_they_coach(pool: PgPo
     let (_, athletes) = app.get("/v1/users/me/athletes", &coach).await;
     assert_eq!(athletes["total"], 3, "nothing was merged");
 }
+
+/// The names of the exercises a list returns.
+fn names(page: &Value) -> Vec<&str> {
+    page["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect()
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn labels_exercises_and_filters_by_label(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let squat = app.exercise_id(&token, "Squat").await;
+    let bench = app.exercise_id(&token, "Développé couché").await;
+    let (_, arnold) = app
+        .post(
+            "/v1/exercises",
+            &token,
+            json!({ "names": { "fr": "Développé Arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
+        )
+        .await;
+    let arnold = arnold["id"].as_str().unwrap();
+
+    let (status, body) = app
+        .put(
+            &format!("/v1/exercises/{bench}/labels"),
+            &token,
+            json!({ "labels": [" Push ", "Programme A", "push"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "labels": ["Programme A", "Push"] }));
+    let (status, body) = app
+        .put(
+            &format!("/v1/exercises/{arnold}/labels"),
+            &token,
+            json!({ "labels": ["PUSH"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({ "labels": ["Push"] }),
+        "keeps the spelling the label already has"
+    );
+    app.put(
+        &format!("/v1/exercises/{squat}/labels"),
+        &token,
+        json!({ "labels": ["Programme A"] }),
+    )
+    .await;
+
+    let (_, exercise) = app.get(&format!("/v1/exercises/{bench}"), &token).await;
+    assert_eq!(exercise["labels"], json!(["Programme A", "Push"]));
+    let (_, page) = app.get("/v1/exercises?label=push", &token).await;
+    assert_eq!(names(&page), ["Développé Arnold", "Développé couché"]);
+    assert_eq!(page["total"], 2);
+    let (_, page) = app
+        .get("/v1/exercises?label=programme%20a&q=squat", &token)
+        .await;
+    assert_eq!(names(&page), ["Squat"]);
+    assert_eq!(page["items"][0]["labels"], json!(["Programme A"]));
+
+    let (status, labels) = app.get("/v1/exercise-labels", &token).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        labels["items"],
+        json!([
+            { "name": "Programme A", "exerciseCount": 2 },
+            { "name": "Push", "exerciseCount": 2 },
+        ])
+    );
+    assert_eq!(labels["total"], 2);
+
+    let (status, body) = app
+        .put(
+            &format!("/v1/exercises/{bench}/labels"),
+            &token,
+            json!({ "labels": ["Programme A"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "labels": ["Programme A"] }));
+    let (_, page) = app.get("/v1/exercises?label=Push", &token).await;
+    assert_eq!(names(&page), ["Développé Arnold"]);
+
+    assert_eq!(
+        app.delete(&format!("/v1/exercises/{arnold}"), &token).await,
+        StatusCode::NO_CONTENT
+    );
+    app.put(
+        &format!("/v1/exercises/{squat}/labels"),
+        &token,
+        json!({ "labels": [] }),
+    )
+    .await;
+    let (_, labels) = app.get("/v1/exercise-labels", &token).await;
+    assert_eq!(
+        labels["items"],
+        json!([{ "name": "Programme A", "exerciseCount": 1 }])
+    );
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn labels_are_private_to_their_user(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, _) = coached_athlete(&app).await;
+    let bench = app.exercise_id(&athlete, "Développé couché").await;
+    let (_, own) = app
+        .post(
+            "/v1/exercises",
+            &athlete,
+            json!({ "names": { "fr": "Développé Arnold" }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] }),
+        )
+        .await;
+    let own = own["id"].as_str().unwrap();
+    app.put(
+        &format!("/v1/exercises/{bench}/labels"),
+        &athlete,
+        json!({ "labels": ["Push"] }),
+    )
+    .await;
+
+    let (_, exercise) = app.get(&format!("/v1/exercises/{bench}"), &coach).await;
+    assert_eq!(exercise["labels"], json!([]));
+    let (_, page) = app.get("/v1/exercises?label=push", &coach).await;
+    assert_eq!(page["total"], 0);
+    let (_, labels) = app.get("/v1/exercise-labels", &coach).await;
+    assert_eq!(labels["total"], 0);
+
+    let (status, body) = app
+        .put(
+            &format!("/v1/exercises/{bench}/labels"),
+            &coach,
+            json!({ "labels": ["Pecs"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "labels": ["Pecs"] }));
+    let (_, exercise) = app.get(&format!("/v1/exercises/{bench}"), &athlete).await;
+    assert_eq!(
+        exercise["labels"],
+        json!(["Push"]),
+        "a catalog exercise's labels are per user"
+    );
+
+    let (status, _) = app
+        .put(
+            &format!("/v1/exercises/{own}/labels"),
+            &coach,
+            json!({ "labels": ["Pecs"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn validates_labels(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let bench = app.exercise_id(&token, "Développé couché").await;
+    let uri = format!("/v1/exercises/{bench}/labels");
+    let too_many: Vec<String> = (0..11).map(|i| format!("label {i}")).collect();
+    for labels in [json!(["  "]), json!(["x".repeat(31)]), json!(too_many)] {
+        let (status, problem) = app.put(&uri, &token, json!({ "labels": labels })).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{labels}");
+        assert_eq!(field_paths(&problem), ["labels"]);
+    }
+    let (status, _) = app
+        .put(&uri, &token, json!({ "labels": ["é".repeat(30)] }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "counts characters, not bytes");
+    let (status, _) = app
+        .put(
+            "/v1/exercises/00000000-0000-0000-0000-000000000000/labels",
+            &token,
+            json!({ "labels": ["Push"] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

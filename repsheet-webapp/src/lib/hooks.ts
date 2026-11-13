@@ -19,6 +19,14 @@ export function useAthletes() {
 	});
 }
 
+/** The caller's exercise labels, alphabetically. */
+export function useExerciseLabels() {
+	return useQuery({
+		queryKey: keys.exerciseLabels,
+		queryFn: () => api.exerciseLabels({ perPage: 100 }),
+	});
+}
+
 export function useIsSuperAdmin(): boolean {
 	return useMe().data?.role === "superAdmin";
 }

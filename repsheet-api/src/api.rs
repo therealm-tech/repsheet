@@ -1,5 +1,6 @@
 mod coaching;
 mod comments;
+mod exercise_labels;
 mod exercises;
 mod extract;
 mod invitations;
@@ -113,6 +114,7 @@ pub fn app(state: AppState) -> Router {
         .merge(users::routes())
         .merge(tokens::routes())
         .merge(exercises::routes())
+        .merge(exercise_labels::routes())
         .merge(workouts::routes())
         .merge(templates::routes())
         .merge(coaching::routes())

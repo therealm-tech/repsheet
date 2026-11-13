@@ -109,6 +109,8 @@ erDiagram
     users ||--o{ users : "manages (profiles)"
     users ||--o| athlete_invitations : "invited through"
     users ||--o{ exercises : "creates (custom)"
+    users ||--o{ exercise_labels : "labels with"
+    exercises ||--o{ exercise_labels : "labelled by"
     users ||--o{ templates : owns
     users ||--o{ templates : "plans (as coach)"
     users ||--o{ coaching_links : "is coached through"
@@ -149,6 +151,11 @@ erDiagram
   everyone; the others belong to the user who created them. Names are unique per user, built-ins
   included, compared through the SQL function `fold()` (lowercase, accents stripped), which also
   powers the search.
+- An **exercise label** (`exercise_labels`) is a short text, 1 to 30 characters, that one user puts
+  on one exercise they see, built-in or their own; an exercise holds at most 10 of a user's labels.
+  Labels compare through `fold()`: a unique index keeps one per folded text on an exercise, and a
+  label added again on another exercise takes the spelling the user already gave it. Deleting the
+  exercise or the account deletes its labels.
 - A **workout** carries the day it took place on (`performed_on`) and an optional duration, not
   start and end times. Workouts are ordered by day, then by creation for a same day.
 - An account has a **locale** (`fr` or `en`). A built-in exercise has a name in each language
@@ -335,6 +342,15 @@ read checks both the grant and the link, so removing a coach cuts both at once, 
 deleted with the link rather than kept dormant: adding the same coach back later shares nothing the
 athlete did not choose to share again.
 
+**Labels belong to the user, not to the exercise.** A label says how one person organises their
+training (`programme A`, `knee-friendly`, the machines of their gym), so it is stored per user and
+per exercise, which lets everyone label the shared catalog without seeing each other's labels; a
+coach included, since their labels say how they organise their own exercises. They are not a field of
+the exercise: a super admin editing the catalog would otherwise edit everyone's labels. An exercise's
+labels are replaced together (`PUT /v1/exercises/{id}/labels`), so a retried request is harmless,
+and `GET /v1/exercises?label=…` filters on the server, where the picker's search and its first 50
+matches are computed.
+
 **Tokens are opaque and stored hashed.** A login returns 256 random bits; the database keeps their
 SHA-256. Unlike a self-contained JWT, a token can be revoked (`DELETE /v1/tokens/current`) and
 expires server-side, with no signing key to manage. The cost is one indexed lookup per request.
@@ -404,6 +420,8 @@ carries its own version, and its `appVersion` names the release of the images it
   (`not-coach`), with the same answer whether that account exists or not, and an action reserved to
   the manager of a profile naming an athlete who has an account (`not-manager`). Merging a profile
   into an account is the exception: it answers `404` to any pairing it refuses.
+- Exercise labels are read and written by their user alone: every query on them filters by the
+  caller, with no coach or super admin exception.
 - A comment is read and written by whoever reads its workout, under the rule above, and goes with
   that access: a removed coach no longer sees their comments, which stay on the athlete's record.
   Only its author edits it, and only its author or the workout's owner deletes it; anyone else who
@@ -435,4 +453,5 @@ carries its own version, and its `appVersion` names the release of the images it
 - Nothing notifies an athlete of a new planned session or comment, or a coach of a logged session or
   a reply; each sees it the next time they open the app.
 - A thread comes whole with its workout and with each performance of the history, unpaginated.
-- The exercise picker lists the first 50 matches of a search.
+- The exercise picker lists the first 50 matches of a search, and offers the first 100 labels as
+  filters.

@@ -11,6 +11,8 @@ import {
 	type CreatePlannedSessionInput,
 	type CreateWorkoutInput,
 	type Equipment,
+	ExerciseLabelSchema,
+	ExerciseLabelsSchema,
 	ExerciseSchema,
 	type GripFilter,
 	InvitationSchema,
@@ -41,6 +43,7 @@ import { type Choices, gripFilter } from "@/lib/choices";
 
 export const UserPageSchema = pageOf(UserSchema);
 export const ExercisePageSchema = pageOf(ExerciseSchema);
+export const ExerciseLabelPageSchema = pageOf(ExerciseLabelSchema);
 export const PerformancePageSchema = pageOf(PerformanceSchema);
 export const WorkoutPageSchema = pageOf(WorkoutSummarySchema);
 export const TemplatePageSchema = pageOf(TemplateSummarySchema);
@@ -97,7 +100,11 @@ export const api = {
 		request("PUT", "/users/me/preferences", UserSchema, { body }),
 
 	exercises: (
-		params: { q?: string; sort?: "name" | "-lastUsedOn" } & PageParams,
+		params: {
+			q?: string;
+			label?: string;
+			sort?: "name" | "-lastUsedOn";
+		} & PageParams,
 	) =>
 		request("GET", "/exercises", ExercisePageSchema, { query: { ...params } }),
 	exercise: (id: string) => request("GET", `/exercises/${id}`, ExerciseSchema),
@@ -106,6 +113,14 @@ export const api = {
 	updateExercise: (id: string, body: UpdateExerciseInput) =>
 		request("PUT", `/exercises/${id}`, ExerciseSchema, { body }),
 	deleteExercise: (id: string) => requestVoid("DELETE", `/exercises/${id}`),
+	replaceExerciseLabels: (id: string, labels: string[]) =>
+		request("PUT", `/exercises/${id}/labels`, ExerciseLabelsSchema, {
+			body: { labels },
+		}),
+	exerciseLabels: (params: PageParams = {}) =>
+		request("GET", "/exercise-labels", ExerciseLabelPageSchema, {
+			query: { ...params },
+		}),
 	performances: (
 		id: string,
 		params: PageParams & {
@@ -250,7 +265,9 @@ export const api = {
 export const keys = {
 	me: ["me"] as const,
 	users: ["users"] as const,
-	exercises: (q: string) => ["exercises", q] as const,
+	exercises: (q: string, label: string | null = null) =>
+		["exercises", q, label] as const,
+	exerciseLabels: ["exerciseLabels"] as const,
 	exercise: (id: string) => ["exercise", id] as const,
 	performances: (
 		id: string,

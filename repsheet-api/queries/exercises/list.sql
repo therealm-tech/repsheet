@@ -1,5 +1,5 @@
 -- $1 user, $2 search text (LIKE-escaped) or NULL, $3 sort by last use, $4 limit, $5 offset,
--- $6 locale of the returned name.
+-- $6 locale of the returned name, $7 label or NULL.
 SELECT
     e.id,
     e.owner_id,
@@ -14,6 +14,7 @@ SELECT
     e.default_grip,
     e.unilateral,
     usage.last_used_on,
+    exercise_labels_of(e.id, $1) AS labels,
     exercise_name(e.name_fr, e.name_en, $6) AS name
 FROM exercises AS e
 LEFT JOIN LATERAL (
@@ -29,6 +30,14 @@ WHERE
         $2::TEXT IS NULL
         OR fold(e.name_fr) LIKE '%' || fold($2) || '%'
         OR fold(e.name_en) LIKE '%' || fold($2) || '%'
+    )
+    AND (
+        $7::TEXT IS NULL
+        OR EXISTS (
+            SELECT 1
+            FROM exercise_labels AS el
+            WHERE el.exercise_id = e.id AND el.user_id = $1 AND fold(el.label) = fold($7)
+        )
     )
 ORDER BY
     CASE WHEN $3 THEN usage.last_used_on END DESC NULLS LAST,

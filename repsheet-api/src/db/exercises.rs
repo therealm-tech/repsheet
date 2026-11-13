@@ -26,6 +26,8 @@ pub struct ExerciseRow {
     pub grips: Grips,
     pub default_grip: Option<Grip>,
     pub unilateral: bool,
+    /// The labels of the user the row was read for, in folded order.
+    pub labels: Vec<String>,
     pub last_used_on: Option<NaiveDate>,
 }
 
@@ -89,34 +91,40 @@ pub struct NewExercise<'a> {
     pub unilateral: bool,
 }
 
+/// Which of the exercises a user sees to list.
+pub struct ExerciseFilter<'a> {
+    pub user_id: Uuid,
+    /// LIKE-escaped text to find in a name.
+    pub search: Option<&'a str>,
+    /// Keeps only the exercises the user put this label on.
+    pub label: Option<&'a str>,
+}
+
 pub async fn list(
     exec: impl PgExecutor<'_>,
-    user_id: Uuid,
-    search: Option<&str>,
+    filter: &ExerciseFilter<'_>,
     by_last_use: bool,
     locale: Locale,
     limit: i64,
     offset: i64,
 ) -> sqlx::Result<Vec<ExerciseRow>> {
     sqlx::query_as(include_str!("../../queries/exercises/list.sql"))
-        .bind(user_id)
-        .bind(search)
+        .bind(filter.user_id)
+        .bind(filter.search)
         .bind(by_last_use)
         .bind(limit)
         .bind(offset)
         .bind(locale.as_str())
+        .bind(filter.label)
         .fetch_all(exec)
         .await
 }
 
-pub async fn count(
-    exec: impl PgExecutor<'_>,
-    user_id: Uuid,
-    search: Option<&str>,
-) -> sqlx::Result<i64> {
+pub async fn count(exec: impl PgExecutor<'_>, filter: &ExerciseFilter<'_>) -> sqlx::Result<i64> {
     sqlx::query_scalar(include_str!("../../queries/exercises/count.sql"))
-        .bind(user_id)
-        .bind(search)
+        .bind(filter.user_id)
+        .bind(filter.search)
+        .bind(filter.label)
         .fetch_one(exec)
         .await
 }

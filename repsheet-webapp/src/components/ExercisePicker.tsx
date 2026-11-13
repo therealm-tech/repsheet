@@ -7,6 +7,7 @@ import {
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExerciseForm } from "@/components/ExerciseForm";
+import { LabelBadges } from "@/components/ExerciseLabels";
 import { ErrorText } from "@/components/ui";
 import i18n, { currentLocale } from "@/i18n";
 import { api, keys } from "@/lib/api/endpoints";
@@ -18,7 +19,7 @@ import {
 	type ExerciseSummary,
 } from "@/lib/api/schemas";
 import { describeExercise, equipmentLabel } from "@/lib/blocks";
-import { useDebounced, useIsSuperAdmin } from "@/lib/hooks";
+import { useDebounced, useExerciseLabels, useIsSuperAdmin } from "@/lib/hooks";
 
 function describe(exercise: Exercise): string {
 	return [
@@ -102,16 +103,20 @@ export function ExercisePicker({
 	const { t } = useTranslation();
 	const [query, setQuery] = useState("");
 	const [equipment, setEquipment] = useState<Equipment | null>(null);
+	const [label, setLabel] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const q = useDebounced(query.trim(), 250);
 	const exercises = useQuery({
-		queryKey: keys.exercises(q),
+		queryKey: keys.exercises(q, label),
 		queryFn: () =>
-			api.exercises(
-				q ? { q, perPage: 50 } : { sort: "-lastUsedOn", perPage: 50 },
-			),
+			api.exercises({
+				...(q ? { q } : { sort: "-lastUsedOn" }),
+				...(label === null ? {} : { label }),
+				perPage: 50,
+			}),
 		placeholderData: keepPreviousData,
 	});
+	const labels = (useExerciseLabels().data?.items ?? []).map((l) => l.name);
 	const items = (exercises.data?.items ?? []).filter(
 		(e) =>
 			!excludeIds.includes(e.id) &&
@@ -163,6 +168,23 @@ export function ExercisePicker({
 					</button>
 				))}
 			</div>
+			{labels.length > 0 ? (
+				<fieldset className="chips field-group" aria-label={t("labels.filter")}>
+					{labels.map((name) => (
+						<button
+							key={name}
+							type="button"
+							className={
+								label === name ? "chip chip-label on" : "chip chip-label"
+							}
+							aria-pressed={label === name}
+							onClick={() => setLabel(label === name ? null : name)}
+						>
+							{name}
+						</button>
+					))}
+				</fieldset>
+			) : null}
 			<span className="label">
 				{q ? t("picker.results") : t("picker.recentAndCatalog")}
 			</span>
@@ -185,6 +207,7 @@ export function ExercisePicker({
 								<span className="muted small line-block">
 									{describe(exercise)}
 								</span>
+								<LabelBadges labels={exercise.labels} />
 							</span>
 							<span className="accent" aria-hidden="true">
 								{actionLabel}

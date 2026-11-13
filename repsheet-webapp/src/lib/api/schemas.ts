@@ -103,9 +103,20 @@ export type ExerciseNames = z.infer<typeof ExerciseNamesSchema>;
 export const ExerciseSchema = ExerciseSummarySchema.extend({
 	names: ExerciseNamesSchema,
 	custom: z.boolean(),
+	labels: z.array(z.string()),
 	lastUsedOn: z.string().nullable(),
 });
 export type Exercise = z.infer<typeof ExerciseSchema>;
+
+export const ExerciseLabelSchema = z.object({
+	name: z.string(),
+	exerciseCount: z.number().int(),
+});
+export type ExerciseLabel = z.infer<typeof ExerciseLabelSchema>;
+
+export const ExerciseLabelsSchema = z.object({
+	labels: z.array(z.string()),
+});
 
 export const SetSchema = z.object({
 	round: z.number().int(),

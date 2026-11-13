@@ -3,6 +3,7 @@
 
 pub mod coaching;
 pub mod comments;
+pub mod exercise_labels;
 pub mod exercises;
 pub mod invitations;
 pub mod planned_sessions;
