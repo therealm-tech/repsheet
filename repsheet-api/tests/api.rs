@@ -483,6 +483,40 @@ fn positions(blocks: &Value) -> Vec<i64> {
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn renumbers_the_blocks_of_a_workout_after_a_deletion(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let squat = app.exercise_id(&token, "Squat").await;
+    let workout_uri = format!(
+        "/v1/workouts/{}",
+        new_workout(&app, &token, "2026-11-12").await
+    );
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let (_, block) = app
+            .post(
+                &format!("{workout_uri}/blocks"),
+                &token,
+                json!({ "exercises": [
+                    { "exerciseId": squat, "sets": [{ "round": 1, "reps": 5, "weightKg": 100.0 }] }
+                ]}),
+            )
+            .await;
+        ids.push(block["id"].as_str().unwrap().to_owned());
+    }
+
+    assert_eq!(
+        app.delete(&format!("{workout_uri}/blocks/{}", ids[1]), &token)
+            .await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (_, fetched) = app.get(&workout_uri, &token).await;
+    assert_eq!(block_ids(&fetched["blocks"]), [&ids[0], &ids[2]]);
+    assert_eq!(positions(&fetched["blocks"]), [1, 2]);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
 async fn reorders_the_blocks_of_a_workout(pool: PgPool) {
     let app = TestApp::new(pool);
     let token = app.sign_up("alex@example.com").await;
@@ -2852,6 +2886,36 @@ async fn revoked_coaches_lose_access_and_the_athlete_keeps_the_sessions(pool: Pg
     assert_eq!(kept["author"]["id"], coach_id.as_str());
     let (_, mine) = app.get("/v1/planned-sessions", &athlete).await;
     assert_eq!(mine["total"], 1);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn renumbers_the_blocks_of_a_planned_session_after_a_deletion(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let bench = app.exercise_id(&coach, "Développé couché").await;
+    let (_, draft) = draft_session(&app, &coach, &athlete_id).await;
+    let session_uri = format!("/v1/planned-sessions/{}", draft["id"].as_str().unwrap());
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let (_, block) = app
+            .post(
+                &format!("{session_uri}/blocks"),
+                &coach,
+                json!({ "exercises": [{ "exerciseId": bench, "sets": five_by(60.0) }] }),
+            )
+            .await;
+        ids.push(block["id"].as_str().unwrap().to_owned());
+    }
+
+    assert_eq!(
+        app.delete(&format!("{session_uri}/blocks/{}", ids[0]), &coach)
+            .await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (_, fetched) = app.get(&session_uri, &coach).await;
+    assert_eq!(block_ids(&fetched["blocks"]), [&ids[1], &ids[2]]);
+    assert_eq!(positions(&fetched["blocks"]), [1, 2]);
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
