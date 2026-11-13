@@ -60,7 +60,7 @@ export const en: Catalog = {
 		dayWithWorkout: "{{day}}, session done",
 		empty: "No sessions yet. Log your first one above.",
 		freeWorkout: "＋ Free session",
-		freeWorkoutName: "Free session",
+		freeWorkoutName: "Session on {{date}}",
 		fromTemplate: "From a template…",
 		greeting: "Hi {{name}}",
 		loadFailed: "Couldn't load your sessions.",

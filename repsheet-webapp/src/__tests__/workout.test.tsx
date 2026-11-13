@@ -11,7 +11,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const created: Workout = {
 	id: "w1",
-	name: "Séance libre",
+	name: "Séance du 30 septembre 2026",
 	templateId: null,
 	note: null,
 	performedOn: "2026-09-30",
@@ -48,12 +48,21 @@ describe("creating a workout", () => {
 			await screen.findByRole("button", { name: "＋ Séance libre" }),
 		);
 		const form = screen.getByRole("form", { name: "Nouvelle séance" });
-		expect(within(form).getByLabelText("Nom")).toHaveValue("Séance libre");
+		const name = within(form).getByLabelText("Nom");
 		const date = within(form).getByLabelText("Date");
 		expect(date).toHaveValue(toDay(new Date()));
 
+		expect(name).toHaveValue(
+			`Séance du ${new Intl.DateTimeFormat("fr-FR", {
+				day: "numeric",
+				month: "long",
+				year: "numeric",
+			}).format(new Date())}`,
+		);
+
 		await ui.clear(date);
 		await ui.type(date, "2026-09-30");
+		expect(name).toHaveValue("Séance du 30 septembre 2026");
 		await ui.type(within(form).getByLabelText("Durée (min, optionnel)"), "55");
 		await ui.click(
 			within(form).getByRole("button", { name: "Créer la séance" }),
@@ -61,11 +70,55 @@ describe("creating a workout", () => {
 
 		await waitFor(() =>
 			expect(calls.find((c) => c.method === "POST")?.body).toEqual({
-				name: "Séance libre",
+				name: "Séance du 30 septembre 2026",
 				performedOn: "2026-09-30",
 				durationMinutes: 55,
 			}),
 		);
+	});
+
+	it("keeps a name the user typed when the date changes", async () => {
+		const calls = home();
+		await renderRoute(HomePage, "/dashboard");
+		const ui = userEvent.setup();
+
+		await ui.click(
+			await screen.findByRole("button", { name: "＋ Séance libre" }),
+		);
+		const form = screen.getByRole("form", { name: "Nouvelle séance" });
+		const name = within(form).getByLabelText("Nom");
+		await ui.clear(name);
+		await ui.type(name, "Jambes");
+		const date = within(form).getByLabelText("Date");
+		await ui.clear(date);
+		await ui.type(date, "2026-09-30");
+		expect(name).toHaveValue("Jambes");
+		await ui.click(
+			within(form).getByRole("button", { name: "Créer la séance" }),
+		);
+
+		await waitFor(() =>
+			expect(calls.find((c) => c.method === "POST")?.body).toMatchObject({
+				name: "Jambes",
+				performedOn: "2026-09-30",
+			}),
+		);
+	});
+
+	it("keeps a template's name when the date changes", async () => {
+		home();
+		await renderRoute(HomePage, "/dashboard");
+		const ui = userEvent.setup();
+
+		await ui.click(
+			await screen.findByRole("button", { name: "Depuis un modèle…" }),
+		);
+		await ui.click(await screen.findByText("Push A"));
+		const form = screen.getByRole("form", { name: "Nouvelle séance" });
+		const date = within(form).getByLabelText("Date");
+		await ui.clear(date);
+		await ui.type(date, "2026-09-30");
+		expect(within(form).getByLabelText("Nom")).toHaveValue("Push A");
 	});
 
 	it("starts from a template, without a duration", async () => {
