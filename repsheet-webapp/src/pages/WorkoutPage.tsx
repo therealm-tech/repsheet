@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BlockCard, PlannedBlockCard } from "@/components/BlockCard";
 import { BlockSheet, type BlockSheetMode } from "@/components/BlockSheet";
+import { ReorderableBlock, useDragReorder } from "@/components/Reorder";
 import { ShareWithCoaches } from "@/components/ShareWithCoaches";
 import { ConfirmButton, ErrorText, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
@@ -14,9 +15,17 @@ import type {
 	Author,
 	TemplateBlock,
 	UpdateWorkoutInput,
+	Workout,
 } from "@/lib/api/schemas";
 import { formatDay, formatMinutes } from "@/lib/dates";
 import { useMe, useUnit } from "@/lib/hooks";
+import { moveBlock } from "@/lib/reorder";
+
+interface BlockMove {
+	from: number;
+	to: number;
+	blockId: string;
+}
 
 /**
  * A workout the caller logs: their own, or, with `athlete`, one of a profile
@@ -71,6 +80,41 @@ export function WorkoutPage({
 			setEditing(false);
 		},
 	});
+
+	// Applied at once, so that a dropped block stays where it was dropped.
+	const reorder = useMutation({
+		mutationFn: ({ to, blockId }: BlockMove) =>
+			api.moveBlock(workoutId, blockId, to + 1),
+		onMutate: async ({ from, to }) => {
+			await queryClient.cancelQueries({ queryKey: keys.workout(workoutId) });
+			const previous = queryClient.getQueryData<Workout>(
+				keys.workout(workoutId),
+			);
+			if (previous) {
+				queryClient.setQueryData(keys.workout(workoutId), {
+					...previous,
+					blocks: moveBlock(previous.blocks, from, to),
+				});
+			}
+			return { previous };
+		},
+		onError: (_error, _move, context) => {
+			if (context?.previous) {
+				queryClient.setQueryData(keys.workout(workoutId), context.previous);
+			}
+		},
+		onSuccess: (updated) => {
+			queryClient.setQueryData(keys.workout(workoutId), updated);
+		},
+	});
+	const blocks = workout.data?.blocks ?? [];
+	function move(from: number, to: number) {
+		const block = blocks[from];
+		if (block) {
+			reorder.mutate({ from, to, blockId: block.id });
+		}
+	}
+	const drag = useDragReorder(blocks.length, move);
 
 	const remove = useMutation({
 		mutationFn: () => api.deleteWorkout(workoutId),
@@ -184,26 +228,45 @@ export function WorkoutPage({
 						</p>
 					) : null}
 
-					{w.blocks.map((block) => (
-						<BlockCard
-							key={block.id}
-							block={block}
-							workoutId={w.id}
-							ownerId={ownerId}
-							unit={unit}
-							managed={athlete !== undefined}
-							onOpen={() => {
-								const templateBlock = template.data?.blocks.find(
-									(b) => b.id === block.templateBlockId,
-								);
-								setSheet({
-									kind: "edit",
-									block,
-									...(templateBlock ? { templateBlock } : {}),
-								});
-							}}
-						/>
-					))}
+					{reorder.isError ? (
+						<ErrorText>
+							{errorMessage(reorder.error, { fallback: "saveFailed" })}
+						</ErrorText>
+					) : null}
+					{w.blocks.map((block, i) => {
+						const card = (
+							<BlockCard
+								block={block}
+								workoutId={w.id}
+								ownerId={ownerId}
+								unit={unit}
+								managed={athlete !== undefined}
+								onOpen={() => {
+									const templateBlock = template.data?.blocks.find(
+										(b) => b.id === block.templateBlockId,
+									);
+									setSheet({
+										kind: "edit",
+										block,
+										...(templateBlock ? { templateBlock } : {}),
+									});
+								}}
+							/>
+						);
+						return w.blocks.length > 1 ? (
+							<ReorderableBlock
+								key={block.id}
+								index={i}
+								count={w.blocks.length}
+								reorder={drag}
+								onMove={(to) => move(i, to)}
+							>
+								{card}
+							</ReorderableBlock>
+						) : (
+							<Fragment key={block.id}>{card}</Fragment>
+						);
+					})}
 					{planned.map((block, i) => (
 						<PlannedBlockCard
 							key={block.id}

@@ -786,6 +786,61 @@ ol {
 	display: block;
 }
 
+/* A block card with, on its right, the grip and the buttons that move it. */
+.reorderable {
+	display: flex;
+	gap: 8px;
+}
+
+.reorderable > .block {
+	flex: 1;
+	min-width: 0;
+}
+
+.reorder-rail {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	flex: none;
+}
+
+/* `touch-action: none` lets a finger drag the block instead of scrolling the page. */
+.drag-handle {
+	display: grid;
+	place-items: center;
+	min-width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	color: var(--muted);
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+[data-drag="self"] {
+	position: relative;
+	z-index: 2;
+	cursor: grabbing;
+}
+
+[data-drag="self"].block,
+[data-drag="self"] > .block {
+	border-color: var(--orange);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-drag="other"] {
+	transition: transform 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	[data-drag="other"] {
+		transition: none;
+	}
+}
+
 .ex {
 	display: flex;
 	align-items: center;

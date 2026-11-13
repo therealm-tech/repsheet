@@ -117,6 +117,20 @@ pub fn routes() -> ApiRouter<AppState> {
                     .summary("Delete a block")
             }),
         )
+        .api_route(
+            "/v1/workouts/{workoutId}/blocks/{blockId}/position",
+            put_with(update_block_position, |op| {
+                authenticated(op)
+                    .tag("Workouts")
+                    .id("updateBlockPosition")
+                    .summary("Move a block")
+                    .description(
+                        "Puts the block at `position`, counted from 1, and renumbers the \
+                         others from 1 in their order, so that positions stay contiguous and \
+                         unique. Returns the workout with its blocks in their new order.",
+                    )
+            }),
+        )
 }
 
 #[derive(Clone, Copy, Serialize, JsonSchema)]
@@ -388,6 +402,14 @@ impl Validate for UpdateBlockRequest {
 
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
+pub struct UpdateBlockPositionRequest {
+    /// From 1 to the workout's number of blocks.
+    #[validate(range(min = 1))]
+    pub position: i32,
+}
+
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
 pub struct ListWorkoutsQuery {
     /// An athlete who has the caller as a coach, to list what they shared,
     /// or every workout of a profile the caller manages.
@@ -615,6 +637,47 @@ async fn delete_block(
         db::workouts::delete_block(&mut *conn, path.block_id, path.workout_id).await?;
     }
     Ok(NoContent)
+}
+
+async fn update_block_position(
+    State(state): State<AppState>,
+    user: AuthUser,
+    PathParams(path): PathParams<BlockPath>,
+    ValidJson(request): ValidJson<UpdateBlockPositionRequest>,
+) -> AppResult<Json<WorkoutResponse>> {
+    let mut tx = state.pool.begin().await?;
+    let workout = db::workouts::find_writable(&mut *tx, path.workout_id, user.id)
+        .await?
+        .ok_or(AppError::NotFound)?
+        .workout;
+    let ids = db::workouts::lock_block_ids(&mut *tx, workout.id).await?;
+    check_block_position(&ids, path.block_id, request.position)?;
+    db::workouts::move_block(&mut *tx, path.block_id, workout.id, request.position).await?;
+    let blocks = db::workouts::list_blocks(&mut *tx, workout.id).await?;
+    let blocks = db::workouts::load_blocks(&mut tx, blocks, user.locale).await?;
+    tx.commit().await?;
+    tracing::debug!(
+        workout_id = %workout.id,
+        block_id = %path.block_id,
+        position = request.position,
+        "block moved"
+    );
+    Ok(Json(WorkoutResponse::new(workout, blocks)))
+}
+
+/// Checks that `block_id` is one of `ids`, the blocks it moves among, and that
+/// `position` is within them.
+pub(super) fn check_block_position(ids: &[Uuid], block_id: Uuid, position: i32) -> AppResult<()> {
+    if !ids.contains(&block_id) {
+        return Err(AppError::NotFound);
+    }
+    if usize::try_from(position).is_ok_and(|p| p > ids.len()) {
+        return Err(AppError::Validation(vec![FieldError::new(
+            "position",
+            format!("at most {}, the number of blocks", ids.len()),
+        )]));
+    }
+    Ok(())
 }
 
 /// The sets of a block exercise, with how they are done.

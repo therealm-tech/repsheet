@@ -415,6 +415,12 @@ carries its own version, and its `appVersion` names the release of the images it
   equipment and held with one of its grips or none. No table check can see across the two tables:
   the API checks it on every write, and refusing to remove a logged mode, equipment or grip keeps it
   true afterwards. A block may hold the same exercise more than once, done differently.
+- A block's `position` orders it in its workout or planned session. Moving one
+  (`PUT /v1/workouts/{id}/blocks/{blockId}/position`, and the same under
+  `/v1/planned-sessions/{id}`) locks the blocks of its parent, then puts it at its place and
+  renumbers the others from 1 in one statement, so positions are contiguous and unique after a move
+  and a concurrent move waits its turn. A deleted block leaves a gap until the next move; the order
+  is kept. A template's blocks take their positions from their order in the `PUT` that replaces it.
 - Every collection endpoint is paginated (`page`, `perPage` ≤ 100) and returns
   `{ items, page, perPage, total }`.
 - A migration that has been applied is never edited: `sqlx` checksums them and refuses to start on

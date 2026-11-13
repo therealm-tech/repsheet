@@ -1,11 +1,19 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExercisePicker } from "@/components/ExercisePicker";
+import {
+	DragHandle,
+	type HandleProps,
+	type ItemProps,
+	MoveButtons,
+	useDragReorder,
+} from "@/components/Reorder";
 import { ChoiceSwitches, KindTag, Sheet } from "@/components/ui";
 import type { ExerciseSummary } from "@/lib/api/schemas";
 import { kindOf, letter } from "@/lib/blocks";
 import { startingChoices } from "@/lib/choices";
 import { parseTyped } from "@/lib/grid";
+import { moveItem } from "@/lib/reorder";
 import {
 	type DraftBlock,
 	type DraftExercise,
@@ -27,6 +35,8 @@ function BlockEditor({
 	block,
 	index,
 	count,
+	item,
+	handle,
 	onChange,
 	onMove,
 	onRemove,
@@ -36,8 +46,10 @@ function BlockEditor({
 	block: DraftBlock;
 	index: number;
 	count: number;
+	item: ItemProps;
+	handle: HandleProps;
 	onChange: (block: DraftBlock) => void;
-	onMove: (direction: -1 | 1) => void;
+	onMove: (to: number) => void;
 	onRemove: () => void;
 	onAddExercise: () => void;
 	onReplaceExercise: (entry: DraftExercise) => void;
@@ -48,29 +60,14 @@ function BlockEditor({
 		<section
 			className="block editable"
 			aria-label={t("block.title", { position: index + 1 })}
+			{...item}
 		>
 			<div className="block-head">
+				<DragHandle handle={handle} />
 				<b>{index + 1}</b>
 				<KindTag kind={kindOf(block.exercises.length)} />
 				<span className="grow" />
-				<button
-					type="button"
-					className="mini-button"
-					aria-label={t("templateEditor.moveUp")}
-					disabled={index === 0}
-					onClick={() => onMove(-1)}
-				>
-					↑
-				</button>
-				<button
-					type="button"
-					className="mini-button"
-					aria-label={t("templateEditor.moveDown")}
-					disabled={index === count - 1}
-					onClick={() => onMove(1)}
-				>
-					↓
-				</button>
+				<MoveButtons index={index} count={count} onMove={onMove} />
 				<button
 					type="button"
 					className="mini-button"
@@ -212,16 +209,10 @@ export function BlocksEditor({
 	const { t } = useTranslation();
 	const [pickTarget, setPickTarget] = useState<PickTarget | null>(null);
 
-	function moveBlock(index: number, direction: -1 | 1) {
-		const next = [...blocks];
-		const target = index + direction;
-		const [moved] = next.splice(index, 1);
-		if (!moved || target < 0 || target > next.length) {
-			return;
-		}
-		next.splice(target, 0, moved);
-		onChange(next);
+	function moveBlock(from: number, to: number) {
+		onChange(moveItem(blocks, from, to));
 	}
+	const reorder = useDragReorder(blocks.length, moveBlock);
 
 	function pick(exercise: ExerciseSummary) {
 		const entry = {
@@ -287,10 +278,12 @@ export function BlocksEditor({
 					block={block}
 					index={i}
 					count={blocks.length}
+					item={reorder.item(i)}
+					handle={reorder.handle(i)}
 					onChange={(next) =>
 						onChange(blocks.map((b) => (b.key === block.key ? next : b)))
 					}
-					onMove={(direction) => moveBlock(i, direction)}
+					onMove={(to) => moveBlock(i, to)}
 					onRemove={() => onChange(blocks.filter((b) => b.key !== block.key))}
 					onAddExercise={() => setPickTarget({ kind: "addTo", key: block.key })}
 					onReplaceExercise={(entry) =>

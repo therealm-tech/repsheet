@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExerciseName, plannedSummary } from "@/components/BlockCard";
 import { BlockSheet, type PlanSheetMode } from "@/components/BlockSheet";
 import { lostAccess, NoLongerCoach } from "@/components/NoLongerCoach";
+import { ReorderableBlock, useDragReorder } from "@/components/Reorder";
 import { SendSessionSheet } from "@/components/SendSessionSheet";
 import { ConfirmButton, ErrorText, KindTag, Sheet } from "@/components/ui";
 import { WorkoutForm } from "@/components/WorkoutForm";
@@ -12,6 +13,7 @@ import { WorkoutReadOnly } from "@/components/WorkoutReadOnly";
 import { api, athletePerformanceQuery, keys } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import type {
+	PlannedSession,
 	TemplateBlock,
 	UpdatePlannedSessionInput,
 	WeightUnit,
@@ -19,6 +21,13 @@ import type {
 import { letter, summarizeSets } from "@/lib/blocks";
 import { formatDay, formatShortDay, today } from "@/lib/dates";
 import { useMe, useUnit } from "@/lib/hooks";
+import { moveBlock } from "@/lib/reorder";
+
+interface BlockMove {
+	from: number;
+	to: number;
+	blockId: string;
+}
 
 /** "↺ 10 nov. : 2×12 · 14→16 kg": the athlete's last time at the exercise, as their coach reads it. */
 function LastSince({
@@ -159,6 +168,45 @@ export function PlannedSessionPage({
 			});
 		},
 	});
+	// Applied at once, so that a dropped block stays where it was dropped.
+	const reorder = useMutation({
+		mutationFn: ({ to, blockId }: BlockMove) =>
+			api.movePlannedBlock(sessionId, blockId, to + 1),
+		onMutate: async ({ from, to }) => {
+			await queryClient.cancelQueries({
+				queryKey: keys.plannedSession(sessionId),
+			});
+			const previous = queryClient.getQueryData<PlannedSession>(
+				keys.plannedSession(sessionId),
+			);
+			if (previous) {
+				queryClient.setQueryData(keys.plannedSession(sessionId), {
+					...previous,
+					blocks: moveBlock(previous.blocks, from, to),
+				});
+			}
+			return { previous };
+		},
+		onError: (_error, _move, context) => {
+			if (context?.previous) {
+				queryClient.setQueryData(
+					keys.plannedSession(sessionId),
+					context.previous,
+				);
+			}
+		},
+		onSuccess: (updated) => {
+			queryClient.setQueryData(keys.plannedSession(sessionId), updated);
+		},
+	});
+	const blocks = session.data?.blocks ?? [];
+	function move(from: number, to: number) {
+		const block = blocks[from];
+		if (block) {
+			reorder.mutate({ from, to, blockId: block.id });
+		}
+	}
+	const drag = useDragReorder(blocks.length, move);
 	const managed = athlete.data?.managed ?? false;
 	const unit = useUnit(managed ? athlete.data?.weightUnit : undefined);
 	const remove = useMutation({
@@ -304,16 +352,35 @@ export function PlannedSessionPage({
 					{s.blocks.length === 0 ? (
 						<p className="empty">{t("plannedSession.empty", { name })}</p>
 					) : null}
-					{s.blocks.map((block, i) => (
-						<PlanBlockCard
-							key={block.id}
-							block={block}
-							index={i + 1}
-							athleteId={athleteId}
-							unit={unit}
-							onOpen={() => setSheet({ kind: "edit", block })}
-						/>
-					))}
+					{reorder.isError ? (
+						<ErrorText>
+							{errorMessage(reorder.error, { fallback: "saveFailed" })}
+						</ErrorText>
+					) : null}
+					{s.blocks.map((block, i) => {
+						const card = (
+							<PlanBlockCard
+								block={block}
+								index={i + 1}
+								athleteId={athleteId}
+								unit={unit}
+								onOpen={() => setSheet({ kind: "edit", block })}
+							/>
+						);
+						return s.blocks.length > 1 ? (
+							<ReorderableBlock
+								key={block.id}
+								index={i}
+								count={s.blocks.length}
+								reorder={drag}
+								onMove={(to) => move(i, to)}
+							>
+								{card}
+							</ReorderableBlock>
+						) : (
+							<Fragment key={block.id}>{card}</Fragment>
+						);
+					})}
 					{managed ? (
 						<button
 							type="button"

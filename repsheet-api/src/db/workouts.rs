@@ -454,6 +454,34 @@ pub async fn delete_block(
     Ok(())
 }
 
+/// The ids of a workout's blocks in order, locked until the transaction ends.
+pub async fn lock_block_ids(
+    exec: impl PgExecutor<'_>,
+    workout_id: Uuid,
+) -> sqlx::Result<Vec<Uuid>> {
+    sqlx::query_scalar(include_str!("../../queries/blocks/lock_ids.sql"))
+        .bind(workout_id)
+        .fetch_all(exec)
+        .await
+}
+
+/// Moves block `id` to `position`, counted from 1, and renumbers the others
+/// around it.
+pub async fn move_block(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    workout_id: Uuid,
+    position: i32,
+) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/blocks/move.sql"))
+        .bind(workout_id)
+        .bind(id)
+        .bind(position)
+        .execute(exec)
+        .await?;
+    Ok(())
+}
+
 async fn write_block_exercises(
     conn: &mut PgConnection,
     block_id: Uuid,
