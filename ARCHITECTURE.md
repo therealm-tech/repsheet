@@ -90,8 +90,8 @@ sequenceDiagram
 
 Creating or replacing a block, and creating or replacing a template, each run in one transaction:
 a failed check leaves nothing behind. `PUT` replaces a block's sets wholesale and its exercises by
-`id`: one sent with its `id` is updated in place, one without is created, and one left out is
-deleted with its sets and comments. A retried request is therefore harmless; `DELETE` answers `204`
+`id`: one sent with its `id` is updated in place, even with another `exerciseId`, one without is
+created, and one left out is deleted with its sets and comments. A retried request is therefore harmless; `DELETE` answers `204`
 whether or not the resource still exists. A comment written while logging a new block is posted
 through `/v1/comments` once the block exists, as two requests: a failed comment leaves the block
 saved, and the client sends it again against the block it now holds.
@@ -242,7 +242,11 @@ performed can count one by mistake. A planned session written with targets only,
 existed, still opens from its targets. A workout block keeps a link to the template block it was logged from, which is how the
 client knows which planned blocks remain; updating a template keeps a block's identity when the
 request carries its `id`, so that link survives edits. A logged block keeps its exercises' identity
-the same way, which is what keeps their comments when the athlete corrects a set.
+the same way, which is what keeps their comments when the athlete corrects a set, or replaces the
+exercise with the variant actually performed: the thread is about that slot of the block, whatever
+the exercise is called. The client keeps whatever values of the replaced exercise the new one can
+hold, its choices where offered and its sets as the new mode and load rule allow, and the API
+checks the result like any other write.
 
 **A plan gives instructions; a workout holds a conversation.** A template exercise carries one
 `note`, the instructions of whoever wrote the plan (`tempo 3-1-1`, `close grip`), as part of the

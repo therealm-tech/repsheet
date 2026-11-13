@@ -470,6 +470,73 @@ export function switchChoice(
 	};
 }
 
+/**
+ * `exercise` in place of the column's, done the same way where it allows it
+ * and its default way otherwise. The column keeps its identity, so a logged
+ * exercise keeps its comments.
+ */
+export function replacementFor(
+	current: GridExercise,
+	exercise: ExerciseSummary,
+): GridExercise {
+	return {
+		...exercise,
+		chosen: startingChoices(exercise, current.chosen),
+		columnId: current.columnId,
+		...(current.blockExerciseId
+			? { blockExerciseId: current.blockExerciseId }
+			: {}),
+	};
+}
+
+/**
+ * Puts `replacement` in the column, keeping every value it can hold: the
+ * counts while the mode stays the same, and the load unless it takes none.
+ * A dropped count, or an empty value, takes the last performance's, as in a
+ * column just added.
+ */
+export function replaceExercise(
+	grid: Grid,
+	col: number,
+	replacement: GridExercise,
+	lastSets: WorkoutSet[] | undefined,
+	unit: WeightUnit,
+): Grid {
+	const current = grid.exercises[col];
+	if (!current) {
+		return grid;
+	}
+	const primary = primaryField(replacement.chosen.mode);
+	const sameMode = replacement.chosen.mode === current.chosen.mode;
+	const last = workingSets(lastSets);
+	let previous: Cell | undefined;
+	return {
+		exercises: grid.exercises.map((e, i) => (i === col ? replacement : e)),
+		rows: grid.rows.map((row, r) => {
+			const old = row.cells[col] ?? emptyCell();
+			const prefilled = prefillCell(
+				replacement,
+				r + 1,
+				previous,
+				null,
+				last,
+				unit,
+			);
+			const cell: Cell = {
+				...emptyCell(),
+				[primary]: (sameMode ? old[primary] : null) ?? prefilled[primary],
+				weight:
+					replacement.load === "none" ? null : (old.weight ?? prefilled.weight),
+			};
+			previous = cell;
+			return {
+				...row,
+				cells: row.cells.map((c, i) => (i === col ? cell : c)),
+			};
+		}),
+	};
+}
+
 export function removeExercise(grid: Grid, col: number): Grid {
 	return {
 		exercises: grid.exercises.filter((_, i) => i !== col),

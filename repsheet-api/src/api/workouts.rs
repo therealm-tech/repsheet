@@ -331,8 +331,9 @@ impl From<&SetRequest> for SetValues {
 #[derive(Serialize, Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockExerciseRequest {
-    /// On update, the id of one of the block's exercises, for the same
-    /// exercise, to keep its identity and its comments; a new one otherwise.
+    /// On update, the id of one of the block's exercises, to keep its identity
+    /// and its comments, whether `exerciseId` is still the same exercise or
+    /// one that replaces it; a new one otherwise.
     pub id: Option<Uuid>,
     pub exercise_id: Uuid,
     /// One of the exercise's modes; its default mode when omitted. Each set
@@ -547,7 +548,7 @@ async fn create_block(
         .await?
         .ok_or(AppError::NotFound)?;
     let workout = found.workout;
-    let sets = check_block(&mut tx, found.owner_id, user.locale, &body, &HashMap::new()).await?;
+    let sets = check_block(&mut tx, found.owner_id, user.locale, &body, &HashSet::new()).await?;
     let exercises = new_block_exercises(&body, &sets);
     let block = db::workouts::insert_block(
         &mut tx,
@@ -633,21 +634,21 @@ pub(super) struct ExerciseSets<'a> {
 
 /// Checks what field-level validation cannot: that the exercises and the
 /// template block are ones the workout's owner may use, that each `id` names one of the block's
-/// `existing` exercises (by block exercise id) for the same exercise, at most
-/// once, and the exercises' sets as [`check_sets`] does.
+/// `existing` block exercises, at most once, and the exercises' sets as
+/// [`check_sets`] does.
 /// Returns the checked exercises, in request order.
 async fn check_block(
     conn: &mut sqlx::PgConnection,
     owner_id: Uuid,
     locale: Locale,
     body: &BlockBody,
-    existing: &HashMap<Uuid, Uuid>,
+    existing: &HashSet<Uuid>,
 ) -> AppResult<Vec<CheckedExercise>> {
     let mut errors = Vec::new();
     let mut kept = HashSet::new();
     for (i, exercise) in body.exercises.iter().enumerate() {
         if let Some(id) = exercise.id
-            && (existing.get(&id) != Some(&exercise.exercise_id) || !kept.insert(id))
+            && (!existing.contains(&id) || !kept.insert(id))
         {
             errors.push(FieldError::new(
                 format!("exercises[{i}].id"),

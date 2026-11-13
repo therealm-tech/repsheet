@@ -6,9 +6,17 @@ import type { ExerciseSummary } from "@/lib/api/schemas";
 import { kindOf, letter } from "@/lib/blocks";
 import { startingChoices } from "@/lib/choices";
 import { parseTyped } from "@/lib/grid";
-import { type DraftBlock, newKey } from "@/lib/templates";
+import {
+	type DraftBlock,
+	type DraftExercise,
+	newKey,
+	replaceDraftExercise,
+} from "@/lib/templates";
 
-type PickTarget = { kind: "newBlock" } | { kind: "addTo"; key: string };
+type PickTarget =
+	| { kind: "newBlock" }
+	| { kind: "addTo"; key: string }
+	| { kind: "replace"; key: string; entry: DraftExercise };
 
 function toInt(text: string): number | null {
 	const value = parseTyped(text);
@@ -23,6 +31,7 @@ function BlockEditor({
 	onMove,
 	onRemove,
 	onAddExercise,
+	onReplaceExercise,
 }: {
 	block: DraftBlock;
 	index: number;
@@ -31,6 +40,7 @@ function BlockEditor({
 	onMove: (direction: -1 | 1) => void;
 	onRemove: () => void;
 	onAddExercise: () => void;
+	onReplaceExercise: (entry: DraftExercise) => void;
 }) {
 	const { t } = useTranslation();
 	const prefix = `block-${block.key}`;
@@ -103,6 +113,16 @@ function BlockEditor({
 								})
 							}
 						/>
+						<button
+							type="button"
+							className="mini-button"
+							aria-label={t("block.replaceExercise", {
+								name: entry.exercise.name,
+							})}
+							onClick={() => onReplaceExercise(entry)}
+						>
+							⇄
+						</button>
 						<button
 							type="button"
 							className="mini-button"
@@ -216,6 +236,23 @@ export function BlocksEditor({
 		if (!target) {
 			return;
 		}
+		if (target.kind === "replace") {
+			onChange(
+				blocks.map((b) =>
+					b.key === target.key
+						? {
+								...b,
+								exercises: b.exercises.map((e) =>
+									e.key === target.entry.key
+										? replaceDraftExercise(e, exercise)
+										: e,
+								),
+							}
+						: b,
+				),
+			);
+			return;
+		}
 		if (target.kind === "newBlock") {
 			onChange([
 				...blocks,
@@ -231,11 +268,16 @@ export function BlocksEditor({
 	}
 
 	const pickExclude =
-		pickTarget?.kind === "addTo"
+		pickTarget && pickTarget.kind !== "newBlock"
 			? (blocks
 					.find((b) => b.key === pickTarget.key)
 					?.exercises.map((e) => e.exercise.id) ?? [])
 			: [];
+
+	const pickTitle =
+		pickTarget?.kind === "replace"
+			? t("block.replaceExercise", { name: pickTarget.entry.exercise.name })
+			: t("templateEditor.pickExercise");
 
 	return (
 		<>
@@ -251,6 +293,9 @@ export function BlocksEditor({
 					onMove={(direction) => moveBlock(i, direction)}
 					onRemove={() => onChange(blocks.filter((b) => b.key !== block.key))}
 					onAddExercise={() => setPickTarget({ kind: "addTo", key: block.key })}
+					onReplaceExercise={(entry) =>
+						setPickTarget({ kind: "replace", key: block.key, entry })
+					}
 				/>
 			))}
 			<button
@@ -261,13 +306,8 @@ export function BlocksEditor({
 				{t("templateEditor.addBlock")}
 			</button>
 			{pickTarget ? (
-				<Sheet
-					title={t("templateEditor.pickExercise")}
-					onClose={() => setPickTarget(null)}
-				>
-					<h2 className="display sheet-title">
-						{t("templateEditor.pickExercise")}
-					</h2>
+				<Sheet title={pickTitle} onClose={() => setPickTarget(null)}>
+					<h2 className="display sheet-title">{pickTitle}</h2>
 					<div className="sheet-body">
 						<ExercisePicker onSelect={pick} excludeIds={pickExclude} />
 					</div>
