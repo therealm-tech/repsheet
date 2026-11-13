@@ -26,6 +26,8 @@ exercise carries a thread of comments, yours and your coaches', kept in its hist
 on a planned exercise starts that thread.
 
 - Built-in catalog of common exercises, plus your own
+- Personal labels on any exercise (your programme, a body part, your gym's equipment), shown on
+  the exercise list and used to filter it, there and while building a block; nobody else sees them
 - Progression per exercise, mode, equipment and grip: max weight, most reps or longest set over
   time, records, full history (warm-up sets excluded)
 - Templates built by hand or from a workout you already logged

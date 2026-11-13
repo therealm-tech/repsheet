@@ -292,6 +292,14 @@ export const en: Catalog = {
 		results: "Results",
 		search: "Search an exercise",
 	},
+	labels: {
+		add: "Add",
+		filter: "Labels",
+		new: "New label",
+		remove: "Remove “{{label}}”",
+		saveFailed: "Couldn't save the labels.",
+		title: "My labels",
+	},
 	exercise: {
 		back: "Back to exercises",
 		bestVolume: "Best volume",

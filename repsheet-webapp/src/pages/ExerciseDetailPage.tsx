@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CommentThread } from "@/components/CommentThread";
 import { ExerciseActions } from "@/components/ExerciseActions";
+import { ExerciseLabelsEditor } from "@/components/ExerciseLabels";
 import { LineChart } from "@/components/LineChart";
 import { Empty, ErrorText, KindTag, Segmented } from "@/components/ui";
 import i18n from "@/i18n";
@@ -227,6 +228,7 @@ export function ExerciseDetailPage({ exerciseId }: { exerciseId: string }) {
 					{ex ? (
 						<p className="muted small">{describeExercise(ex).join(" · ")}</p>
 					) : null}
+					{ex ? <ExerciseLabelsEditor key={ex.id} exercise={ex} /> : null}
 					{ex ? <ExerciseActions key={ex.id} exercise={ex} /> : null}
 
 					{multiMode ? (

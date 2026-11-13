@@ -488,6 +488,34 @@ ol {
 	padding: 9px 12px;
 }
 
+.tag-label {
+	text-transform: none;
+	letter-spacing: 0;
+	max-width: 100%;
+}
+
+.label-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tag-remove {
+	margin-right: -4px;
+	padding: 0 4px;
+	font-size: 14px;
+	line-height: 1;
+	color: inherit;
+	background: none;
+}
+
+.chip-label {
+	border: 1px dashed var(--line);
+}
+
 .segmented {
 	border: 0;
 	min-width: 0;

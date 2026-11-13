@@ -291,6 +291,14 @@ export const fr = {
 		results: "Résultats",
 		search: "Rechercher un exercice",
 	},
+	labels: {
+		add: "Ajouter",
+		filter: "Étiquettes",
+		new: "Nouvelle étiquette",
+		remove: "Retirer « {{label}} »",
+		saveFailed: "Impossible d'enregistrer les étiquettes.",
+		title: "Mes étiquettes",
+	},
 	exercise: {
 		back: "Retour aux exercices",
 		bestVolume: "Meilleur volume",

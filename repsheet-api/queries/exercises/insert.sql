@@ -26,4 +26,5 @@ RETURNING
     grips,
     default_grip,
     unilateral,
+    '{}'::TEXT[] AS labels,
     NULL::DATE AS last_used_on;

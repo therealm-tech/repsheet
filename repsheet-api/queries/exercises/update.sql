@@ -1,4 +1,5 @@
--- $12 is the user whose last use the returned row reflects, $13 their locale.
+-- $12 is the user whose last use and labels the returned row reflects, $13 their
+-- locale.
 UPDATE exercises
 SET
     name_fr = $2,
@@ -26,6 +27,7 @@ RETURNING
     grips,
     default_grip,
     unilateral,
+    exercise_labels_of(exercises.id, $12) AS labels,
     (
         SELECT max(w.performed_on)
         FROM block_exercises AS be
