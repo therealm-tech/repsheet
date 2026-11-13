@@ -58,7 +58,7 @@ export const fr = {
 		dayWithWorkout: "{{day}}, séance faite",
 		empty: "Aucune séance pour l'instant. Note ta première séance ci-dessus.",
 		freeWorkout: "＋ Séance libre",
-		freeWorkoutName: "Séance libre",
+		freeWorkoutName: "Séance du {{date}}",
 		fromTemplate: "Depuis un modèle…",
 		greeting: "Salut {{name}}",
 		loadFailed: "Impossible de charger tes séances.",

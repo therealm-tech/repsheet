@@ -190,6 +190,26 @@ describe("switching language", () => {
 		expect(document.documentElement.lang).toBe("en");
 	});
 
+	it("names a free session after its date in English, following date changes", async () => {
+		mockApi({
+			"GET /v1/users/me": () => ({ status: 200, body: user }),
+			"GET /v1/workouts": () => ({ status: 200, body: page([]) }),
+		});
+		await renderRoute(HomePage, "/dashboard");
+		await act(() => i18n.changeLanguage("en"));
+		const ui = userEvent.setup();
+
+		await ui.click(screen.getByRole("button", { name: "＋ Free session" }));
+		const form = screen.getByRole("form", { name: "New session" });
+		const date = within(form).getByLabelText("Date");
+		await ui.clear(date);
+		await ui.type(date, "2026-09-30");
+
+		expect(within(form).getByLabelText("Name")).toHaveValue(
+			"Session on 30 September 2026",
+		);
+	});
+
 	it("saves language and unit through the preferences endpoint", async () => {
 		const calls = mockApi({
 			"GET /v1/users/me": () => ({ status: 200, body: user }),

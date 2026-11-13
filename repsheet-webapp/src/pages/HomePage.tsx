@@ -16,6 +16,7 @@ import type {
 } from "@/lib/api/schemas";
 import {
 	formatDay,
+	formatFullDay,
 	formatLongDay,
 	formatMinutes,
 	today,
@@ -129,6 +130,9 @@ export function HomePage() {
 		enabled: choosingTemplate,
 	});
 
+	const freeName = (day: string) =>
+		t("home.freeWorkoutName", { date: formatFullDay(day) });
+
 	const start = useMutation({
 		mutationFn: api.createWorkout,
 		onSuccess: (workout) => {
@@ -215,7 +219,7 @@ export function HomePage() {
 						<button
 							type="button"
 							className="btn btn-primary"
-							onClick={() => setDraft({ name: t("home.freeWorkoutName") })}
+							onClick={() => setDraft({ name: freeName(today()) })}
 						>
 							{t("home.freeWorkout")}
 						</button>
@@ -345,6 +349,7 @@ export function HomePage() {
 							title={t("workoutForm.newTitle")}
 							submitLabel={t("workoutForm.create")}
 							withNote={false}
+							defaultName={draft.templateId ? undefined : freeName}
 							initial={{
 								name: draft.name,
 								performedOn: today(),

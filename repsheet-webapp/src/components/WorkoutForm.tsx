@@ -44,6 +44,7 @@ export function WorkoutForm({
 	initial,
 	withNote,
 	withDuration = true,
+	defaultName,
 	notePlaceholder,
 	submitLabel,
 	pending,
@@ -55,6 +56,8 @@ export function WorkoutForm({
 	initial: WorkoutFormInitial;
 	withNote: boolean;
 	withDuration?: boolean;
+	/** Derives the name from the date, until the user types a name of their own. */
+	defaultName?: ((day: string) => string) | undefined;
 	notePlaceholder?: string;
 	submitLabel: string;
 	pending: boolean;
@@ -65,6 +68,7 @@ export function WorkoutForm({
 	const { t } = useTranslation();
 	const id = useId();
 	const [name, setName] = useState(initial.name);
+	const [nameEdited, setNameEdited] = useState(false);
 	const [performedOn, setPerformedOn] = useState(initial.performedOn);
 	const [duration, setDuration] = useState(
 		initial.durationMinutes === null ? "" : String(initial.durationMinutes),
@@ -99,7 +103,10 @@ export function WorkoutForm({
 					id={`${id}-name`}
 					className="input"
 					value={name}
-					onChange={(e) => setName(e.target.value)}
+					onChange={(e) => {
+						setName(e.target.value);
+						setNameEdited(true);
+					}}
 				/>
 			</div>
 			<div className="row form-pair">
@@ -112,7 +119,12 @@ export function WorkoutForm({
 						className="input"
 						type="date"
 						value={performedOn}
-						onChange={(e) => setPerformedOn(e.target.value)}
+						onChange={(e) => {
+							setPerformedOn(e.target.value);
+							if (defaultName && !nameEdited && e.target.value) {
+								setName(defaultName(e.target.value));
+							}
+						}}
 					/>
 				</div>
 				{withDuration ? (

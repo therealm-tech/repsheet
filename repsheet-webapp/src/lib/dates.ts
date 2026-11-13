@@ -33,6 +33,11 @@ const LONG_DAY: Intl.DateTimeFormatOptions = {
 	day: "numeric",
 	month: "long",
 };
+const FULL_DAY: Intl.DateTimeFormatOptions = {
+	day: "numeric",
+	month: "long",
+	year: "numeric",
+};
 const SHORT: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 const MONTH: Intl.DateTimeFormatOptions = { month: "short" };
 const WEEKDAY_LETTER: Intl.DateTimeFormatOptions = { weekday: "narrow" };
@@ -62,6 +67,11 @@ export function today(): string {
 /** "Jeu. 22 oct." */
 export function formatDay(day: string): string {
 	return capitalize(format(DAY, "day").format(parseDay(day)));
+}
+
+/** "22 octobre 2026" */
+export function formatFullDay(day: string): string {
+	return format(FULL_DAY, "fullDay").format(parseDay(day));
 }
 
 /** "22 oct." */
