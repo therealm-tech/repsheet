@@ -165,6 +165,14 @@ export const api = {
 		}),
 	deleteBlock: (workoutId: string, blockId: string) =>
 		requestVoid("DELETE", `/workouts/${workoutId}/blocks/${blockId}`),
+	/** Moves a block to `position`, from 1; returns the workout reordered. */
+	moveBlock: (workoutId: string, blockId: string, position: number) =>
+		request(
+			"PUT",
+			`/workouts/${workoutId}/blocks/${blockId}/position`,
+			WorkoutSchema,
+			{ body: { position } },
+		),
 
 	templates: (params: PageParams = {}) =>
 		request("GET", "/templates", TemplatePageSchema, { query: { ...params } }),
@@ -238,6 +246,14 @@ export const api = {
 		),
 	deletePlannedBlock: (sessionId: string, blockId: string) =>
 		requestVoid("DELETE", `/planned-sessions/${sessionId}/blocks/${blockId}`),
+	/** Moves a planned block to `position`, from 1; returns the session reordered. */
+	movePlannedBlock: (sessionId: string, blockId: string, position: number) =>
+		request(
+			"PUT",
+			`/planned-sessions/${sessionId}/blocks/${blockId}/position`,
+			PlannedSessionSchema,
+			{ body: { position } },
+		),
 	plannedSessionWorkouts: (id: string) =>
 		request(
 			"GET",

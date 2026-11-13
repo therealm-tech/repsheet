@@ -18,7 +18,10 @@ use crate::{
         pagination::{MAX_PER_PAGE, PageQuery, PageResponse},
         templates::TemplateBlockResponse,
         users::{AuthorResponse, author},
-        workouts::{CheckedExercise, ExerciseSets, SetRequest, WorkoutResponse, check_sets},
+        workouts::{
+            CheckedExercise, ExerciseSets, SetRequest, WorkoutResponse, check_block_position,
+            check_sets,
+        },
     },
     auth::AuthUser,
     db::{
@@ -157,6 +160,21 @@ fn progress_routes() -> ApiRouter<AppState> {
                     .id("deletePlannedBlock")
                     .summary("Delete a planned block")
                     .description("Blocks logged from it are kept and lose their link to it.")
+            }),
+        )
+        .api_route(
+            "/v1/planned-sessions/{plannedSessionId}/blocks/{blockId}/position",
+            put_with(update_block_position, |op| {
+                authenticated(op)
+                    .tag("Planned sessions")
+                    .id("updatePlannedBlockPosition")
+                    .summary("Move a planned block")
+                    .description(
+                        "Puts the block at `position`, counted from 1, and renumbers the \
+                         others from 1 in their order, so that positions stay contiguous and \
+                         unique. By whoever may replace the session. Returns the session with \
+                         its blocks in their new order.",
+                    )
             }),
         )
 }
@@ -336,6 +354,14 @@ impl Validate for UpdatePlannedBlockRequest {
     fn validate(&self) -> Result<(), ValidationErrors> {
         self.block.validate()
     }
+}
+
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePlannedBlockPositionRequest {
+    /// From 1 to the session's number of blocks.
+    #[validate(range(min = 1))]
+    pub position: i32,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -597,6 +623,30 @@ async fn delete_block(
         db::templates::delete_block(&mut *conn, path.block_id, session.id).await?;
     }
     Ok(NoContent)
+}
+
+async fn update_block_position(
+    State(state): State<AppState>,
+    user: AuthUser,
+    PathParams(path): PathParams<PlannedBlockPath>,
+    ValidJson(request): ValidJson<UpdatePlannedBlockPositionRequest>,
+) -> AppResult<Json<PlannedSessionResponse>> {
+    let mut tx = state.pool.begin().await?;
+    let session = db::planned_sessions::find(&mut *tx, path.planned_session_id, user.id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let ids = db::templates::lock_block_ids(&mut *tx, session.id).await?;
+    check_block_position(&ids, path.block_id, request.position)?;
+    db::templates::move_block(&mut *tx, path.block_id, session.id, request.position).await?;
+    let blocks = db::templates::load_blocks(&mut tx, session.id, user.locale).await?;
+    tx.commit().await?;
+    tracing::debug!(
+        planned_session_id = %session.id,
+        block_id = %path.block_id,
+        position = request.position,
+        "planned block moved"
+    );
+    Ok(Json(PlannedSessionResponse::new(session, blocks)))
 }
 
 /// Checks the exercises and sets of a planned block as a logged block's are

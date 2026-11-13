@@ -373,6 +373,34 @@ pub async fn delete_block(
     Ok(())
 }
 
+/// The ids of a template's blocks in order, locked until the transaction ends.
+pub async fn lock_block_ids(
+    exec: impl PgExecutor<'_>,
+    template_id: Uuid,
+) -> sqlx::Result<Vec<Uuid>> {
+    sqlx::query_scalar(include_str!("../../queries/templates/lock_block_ids.sql"))
+        .bind(template_id)
+        .fetch_all(exec)
+        .await
+}
+
+/// Moves block `id` to `position`, counted from 1, and renumbers the others
+/// around it.
+pub async fn move_block(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    template_id: Uuid,
+    position: i32,
+) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/templates/move_block.sql"))
+        .bind(template_id)
+        .bind(id)
+        .bind(position)
+        .execute(exec)
+        .await?;
+    Ok(())
+}
+
 /// The rounds a block planned set by set spans.
 fn planned_rounds(exercises: &[TemplateExerciseInput<'_>]) -> Option<i32> {
     exercises

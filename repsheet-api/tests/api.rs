@@ -464,6 +464,103 @@ async fn logs_blocks_in_a_workout(pool: PgPool) {
     assert_eq!(list["items"][0]["blockCount"], 0);
 }
 
+fn block_ids(blocks: &Value) -> Vec<&str> {
+    blocks
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| b["id"].as_str().unwrap())
+        .collect()
+}
+
+fn positions(blocks: &Value) -> Vec<i64> {
+    blocks
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| b["position"].as_i64().unwrap())
+        .collect()
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn reorders_the_blocks_of_a_workout(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+    let squat = app.exercise_id(&token, "Squat").await;
+    let workout_uri = format!(
+        "/v1/workouts/{}",
+        new_workout(&app, &token, "2026-11-12").await
+    );
+    let mut ids = Vec::new();
+    for _ in 0..4 {
+        let (status, block) = app
+            .post(
+                &format!("{workout_uri}/blocks"),
+                &token,
+                json!({ "exercises": [
+                    { "exerciseId": squat, "sets": [{ "round": 1, "reps": 5, "weightKg": 100.0 }] }
+                ]}),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{block}");
+        ids.push(block["id"].as_str().unwrap().to_owned());
+    }
+    let position_uri = |id: &str| format!("{workout_uri}/blocks/{id}/position");
+    assert_eq!(
+        app.delete(&format!("{workout_uri}/blocks/{}", ids[1]), &token)
+            .await,
+        StatusCode::NO_CONTENT
+    );
+
+    let (status, moved) = app
+        .put(&position_uri(&ids[3]), &token, json!({ "position": 1 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(block_ids(&moved["blocks"]), [&ids[3], &ids[0], &ids[2]]);
+    assert_eq!(
+        positions(&moved["blocks"]),
+        [1, 2, 3],
+        "the gap the deleted block left is closed"
+    );
+
+    let (status, moved) = app
+        .put(&position_uri(&ids[3]), &token, json!({ "position": 3 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(block_ids(&moved["blocks"]), [&ids[0], &ids[2], &ids[3]]);
+    let (status, again) = app
+        .put(&position_uri(&ids[3]), &token, json!({ "position": 3 }))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(again["blocks"], moved["blocks"], "moving is idempotent");
+    let (_, fetched) = app.get(&workout_uri, &token).await;
+    assert_eq!(block_ids(&fetched["blocks"]), [&ids[0], &ids[2], &ids[3]]);
+    assert_eq!(positions(&fetched["blocks"]), [1, 2, 3]);
+
+    for position in [0, 4] {
+        let (status, problem) = app
+            .put(
+                &position_uri(&ids[0]),
+                &token,
+                json!({ "position": position }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{position}");
+        assert_eq!(field_paths(&problem), ["position"]);
+    }
+    let (status, _) = app
+        .put(&position_uri(&ids[1]), &token, json!({ "position": 1 }))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "the deleted block");
+    let stranger = app.sign_up("sam@example.com").await;
+    let (status, _) = app
+        .put(&position_uri(&ids[0]), &stranger, json!({ "position": 2 }))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, fetched) = app.get(&workout_uri, &token).await;
+    assert_eq!(block_ids(&fetched["blocks"]), [&ids[0], &ids[2], &ids[3]]);
+}
+
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
 async fn checks_sets_against_the_mode_and_the_load(pool: PgPool) {
     let app = TestApp::new(pool);
@@ -2755,6 +2852,51 @@ async fn revoked_coaches_lose_access_and_the_athlete_keeps_the_sessions(pool: Pg
     assert_eq!(kept["author"]["id"], coach_id.as_str());
     let (_, mine) = app.get("/v1/planned-sessions", &athlete).await;
     assert_eq!(mine["total"], 1);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn reorders_the_blocks_of_a_planned_session(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (athlete, coach, athlete_id) = coached_athlete(&app).await;
+    let bench = app.exercise_id(&coach, "Développé couché").await;
+    let (_, draft) = draft_session(&app, &coach, &athlete_id).await;
+    let session_uri = format!("/v1/planned-sessions/{}", draft["id"].as_str().unwrap());
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let (status, block) = app
+            .post(
+                &format!("{session_uri}/blocks"),
+                &coach,
+                json!({ "exercises": [{ "exerciseId": bench, "sets": five_by(60.0) }] }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{block}");
+        ids.push(block["id"].as_str().unwrap().to_owned());
+    }
+    let position_uri = format!("{session_uri}/blocks/{}/position", ids[2]);
+
+    let (status, moved) = app
+        .put(&position_uri, &coach, json!({ "position": 2 }))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(block_ids(&moved["blocks"]), [&ids[0], &ids[2], &ids[1]]);
+    assert_eq!(positions(&moved["blocks"]), [1, 2, 3]);
+    let (_, fetched) = app.get(&session_uri, &coach).await;
+    assert_eq!(block_ids(&fetched["blocks"]), [&ids[0], &ids[2], &ids[1]]);
+
+    let (status, problem) = app
+        .put(&position_uri, &coach, json!({ "position": 4 }))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(field_paths(&problem), ["position"]);
+    let (status, _) = app
+        .put(&position_uri, &athlete, json!({ "position": 1 }))
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "the athlete cannot see a draft"
+    );
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
