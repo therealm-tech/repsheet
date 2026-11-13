@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExerciseName, plannedSummary } from "@/components/BlockCard";
 import { BlockSheet, type PlanSheetMode } from "@/components/BlockSheet";
@@ -360,6 +360,7 @@ export function PlannedSessionPage({
 					{s.blocks.map((block, i) => {
 						const card = (
 							<PlanBlockCard
+								key={block.id}
 								block={block}
 								index={i + 1}
 								athleteId={athleteId}
@@ -378,7 +379,7 @@ export function PlannedSessionPage({
 								{card}
 							</ReorderableBlock>
 						) : (
-							<Fragment key={block.id}>{card}</Fragment>
+							card
 						);
 					})}
 					{managed ? (

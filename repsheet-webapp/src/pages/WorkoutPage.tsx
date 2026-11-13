@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BlockCard, PlannedBlockCard } from "@/components/BlockCard";
 import { BlockSheet, type BlockSheetMode } from "@/components/BlockSheet";
@@ -236,6 +236,7 @@ export function WorkoutPage({
 					{w.blocks.map((block, i) => {
 						const card = (
 							<BlockCard
+								key={block.id}
 								block={block}
 								workoutId={w.id}
 								ownerId={ownerId}
@@ -264,7 +265,7 @@ export function WorkoutPage({
 								{card}
 							</ReorderableBlock>
 						) : (
-							<Fragment key={block.id}>{card}</Fragment>
+							card
 						);
 					})}
 					{planned.map((block, i) => (
