@@ -312,6 +312,23 @@ async fn the_catalog_offers_lunge_variants_push_press_and_pullover(pool: PgPool)
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn the_catalog_offers_mountain_climbers(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let token = app.sign_up("alex@example.com").await;
+
+    let (status, page) = app.get("/v1/exercises?q=mountain", &token).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(page["total"], 1);
+    let exercise = &page["items"][0];
+    assert_eq!(exercise["name"], "Mountain climbers");
+    assert_eq!(exercise["modes"], json!(["reps", "time"]));
+    assert_eq!(exercise["defaultMode"], "reps");
+    assert_eq!(exercise["load"], "none");
+    assert_eq!(exercise["equipment"], json!(["bodyweight"]));
+    assert_eq!(exercise["custom"], false);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
 async fn custom_exercises_are_private_and_unique(pool: PgPool) {
     let app = TestApp::new(pool);
     let alex = app.sign_up("alex@example.com").await;
