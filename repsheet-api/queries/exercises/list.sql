@@ -1,5 +1,5 @@
 -- $1 user, $2 search text (LIKE-escaped) or NULL, $3 sort by last use, $4 limit, $5 offset,
--- $6 locale of the returned name, $7 label or NULL.
+-- $6 locale of the returned name, $7 label or NULL, $8 only the user's own exercises.
 SELECT
     e.id,
     e.owner_id,
@@ -26,6 +26,7 @@ LEFT JOIN LATERAL (
 ) AS usage ON TRUE
 WHERE
     (e.owner_id IS NULL OR e.owner_id = $1)
+    AND (NOT $8 OR e.owner_id = $1)
     AND (
         $2::TEXT IS NULL
         OR fold(e.name_fr) LIKE '%' || fold($2) || '%'

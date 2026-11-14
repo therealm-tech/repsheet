@@ -290,6 +290,7 @@ export const fr = {
 		empty: "Aucun exercice trouvé.",
 		listLabel: "Exercices",
 		loadFailed: "Impossible de charger les exercices.",
+		mine: "Mes exercices",
 		recentAndCatalog: "Récents et catalogue",
 		results: "Résultats",
 		search: "Rechercher un exercice",

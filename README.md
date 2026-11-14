@@ -25,7 +25,7 @@ minutes. A template gives each exercise your instructions, shown while logging i
 exercise carries a thread of comments, yours and your coaches', kept in its history; a coach's note
 on a planned exercise starts that thread.
 
-- Built-in catalog of common exercises, plus your own
+- Built-in catalog of common exercises, plus your own, which a filter lists on their own
 - Personal labels on any exercise (your programme, a body part, your gym's equipment), shown on
   the exercise list and used to filter it, there and while building a block; nobody else sees them
 - Progression per exercise, mode, equipment and grip: max weight, most reps or longest set over

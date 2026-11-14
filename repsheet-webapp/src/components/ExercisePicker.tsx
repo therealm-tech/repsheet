@@ -104,14 +104,16 @@ export function ExercisePicker({
 	const [query, setQuery] = useState("");
 	const [equipment, setEquipment] = useState<Equipment | null>(null);
 	const [label, setLabel] = useState<string | null>(null);
+	const [mine, setMine] = useState(false);
 	const [creating, setCreating] = useState(false);
 	const q = useDebounced(query.trim(), 250);
 	const exercises = useQuery({
-		queryKey: keys.exercises(q, label),
+		queryKey: keys.exercises(q, label, mine),
 		queryFn: () =>
 			api.exercises({
 				...(q ? { q } : { sort: "-lastUsedOn" }),
 				...(label === null ? {} : { label }),
+				...(mine ? { mine } : {}),
 				perPage: 50,
 			}),
 		placeholderData: keepPreviousData,
@@ -168,6 +170,18 @@ export function ExercisePicker({
 					</button>
 				))}
 			</div>
+			{builtInOnly ? null : (
+				<div className="chips">
+					<button
+						type="button"
+						className={mine ? "chip on" : "chip"}
+						aria-pressed={mine}
+						onClick={() => setMine(!mine)}
+					>
+						{t("picker.mine")}
+					</button>
+				</div>
+			)}
 			{labels.length > 0 ? (
 				<fieldset className="chips field-group" aria-label={t("labels.filter")}>
 					{labels.map((name) => (
