@@ -103,10 +103,13 @@ export const api = {
 		params: {
 			q?: string;
 			label?: string;
+			mine?: boolean;
 			sort?: "name" | "-lastUsedOn";
 		} & PageParams,
 	) =>
-		request("GET", "/exercises", ExercisePageSchema, { query: { ...params } }),
+		request("GET", "/exercises", ExercisePageSchema, {
+			query: { ...params, mine: params.mine ? "true" : undefined },
+		}),
 	exercise: (id: string) => request("GET", `/exercises/${id}`, ExerciseSchema),
 	createExercise: (body: CreateExerciseInput) =>
 		request("POST", "/exercises", ExerciseSchema, { body }),
@@ -281,8 +284,8 @@ export const api = {
 export const keys = {
 	me: ["me"] as const,
 	users: ["users"] as const,
-	exercises: (q: string, label: string | null = null) =>
-		["exercises", q, label] as const,
+	exercises: (q: string, label: string | null = null, mine = false) =>
+		["exercises", q, label, mine] as const,
 	exerciseLabels: ["exerciseLabels"] as const,
 	exercise: (id: string) => ["exercise", id] as const,
 	performances: (

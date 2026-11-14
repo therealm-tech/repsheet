@@ -377,6 +377,10 @@ pub struct ListExercisesQuery {
     /// and accents
     #[validate(length(max = MAX_LABEL_LENGTH))]
     pub label: Option<String>,
+    /// Only the custom exercises the user created, not the catalog (default
+    /// false)
+    #[serde(default)]
+    pub mine: bool,
     #[serde(default)]
     pub sort: ExerciseSortDto,
     /// 1-based page number (default 1)
@@ -599,6 +603,7 @@ async fn list(
         user_id: user.id,
         search: search.as_deref(),
         label: trimmed(query.label.as_deref()),
+        mine: query.mine,
     };
     let by_last_use = matches!(query.sort, ExerciseSortDto::LastUsedDesc);
     let rows = db::exercises::list(

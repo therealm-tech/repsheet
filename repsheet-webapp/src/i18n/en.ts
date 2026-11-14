@@ -291,6 +291,7 @@ export const en: Catalog = {
 		empty: "No exercise found.",
 		listLabel: "Exercises",
 		loadFailed: "Couldn't load the exercises.",
+		mine: "My exercises",
 		recentAndCatalog: "Recent and catalog",
 		results: "Results",
 		search: "Search an exercise",

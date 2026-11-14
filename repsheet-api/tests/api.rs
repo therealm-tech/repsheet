@@ -5140,6 +5140,47 @@ async fn labels_exercises_and_filters_by_label(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
+async fn filters_exercises_to_the_callers_own(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let alex = app.sign_up("alex@example.com").await;
+    let sam = app.sign_up("sam@example.com").await;
+    let custom = |name: &str| json!({ "names": { "fr": name }, "modes": ["reps"], "defaultMode": "reps", "load": "required", "equipment": ["dumbbell"], "defaultEquipment": "dumbbell", "grips": [] });
+    let mut ids = Vec::new();
+    for name in ["Mon curl", "Mon squat"] {
+        let (_, created) = app.post("/v1/exercises", &alex, custom(name)).await;
+        ids.push(created["id"].as_str().unwrap().to_owned());
+    }
+    app.post("/v1/exercises", &sam, custom("Mon secret")).await;
+    app.put(
+        &format!("/v1/exercises/{}/labels", ids[0]),
+        &alex,
+        json!({ "labels": ["Bras"] }),
+    )
+    .await;
+
+    let (status, page) = app.get("/v1/exercises?mine=true", &alex).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(names(&page), ["Mon curl", "Mon squat"]);
+    assert_eq!(page["total"], 2);
+    let (_, page) = app.get("/v1/exercises?mine=true&perPage=1", &alex).await;
+    assert_eq!(names(&page), ["Mon curl"]);
+    assert_eq!(page["total"], 2, "counts the own exercises only");
+    let (_, page) = app.get("/v1/exercises?mine=true&label=bras", &alex).await;
+    assert_eq!(names(&page), ["Mon curl"]);
+    let (_, page) = app.get("/v1/exercises?mine=true&q=squat", &alex).await;
+    assert_eq!(names(&page), ["Mon squat"]);
+    let (_, page) = app
+        .get("/v1/exercises?mine=true&q=curl&label=jambes", &alex)
+        .await;
+    assert_eq!(page["total"], 0);
+
+    let (_, page) = app.get("/v1/exercises?mine=true", &sam).await;
+    assert_eq!(names(&page), ["Mon secret"]);
+    let (_, page) = app.get("/v1/exercises?mine=false&q=mon", &alex).await;
+    assert_eq!(names(&page), ["Mon curl", "Mon squat"]);
+}
+
+#[sqlx::test(migrator = "repsheet_api::MIGRATOR")]
 async fn labels_are_private_to_their_user(pool: PgPool) {
     let app = TestApp::new(pool);
     let (athlete, coach, _) = coached_athlete(&app).await;

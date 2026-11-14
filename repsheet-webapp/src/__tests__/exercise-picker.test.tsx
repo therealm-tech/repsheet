@@ -28,6 +28,37 @@ const dips = exercise({
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ExercisePicker", () => {
+	it("toggles the filter on the user's own exercises", async () => {
+		const mineOnly = exercise({ id: "mine", name: "Mon curl", custom: true });
+		const calls = mockApi({
+			"GET /v1/exercises": (call) => ({
+				status: 200,
+				body: page(
+					call.path.includes("mine=true") ? [mineOnly] : [bench, dips],
+				),
+			}),
+		});
+		renderWithClient(<ExercisePicker onSelect={vi.fn()} />);
+		const ui = userEvent.setup();
+
+		expect(await screen.findByText("Dips")).toBeInTheDocument();
+		expect(calls.at(-1)?.path).not.toContain("mine");
+		const chip = screen.getByRole("button", { name: "Mes exercices" });
+		expect(chip).toHaveAttribute("aria-pressed", "false");
+
+		await ui.click(chip);
+		await waitFor(() =>
+			expect(screen.queryByText("Dips")).not.toBeInTheDocument(),
+		);
+		expect(await screen.findByText("Mon curl")).toBeInTheDocument();
+		expect(chip).toHaveAttribute("aria-pressed", "true");
+		expect(calls.at(-1)?.path).toContain("mine=true");
+
+		await ui.click(chip);
+		expect(await screen.findByText("Dips")).toBeInTheDocument();
+		expect(calls.at(-1)?.path).not.toContain("mine");
+	});
+
 	it("searches the catalog and selects an exercise", async () => {
 		const calls = mockApi({
 			"GET /v1/exercises": (call) => ({

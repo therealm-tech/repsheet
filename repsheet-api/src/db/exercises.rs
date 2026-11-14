@@ -98,6 +98,8 @@ pub struct ExerciseFilter<'a> {
     pub search: Option<&'a str>,
     /// Keeps only the exercises the user put this label on.
     pub label: Option<&'a str>,
+    /// Keeps only the custom exercises the user owns.
+    pub mine: bool,
 }
 
 pub async fn list(
@@ -116,6 +118,7 @@ pub async fn list(
         .bind(offset)
         .bind(locale.as_str())
         .bind(filter.label)
+        .bind(filter.mine)
         .fetch_all(exec)
         .await
 }
@@ -125,6 +128,7 @@ pub async fn count(exec: impl PgExecutor<'_>, filter: &ExerciseFilter<'_>) -> sq
         .bind(filter.user_id)
         .bind(filter.search)
         .bind(filter.label)
+        .bind(filter.mine)
         .fetch_one(exec)
         .await
 }
