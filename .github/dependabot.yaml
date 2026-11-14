@@ -40,6 +40,12 @@ updates:
           - react-dom
           - "@types/react"
           - "@types/react-dom"
+      # react-i18next requires a matching i18next major as a peer
+      # dependency: bumped one at a time, each PR fails to install.
+      i18next:
+        patterns:
+          - i18next
+          - react-i18next
       npm:
         # Dependabot gives a dependency to its most specific matching group,
         # not the first: a wildcard pattern ranks below this pattern-less
@@ -47,6 +53,8 @@ updates:
         # https://github.com/dependabot/dependabot-core/issues/14576
         exclude-patterns:
           - "@tanstack/*"
+          - i18next
+          - react-i18next
         update-types:
           - minor
           - patch
