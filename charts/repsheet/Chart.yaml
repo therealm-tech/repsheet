@@ -2,8 +2,8 @@ apiVersion: v2
 name: repsheet
 description: RepSheet, a web app to log strength-training workouts set by set. Deploys the API and the webapp against an external PostgreSQL database.
 type: application
-version: 0.3.0
-appVersion: "0.3.0"
+version: 0.4.0
+appVersion: "0.4.0"
 home: https://github.com/therealm-tech/repsheet
 icon: https://raw.githubusercontent.com/therealm-tech/repsheet/main/repsheet-webapp/public/logo.svg
 sources:
