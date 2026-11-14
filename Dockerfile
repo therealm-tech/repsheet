@@ -1,7 +1,7 @@
 # Builds the two images RepSheet ships: `api`, the Rust server, and `webapp`,
 # the static front end served by nginx, which also proxies /api/ to the server.
 
-FROM rust:1.99.0-alpine3.24@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627 AS chef
+FROM rust:1.99.1-alpine3.24@sha256:44819b27be4c97b0e4d7203bd2e02c4820f97700211b6a37fb4c246a2de59383 AS chef
 RUN cargo install cargo-chef@0.1.78 --locked
 WORKDIR /usr/local/src/repsheet
 
